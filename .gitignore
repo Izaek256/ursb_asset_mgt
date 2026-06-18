@@ -1,0 +1,17 @@
+# Development Environment System Files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Backend / Python exclusions
+backend/venv/
+backend/__pycache__/
+backend/**/*.pyc
+backend/.env
+
+# Frontend / Node exclusions
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
