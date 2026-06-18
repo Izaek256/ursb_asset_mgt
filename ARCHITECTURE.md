@@ -130,6 +130,110 @@ The system uses a dual-database strategy: **SQLite** during local development fo
 
 **Verdict: SQLite (Dev) + MySQL (Prod)** — During development, engineers need instant startup with no external dependencies. SQLite provides a frictionless local experience. MySQL is the production target because asset management data demands transactional integrity, concurrent access from multiple users, and robust relational modeling. SQLAlchemy's database-agnostic abstraction ensures the same application code works seamlessly across both environments.
 
+### Entity Relationship Diagram (ERD)
+
+The following ERD represents the current database schema implemented via SQLAlchemy models:
+
+```mermaid
+erDiagram
+    User {
+        string user_id PK
+        string full_name
+        string email
+        string password_hash
+        string role
+        string department
+        boolean is_active
+        datetime created_at
+    }
+
+    Asset {
+        string asset_id PK
+        string asset_name
+        string asset_type
+        string category
+        string serial_number
+        string condition
+        string status
+        string source_type
+        string procurement_ref
+        float cost
+        date acquisition_date
+        string supplier
+        string current_custodian_id FK
+        string department
+        datetime created_at
+        datetime updated_at
+    }
+
+    Assignment {
+        int assignment_id PK
+        string asset_id FK
+        string assigned_to FK
+        string assigned_by FK
+        date assignment_date
+        date return_date
+        string status
+        string notes
+    }
+
+    AuditLog {
+        int log_id PK
+        string user_id FK
+        string action
+        string table_affected
+        string record_id
+        string details
+        datetime timestamp
+    }
+
+    DisposalRecord {
+        int disposal_id PK
+        string asset_id FK
+        date disposal_date
+        string disposal_method
+        string reason
+        string authorised_by FK
+    }
+
+    MaintenanceRecord {
+        int maintenance_id PK
+        string asset_id FK
+        date service_date
+        string service_provider
+        string description
+        float cost
+        date next_service_date
+        string recorded_by FK
+    }
+
+    Transfer {
+        int transfer_id PK
+        string asset_id FK
+        string from_user_id FK
+        string to_user_id FK
+        date transfer_date
+        string reason
+        string authorised_by FK
+        datetime acknowledged_at
+    }
+
+    User ||--o{ Asset : "is custodian of"
+    User ||--o{ Assignment : "receives assignment"
+    User ||--o{ Assignment : "creates assignment"
+    User ||--o{ AuditLog : "generates log"
+    User ||--o{ DisposalRecord : "authorises disposal"
+    User ||--o{ MaintenanceRecord : "records maintenance"
+    User ||--o{ Transfer : "transfers from"
+    User ||--o{ Transfer : "transfers to"
+    User ||--o{ Transfer : "authorises transfer"
+
+    Asset ||--o{ Assignment : "has assignment"
+    Asset ||--o{ DisposalRecord : "is disposed via"
+    Asset ||--o{ MaintenanceRecord : "undergoes maintenance"
+    Asset ||--o{ Transfer : "is transferred"
+```
+
 ### Rules
 
 1. **No raw SQL** — All database operations must go through SQLAlchemy to maintain cross-database compatibility between SQLite and MySQL.
