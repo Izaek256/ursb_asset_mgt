@@ -12,13 +12,16 @@ A monorepo containing a React + TypeScript frontend and a FastAPI backend for ma
 ```
 ursb_asset_mgt/
 ├── backend/
+│   ├── alembic/            # Database migration scripts
 │   ├── app/
 │   │   ├── api/v1/        # API route handlers
 │   │   ├── models/        # Data models
 │   │   ├── schemas/       # Pydantic schemas
-│   │   └── services/      # Business logic
+│   │   ├── services/      # Business logic
+│   │   └── db.py          # Database connection & session config
 │   ├── .env               # Backend environment variables (not committed)
 │   ├── .env.example       # Backend environment variable template
+│   ├── alembic.ini        # Alembic migration configuration
 │   ├── requirements.txt   # Python dependencies
 │   └── venv/              # Python virtual environment (not committed)
 ├── frontend/
@@ -64,12 +67,28 @@ ursb_asset_mgt/
    cp .env.example .env
    ```
 
-5. Run the development server:
+5. Run database migrations:
+   ```bash
+   alembic upgrade head
+   ```
+   This creates/updates the database schema. The SQLite file (`ursb_asset.db`) is created automatically in the `backend/` directory.
+
+6. Run the development server:
    ```bash
    uvicorn main:app --reload --port 8000
    ```
    The API will be available at [http://localhost:8000](http://localhost:8000).  
    Interactive docs at [http://localhost:8000/docs](http://localhost:8000/docs).
+
+### Database Migrations
+
+| Command | Description |
+|---|---|
+| `alembic upgrade head` | Apply all pending migrations |
+| `alembic downgrade -1` | Roll back the last migration |
+| `alembic revision --autogenerate -m "description"` | Generate a new migration from model changes |
+| `alembic current` | Show the current migration revision |
+| `alembic history` | Show migration history |
 
 ### Frontend
 
@@ -103,6 +122,7 @@ ursb_asset_mgt/
 | `APP_NAME` | Application name | `URSB Asset Management` |
 | `DEBUG` | Enable debug mode | `true` |
 | `CORS_ORIGINS` | Allowed CORS origins (comma-separated) | `http://localhost:5173` |
+| `DATABASE_URL` | SQLAlchemy database URL | `sqlite:///./ursb_asset.db` |
 
 ### Frontend (`frontend/.env`)
 
