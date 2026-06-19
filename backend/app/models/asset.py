@@ -8,12 +8,14 @@ from sqlalchemy import (
     DECIMAL,
     Enum,
     ForeignKey,
+    Integer,
     String,
+    Text,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.database import Base
+from app.db import Base
 
 
 class AssetType(str, enum.Enum):
@@ -33,6 +35,7 @@ class AssetCondition(str, enum.Enum):
 
 class AssetStatus(str, enum.Enum):
     ACTIVE = "Active"
+    INACTIVE = "Inactive"
     IN_STORAGE = "In Storage"
     UNDER_MAINTENANCE = "Under Maintenance"
     DISPOSED = "Disposed"
@@ -51,31 +54,40 @@ class Asset(Base):
         String(100), primary_key=True, default=lambda: f"AST-{uuid.uuid4().hex[:8].upper()}"
     )
     asset_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    asset_type: Mapped[AssetType] = mapped_column(
-        Enum(AssetType, native_enum=False, length=50), nullable=False
+    asset_type: Mapped[str | None] = mapped_column(
+        Enum(AssetType, native_enum=False, length=50), nullable=True
     )
     category: Mapped[str] = mapped_column(String(100), nullable=False)
-    serial_number: Mapped[str] = mapped_column(
-        String(100), nullable=False, unique=True, index=True
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    serial_number: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, unique=True, index=True
     )
-    condition: Mapped[AssetCondition] = mapped_column(
-        Enum(AssetCondition, native_enum=False, length=50), nullable=False
+    condition: Mapped[str | None] = mapped_column(
+        Enum(AssetCondition, native_enum=False, length=50), nullable=True
     )
     status: Mapped[AssetStatus] = mapped_column(
         Enum(AssetStatus, native_enum=False, length=50),
         nullable=False,
         default=AssetStatus.ACTIVE,
     )
-    source_type: Mapped[SourceType] = mapped_column(
-        Enum(SourceType, native_enum=False, length=50), nullable=False
+    source_type: Mapped[str | None] = mapped_column(
+        Enum(SourceType, native_enum=False, length=50), nullable=True
     )
     procurement_ref: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    cost: Mapped[float] = mapped_column(DECIMAL(15, 2), nullable=False)
-    acquisition_date: Mapped[date] = mapped_column(Date, nullable=False)
-    supplier: Mapped[str] = mapped_column(String(255), nullable=False)
+    cost: Mapped[float | None] = mapped_column(DECIMAL(15, 2), nullable=True)
+    purchase_cost: Mapped[float | None] = mapped_column(DECIMAL(15, 2), nullable=True)
+    acquisition_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    purchase_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    supplier: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    location: Mapped[str | None] = mapped_column(String(255), nullable=True)
     current_custodian_id: Mapped[str | None] = mapped_column(
         String(36),
-        ForeignKey("users.user_id", ondelete="RESTRICT"),
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    created_by: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
     department: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -92,6 +104,9 @@ class Asset(Base):
     # Relationships
     current_custodian = relationship(
         "User", back_populates="assets_as_custodian", foreign_keys=[current_custodian_id]
+    )
+    creator = relationship(
+        "User", foreign_keys=[created_by]
     )
     assignments = relationship("Assignment", back_populates="asset")
     transfers = relationship("Transfer", back_populates="asset")

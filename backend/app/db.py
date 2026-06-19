@@ -1,6 +1,6 @@
 import os
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, Session
 from typing import Generator
 
@@ -39,3 +39,14 @@ def get_db() -> Generator[Session, None, None]:
             yield db
         finally:
             db.close()
+
+
+def _enforce_sqlite_fks(dbapi_conn, connection_record):
+    """Enable foreign key constraints on SQLite connections."""
+    cursor = dbapi_conn.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
+
+if DATABASE_URL.startswith("sqlite"):
+    event.listen(engine, "connect", _enforce_sqlite_fks)

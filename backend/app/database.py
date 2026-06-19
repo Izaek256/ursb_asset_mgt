@@ -1,3 +1,7 @@
+"""Re-export from app.db so all models share a single Base class."""
+from app.db import Base, SessionLocal, engine, get_db
+
+__all__ = ["Base", "SessionLocal", "engine", "get_db"]
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 import os

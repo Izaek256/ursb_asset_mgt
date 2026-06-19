@@ -29,3 +29,4 @@ class AuthStatusResponse(BaseModel):
     username: str | None = None
     phone_number: str | None = None
     department: str | None = None
+    role: str | None = None

@@ -134,6 +134,7 @@ def auth_check(request: Request, db: Session = Depends(get_db)) -> dict[str, obj
         "username": session.user.username,
         "phone_number": session.user.phone_number,
         "department": session.user.department,
+        "role": session.user.role.value if session.user.role else None,
     }
 
 
