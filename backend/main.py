@@ -18,6 +18,29 @@ async def lifespan(app: FastAPI):
 
     Base.metadata.create_all(engine)
 
+    # Ensure any new columns are added to existing tables before querying
+    with engine.begin() as connection:
+        existing_columns = {
+            row[1] for row in connection.execute(text("PRAGMA table_info(users)")).all()
+        }
+        additional_columns = {
+            "first_name": "first_name TEXT",
+            "last_name": "last_name TEXT",
+            "phone_number": "phone_number TEXT",
+            "department": "department TEXT",
+            "username": "username TEXT UNIQUE",
+            "role": "role VARCHAR(50)",
+            "password_hash": "password_hash VARCHAR(128) NOT NULL DEFAULT ''",
+            "password_salt": "password_salt VARCHAR(128) NOT NULL DEFAULT ''",
+            "is_active": "is_active BOOLEAN NOT NULL DEFAULT 1",
+            "failed_login_attempts": "failed_login_attempts INTEGER NOT NULL DEFAULT 0",
+            "locked_until": "locked_until DATETIME",
+            "created_at": "created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        }
+        for column_name, definition in additional_columns.items():
+            if column_name not in existing_columns:
+                connection.execute(text(f"ALTER TABLE users ADD COLUMN {definition}"))
+
     default_email = os.getenv("AUTH_DEFAULT_EMAIL", "admin@ursb.local").strip().lower()
     default_password = os.getenv("AUTH_DEFAULT_PASSWORD", "Admin123!")
 
@@ -32,23 +55,6 @@ async def lifespan(app: FastAPI):
                 )
             )
             db.commit()
-
-    with engine.begin() as connection:
-        existing_columns = {
-            row[1] for row in connection.execute(text("PRAGMA table_info(users)")).all()
-        }
-        additional_columns = {
-            "first_name": "first_name TEXT",
-            "last_name": "last_name TEXT",
-            "phone_number": "phone_number TEXT",
-            "department": "department TEXT",
-            "username": "username TEXT UNIQUE",
-            "failed_login_attempts": "failed_login_attempts INTEGER NOT NULL DEFAULT 0",
-            "locked_until": "locked_until DATETIME",
-        }
-        for column_name, definition in additional_columns.items():
-            if column_name not in existing_columns:
-                connection.execute(text(f"ALTER TABLE users ADD COLUMN {definition}"))
 
     yield
     engine.dispose()
