@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 load_dotenv()
 
@@ -11,10 +12,45 @@ load_dotenv()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan: startup and shutdown events."""
-    # Import engine so it is initialized when the app starts
-    from app.db import engine
+    from app.db import engine, SessionLocal
+    from app.models import Base, User
+    from app.services.auth import create_password_hash
+
+    Base.metadata.create_all(engine)
+
+    default_email = os.getenv("AUTH_DEFAULT_EMAIL", "admin@ursb.local").strip().lower()
+    default_password = os.getenv("AUTH_DEFAULT_PASSWORD", "Admin123!")
+
+    with SessionLocal() as db:
+        if db.query(User).count() == 0:
+            salt, password_hash = create_password_hash(default_password)
+            db.add(
+                User(
+                    email=default_email,
+                    password_hash=password_hash,
+                    password_salt=salt,
+                )
+            )
+            db.commit()
+
+    with engine.begin() as connection:
+        existing_columns = {
+            row[1] for row in connection.execute(text("PRAGMA table_info(users)")).all()
+        }
+        additional_columns = {
+            "first_name": "first_name TEXT",
+            "last_name": "last_name TEXT",
+            "phone_number": "phone_number TEXT",
+            "department": "department TEXT",
+            "username": "username TEXT UNIQUE",
+            "failed_login_attempts": "failed_login_attempts INTEGER NOT NULL DEFAULT 0",
+            "locked_until": "locked_until DATETIME",
+        }
+        for column_name, definition in additional_columns.items():
+            if column_name not in existing_columns:
+                connection.execute(text(f"ALTER TABLE users ADD COLUMN {definition}"))
+
     yield
-    # Dispose of the connection pool on shutdown
     engine.dispose()
 
 
@@ -33,6 +69,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+from app.api.v1.auth import router as auth_router
+from app.middleware.auth_middleware import AuthMiddleware
+
+app.include_router(auth_router, prefix="/api/v1")
+app.add_middleware(AuthMiddleware)
 
 
 @app.get("/")
