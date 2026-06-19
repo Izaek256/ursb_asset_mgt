@@ -27,7 +27,7 @@ def _cookie_settings(request: Request) -> dict:
     return {
         "httponly": True,
         "secure": secure,
-        "samesite": "none",
+        "samesite": "lax",
         "path": "/",
         "max_age": int(24 * 60 * 60),
     }
@@ -118,22 +118,21 @@ def logout(
 
 
 @router.get("/auth/check", response_model=AuthStatusResponse)
-def auth_check(request: Request, db: Session = Depends(get_db)) -> dict[str, object]:
-    session_token = request.cookies.get(SESSION_COOKIE_NAME)
-    session = get_session(db, session_token)
-    if not session:
+def auth_check(request: Request) -> dict[str, object]:
+    user = getattr(request.state, "user", None)
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required",
         )
     return {
         "authenticated": True,
-        "email": session.user.email,
-        "first_name": session.user.first_name,
-        "last_name": session.user.last_name,
-        "username": session.user.username,
-        "phone_number": session.user.phone_number,
-        "department": session.user.department,
+        "email": user.email,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "username": user.username,
+        "phone_number": user.phone_number,
+        "department": user.department,
     }
 
 
