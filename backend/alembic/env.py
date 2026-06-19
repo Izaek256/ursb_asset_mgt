@@ -1,14 +1,28 @@
 import os
+import sys
 from logging.config import fileConfig
 
-from dotenv import load_dotenv
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-
 from alembic import context
+from sqlalchemy import engine_from_config, pool
 
-# Load environment variables from .env
+# Add the backend directory to Python path so we can import app modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from dotenv import load_dotenv
+
 load_dotenv()
+
+# Import all models so Alembic can detect them
+from app.models import (  # noqa: F401
+    Asset,
+    Assignment,
+    AuditLog,
+    DisposalRecord,
+    MaintenanceRecord,
+    Transfer,
+    User,
+)
+from app.database import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -23,10 +37,8 @@ config.set_main_option("sqlalchemy.url", database_url)
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Import Base metadata for autogenerate support
-from app.db import Base  # noqa: E402
-import app.models  # noqa: E402, F401 – ensure all models are imported
-
+# add your model's MetaData object here
+# for 'autogenerate' support
 target_metadata = Base.metadata
 
 
@@ -54,7 +66,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        render_as_batch=True,
+        render_as_batch=url.startswith("sqlite"),
     )
 
     with context.begin_transaction():
@@ -78,7 +90,7 @@ def run_migrations_online() -> None:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            render_as_batch=True,
+            render_as_batch=connectable.url.drivername.startswith("sqlite"),
         )
 
         with context.begin_transaction():
