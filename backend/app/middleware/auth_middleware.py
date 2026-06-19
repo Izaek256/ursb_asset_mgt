@@ -7,7 +7,23 @@ from app.services.auth import get_session, SESSION_COOKIE_NAME
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, exempt_paths: tuple[str, ...] = ("/login", "/logout", "/health", "/", "/openapi.json", "/docs", "/redoc")):
+    def __init__(
+        self,
+        app,
+        exempt_paths: tuple[str, ...] = (
+            "/login",
+            "/logout",
+            "/signup",
+            "/health",
+            "/",
+            "/openapi.json",
+            "/docs",
+            "/redoc",
+            "/api/v1/login",
+            "/api/v1/signup",
+            "/api/v1/logout",
+        ),
+    ):
         super().__init__(app)
         self.exempt_paths = exempt_paths
 

@@ -129,6 +129,11 @@ def auth_check(request: Request, db: Session = Depends(get_db)) -> dict[str, obj
     return {
         "authenticated": True,
         "email": session.user.email,
+        "first_name": session.user.first_name,
+        "last_name": session.user.last_name,
+        "username": session.user.username,
+        "phone_number": session.user.phone_number,
+        "department": session.user.department,
     }
 
 
