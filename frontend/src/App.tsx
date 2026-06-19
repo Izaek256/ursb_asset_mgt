@@ -1,14 +1,29 @@
 import React from "react";
 import AdminUsers from "./pages/AdminUsers";
 import AuditLogs from "./pages/AuditLogs";
+import Dashboard from "./pages/Dashboard";
 
-const TAB_ITEMS = [
-  { id: "users", label: "User Management", icon: "👥" },
-  { id: "audit", label: "Audit Logs", icon: "🕐" },
+type NavId = "dashboard" | "users" | "audit" | "assets" | "transfers" | "settings";
+
+interface NavItem {
+  id: NavId;
+  label: string;
+  icon: string;
+  path: string;
+  badge?: number;
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { id: "dashboard", label: "Dashboard", icon: "📊", path: "/dashboard" },
+  { id: "assets", label: "Assets", icon: "📦", path: "/assets", badge: 12 },
+  { id: "transfers", label: "Transfers", icon: "🔄", path: "/transfers" },
+  { id: "users", label: "User Management", icon: "👥", path: "/admin/users" },
+  { id: "audit", label: "Audit Logs", icon: "🕐", path: "/admin/audit-logs" },
+  { id: "settings", label: "Settings", icon: "⚙️", path: "/settings" },
 ];
 
 function App() {
-  const [path, setPath] = React.useState(window.location.pathname || "/admin/users");
+  const [path, setPath] = React.useState(window.location.pathname || "/dashboard");
 
   React.useEffect(() => {
     const onPop = () => setPath(window.location.pathname);
@@ -21,60 +36,79 @@ function App() {
     setPath(to);
   };
 
-  let content: React.ReactNode;
-  let activeTab = "users";
+  const activeItem = NAV_ITEMS.find((n) => n.path === path) ?? NAV_ITEMS[0];
 
-  if (path === "/admin/audit-logs") {
-    content = <AuditLogs />;
-    activeTab = "audit";
-  } else {
-    content = <AdminUsers />;
-    activeTab = "users";
+  let content: React.ReactNode;
+  switch (activeItem.id) {
+    case "dashboard":
+      content = <Dashboard />;
+      break;
+    case "audit":
+      content = <AuditLogs />;
+      break;
+    case "users":
+      content = <AdminUsers />;
+      break;
+    default:
+      content = (
+        <div className="placeholder-page">
+          <div className="placeholder-icon">{activeItem.icon}</div>
+          <h2>{activeItem.label}</h2>
+          <p>This section is under development.</p>
+        </div>
+      );
   }
 
   return (
     <div className="app-container">
-      {/* Sidebar */}
+      {/* ── Sidebar ────────────────────────────────────────────────────────── */}
       <aside className="sidebar">
+        {/* Logo / brand */}
         <div className="sidebar-header">
           <div className="sidebar-icon">🏢</div>
           <div>
-            <div className="sidebar-title">Staff Portal</div>
-            <div className="sidebar-subtitle">Admin Dashboard</div>
+            <div className="sidebar-title">URSB Assets</div>
+            <div className="sidebar-subtitle">Management Portal</div>
           </div>
         </div>
 
+        {/* Nav */}
         <nav className="sidebar-nav">
           <div className="nav-section">Main Menu</div>
-          {TAB_ITEMS.map((item) => (
+          {NAV_ITEMS.map((item) => (
             <button
               key={item.id}
-              className={`nav-item ${activeTab === item.id ? "active" : ""}`}
-              onClick={() => navigate(item.id === "users" ? "/admin/users" : "/admin/audit-logs")}
+              className={`nav-item ${activeItem.id === item.id ? "active" : ""}`}
+              onClick={() => navigate(item.path)}
             >
               <span className="nav-icon">{item.icon}</span>
-              {item.label}
+              <span className="nav-label">{item.label}</span>
+              {item.badge && <span className="nav-badge">{item.badge}</span>}
             </button>
           ))}
         </nav>
 
+        {/* Profile */}
         <div className="sidebar-profile">
           <div className="profile-avatar">SA</div>
-          <div>
+          <div className="profile-info">
             <div className="profile-name">System Admin</div>
-            <div className="profile-role">Administrator</div>
+            <div className="profile-role">admin@ursb.go.ug</div>
           </div>
+          <button className="sidebar-logout" title="Sign out">⏻</button>
         </div>
       </aside>
 
-      {/* Main Content */}
+      {/* ── Main ───────────────────────────────────────────────────────────── */}
       <div className="main-content">
         <header className="header">
-          <h1 className="header-title">
-            {activeTab === "users" ? "User Management" : "Audit Logs"}
-          </h1>
+          <div>
+            <h1 className="header-title">{activeItem.label}</h1>
+            <p className="header-breadcrumb">Home / {activeItem.label}</p>
+          </div>
           <div className="header-actions">
-            <button className="icon-btn">🔔</button>
+            <button className="icon-btn" title="Notifications">🔔</button>
+            <button className="icon-btn" title="Search">🔍</button>
             <button className="btn btn-secondary">Sign out</button>
           </div>
         </header>
