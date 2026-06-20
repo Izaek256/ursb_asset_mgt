@@ -1,8 +1,13 @@
 import React from "react";
+import { AuthProvider, useAuth } from "./AuthContext";
 import AdminUsers from "./pages/AdminUsers";
 import AuditLogs from "./pages/AuditLogs";
 import Dashboard from "./pages/Dashboard";
+import LoginPage from "./pages/Login";
+import ProfileModal from "./components/ProfileModal";
+import NotificationPanel from "./components/NotificationPanel";
 
+// ── Navigation config ────────────────────────────────────────────────────────────
 type NavId = "dashboard" | "users" | "audit" | "assets" | "transfers" | "settings";
 
 interface NavItem {
@@ -10,20 +15,31 @@ interface NavItem {
   label: string;
   icon: string;
   path: string;
-  badge?: number;
+  roles: string[]; // which roles can see this nav item
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { id: "dashboard", label: "Dashboard", icon: "📊", path: "/dashboard" },
-  { id: "assets", label: "Assets", icon: "📦", path: "/assets", badge: 12 },
-  { id: "transfers", label: "Transfers", icon: "🔄", path: "/transfers" },
-  { id: "users", label: "User Management", icon: "👥", path: "/admin/users" },
-  { id: "audit", label: "Audit Logs", icon: "🕐", path: "/admin/audit-logs" },
-  { id: "settings", label: "Settings", icon: "⚙️", path: "/settings" },
+const ALL_ROLES = [
+  "System Administrator",
+  "Asset Manager",
+  "Asset Custodian",
+  "Employee",
 ];
 
-function App() {
+const NAV_ITEMS: NavItem[] = [
+  { id: "dashboard", label: "Dashboard", icon: "📊", path: "/dashboard", roles: ALL_ROLES },
+  { id: "assets", label: "Assets", icon: "📦", path: "/assets", roles: ["System Administrator", "Asset Manager", "Asset Custodian"] },
+  { id: "transfers", label: "Transfers", icon: "🔄", path: "/transfers", roles: ["System Administrator", "Asset Manager"] },
+  { id: "users", label: "User Management", icon: "👥", path: "/admin/users", roles: ["System Administrator", "Asset Manager"] },
+  { id: "audit", label: "Audit Logs", icon: "🕐", path: "/admin/audit-logs", roles: ["System Administrator", "Asset Manager"] },
+  { id: "settings", label: "Settings", icon: "⚙️", path: "/settings", roles: ["System Administrator"] },
+];
+
+// ── Inner app (requires auth) ────────────────────────────────────────────────────
+function AppShell() {
+  const { user, logout } = useAuth();
   const [path, setPath] = React.useState(window.location.pathname || "/dashboard");
+  const [profileOpen, setProfileOpen] = React.useState(false);
+  const [notifOpen, setNotifOpen] = React.useState(false);
 
   React.useEffect(() => {
     const onPop = () => setPath(window.location.pathname);
@@ -36,10 +52,13 @@ function App() {
     setPath(to);
   };
 
-  const activeItem = NAV_ITEMS.find((n) => n.path === path) ?? NAV_ITEMS[0];
+  // Filter nav items by user role
+  const visibleNav = NAV_ITEMS.filter((n) => n.roles.includes(user!.role));
+  const activeItem = visibleNav.find((n) => n.path === path) ?? visibleNav[0];
 
+  // Route to correct content
   let content: React.ReactNode;
-  switch (activeItem.id) {
+  switch (activeItem?.id) {
     case "dashboard":
       content = <Dashboard />;
       break;
@@ -52,18 +71,25 @@ function App() {
     default:
       content = (
         <div className="placeholder-page">
-          <div className="placeholder-icon">{activeItem.icon}</div>
-          <h2>{activeItem.label}</h2>
+          <div className="placeholder-icon">{activeItem?.icon ?? "📄"}</div>
+          <h2>{activeItem?.label ?? "Page"}</h2>
           <p>This section is under development.</p>
         </div>
       );
   }
 
+  // User initials
+  const initials = user!.full_name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+
   return (
     <div className="app-container">
-      {/* ── Sidebar ────────────────────────────────────────────────────────── */}
+      {/* ── Sidebar ──────────────────────────────────────────────────────────── */}
       <aside className="sidebar">
-        {/* Logo / brand */}
         <div className="sidebar-header">
           <div className="sidebar-icon">🏢</div>
           <div>
@@ -72,51 +98,81 @@ function App() {
           </div>
         </div>
 
-        {/* Nav */}
         <nav className="sidebar-nav">
           <div className="nav-section">Main Menu</div>
-          {NAV_ITEMS.map((item) => (
+          {visibleNav.map((item) => (
             <button
               key={item.id}
-              className={`nav-item ${activeItem.id === item.id ? "active" : ""}`}
+              className={`nav-item ${activeItem?.id === item.id ? "active" : ""}`}
               onClick={() => navigate(item.path)}
             >
               <span className="nav-icon">{item.icon}</span>
               <span className="nav-label">{item.label}</span>
-              {item.badge && <span className="nav-badge">{item.badge}</span>}
             </button>
           ))}
         </nav>
 
-        {/* Profile */}
-        <div className="sidebar-profile">
-          <div className="profile-avatar">SA</div>
+        <div
+          className="sidebar-profile"
+          onClick={() => setProfileOpen(true)}
+        >
+          <div className="profile-avatar">{initials}</div>
           <div className="profile-info">
-            <div className="profile-name">System Admin</div>
-            <div className="profile-role">admin@ursb.go.ug</div>
+            <div className="profile-name">{user!.full_name}</div>
+            <div className="profile-role">{user!.role}</div>
           </div>
-          <button className="sidebar-logout" title="Sign out">⏻</button>
         </div>
       </aside>
 
-      {/* ── Main ───────────────────────────────────────────────────────────── */}
+      {/* ── Main ─────────────────────────────────────────────────────────────── */}
       <div className="main-content">
         <header className="header">
           <div>
-            <h1 className="header-title">{activeItem.label}</h1>
-            <p className="header-breadcrumb">Home / {activeItem.label}</p>
+            <h1 className="header-title">{activeItem?.label ?? "Dashboard"}</h1>
+            <p className="header-breadcrumb">Home / {activeItem?.label ?? "Dashboard"}</p>
           </div>
           <div className="header-actions">
-            <button className="icon-btn" title="Notifications">🔔</button>
+            <button
+              className="icon-btn"
+              title="Notifications"
+              onClick={() => setNotifOpen(!notifOpen)}
+            >
+              🔔
+            </button>
             <button className="icon-btn" title="Search">🔍</button>
-            <button className="btn btn-secondary">Sign out</button>
+            <button className="btn btn-secondary" onClick={logout}>
+              Sign out
+            </button>
           </div>
         </header>
 
         <div className="content-area">{content}</div>
       </div>
+
+      {/* ── Overlays ─────────────────────────────────────────────────────────── */}
+      <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
+      <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} />
     </div>
   );
 }
 
-export default App;
+// ── Root (auth gate) ─────────────────────────────────────────────────────────────
+function AppRoot() {
+  const { user, token } = useAuth();
+
+  // Not logged in → show login
+  if (!user || !token) {
+    return <LoginPage />;
+  }
+
+  return <AppShell />;
+}
+
+// ── Wrapped export ───────────────────────────────────────────────────────────────
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppRoot />
+    </AuthProvider>
+  );
+}

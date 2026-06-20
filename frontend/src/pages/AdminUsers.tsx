@@ -1,46 +1,44 @@
 import React from "react";
-import { UserRow, Role } from "../types";
+import { Role, UserRow } from "../types";
+import { apiFetch, useAuth } from "../AuthContext";
 import EditRoleModal from "../components/EditRoleModal";
 import ConfirmDialog from "../components/ConfirmDialog";
 
-const ROLE_FILTERS: (Role | "All")[] = ["All", "System Administrator", "Asset Manager", "Asset Custodian", "Employee"];
-
-const getBadgeClass = (status: string): string => {
-  if (status === "Active") return "badge-active";
-  if (status === "Inactive") return "badge-inactive";
-  return "badge";
-};
+const ROLE_FILTERS: (Role | "All")[] = [
+  "All", "System Administrator", "Asset Manager", "Asset Custodian", "Employee",
+];
 
 export default function AdminUsers() {
+  const { token, user: currentUser } = useAuth();
   const [users, setUsers] = React.useState<UserRow[]>([]);
   const [filter, setFilter] = React.useState<Role | "All">("All");
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [successMsg, setSuccessMsg] = React.useState<string | null>(null);
 
   const [editing, setEditing] = React.useState<UserRow | null>(null);
   const [isEditOpen, setEditOpen] = React.useState(false);
   const [pendingNewRole, setPendingNewRole] = React.useState<Role | null>(null);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
 
-  React.useEffect(() => {
-    // Fetch users list. Replace endpoint as needed.
-    fetch("/api/admin/users")
-      .then((r) => {
-        if (!r.ok) throw new Error("Failed to fetch");
-        return r.json();
-      })
-      .then((data) => setUsers(data))
-      .catch(() => {
-        // Fallback: sample data if backend not available
-        setUsers([
-          { id: "1", name: "Alice Johnson", email: "alice@example.com", role: "System Administrator", isActive: true },
-          { id: "2", name: "Bob Smith", email: "bob@example.com", role: "Employee", isActive: true },
-          { id: "3", name: "Clara Zhou", email: "clara@example.com", role: "Asset Manager", isActive: false },
-          { id: "4", name: "David Lee", email: "david@example.com", role: "Asset Custodian", isActive: true },
-          { id: "5", name: "Emma Davis", email: "emma@example.com", role: "Asset Manager", isActive: true },
-        ]);
-      });
-  }, []);
+  // Only System Administrator can change roles
+  const canChangeRole = currentUser?.role === "System Administrator";
+
+  const fetchUsers = React.useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await apiFetch<UserRow[]>("/admin/users", {}, token);
+      setUsers(data);
+    } catch {
+      setUsers([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token]);
+
+  React.useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
   const openEdit = (u: UserRow) => {
+    if (!canChangeRole) return;
     setEditing(u);
     setEditOpen(true);
   };
@@ -52,20 +50,20 @@ export default function AdminUsers() {
 
   const applyChange = async () => {
     if (!editing || !pendingNewRole) return;
-
     try {
-      const res = await fetch(`/api/admin/users/${editing.id}/role`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: pendingNewRole }),
-      });
+      const res = await apiFetch<{ message: string }>(
+        `/admin/users/${editing.id}/role`,
+        { method: "PUT", body: JSON.stringify({ role: pendingNewRole }) },
+        token
+      );
 
-      if (!res.ok) throw new Error("update failed");
-
-      // optimistic update
-      setUsers((prev) => prev.map((u) => (u.id === editing.id ? { ...u, role: pendingNewRole } : u)));
-    } catch (err) {
-      console.error(err);
+      setUsers((prev) =>
+        prev.map((u) => (u.id === editing.id ? { ...u, role: pendingNewRole } : u))
+      );
+      setSuccessMsg(res.message);
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: any) {
+      alert(err.message || "Failed to update role");
     } finally {
       setConfirmOpen(false);
       setEditOpen(false);
@@ -76,13 +74,21 @@ export default function AdminUsers() {
 
   const visible = users.filter((u) => filter === "All" || u.role === filter);
 
+  if (isLoading) {
+    return (
+      <div className="page-loading">
+        Loading users...
+      </div>
+    );
+  }
+
   return (
     <>
+      {successMsg && <div className="alert-success">{successMsg}</div>}
+
       <div className="filter-bar">
         <div>
-          <label htmlFor="role-filter" className="filter-label">
-            Filter by Role
-          </label>
+          <label htmlFor="role-filter" className="filter-label">Filter by Role</label>
           <select
             id="role-filter"
             value={filter}
@@ -90,9 +96,7 @@ export default function AdminUsers() {
             className="filter-select"
           >
             {ROLE_FILTERS.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
+              <option key={r} value={r}>{r}</option>
             ))}
           </select>
         </div>
@@ -105,35 +109,39 @@ export default function AdminUsers() {
             <tr>
               <th>Name / Email</th>
               <th>Current Role</th>
+              <th>Department</th>
               <th>Status</th>
-              <th>Actions</th>
+              {canChangeRole && <th>Actions</th>}
             </tr>
           </thead>
           <tbody>
             {visible.map((u) => (
               <tr key={u.id}>
                 <td>
-                  <div style={{ fontWeight: 500 }}>{u.name}</div>
+                  <div className="user-name">{u.name}</div>
                   <div className="text-small text-muted">{u.email}</div>
                 </td>
                 <td>{u.role}</td>
+                <td>{(u as any).department ?? "—"}</td>
                 <td>
-                  <span className={`badge ${getBadgeClass(u.isActive ? "Active" : "Inactive")}`}>
+                  <span className={`badge ${u.isActive ? "badge-active" : "badge-inactive"}`}>
                     {u.isActive ? "Active" : "Inactive"}
                   </span>
                 </td>
-                <td>
-                  <button className="btn btn-primary" onClick={() => openEdit(u)}>
-                    Change Role
-                  </button>
-                </td>
+                {canChangeRole && (
+                  <td>
+                    <button className="btn btn-primary" onClick={() => openEdit(u)}>
+                      Change Role
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
         </table>
 
         {visible.length === 0 && (
-          <div style={{ padding: "2rem", textAlign: "center", color: "var(--color-muted)" }}>
+          <div className="page-empty">
             No users found with the selected filter.
           </div>
         )}
