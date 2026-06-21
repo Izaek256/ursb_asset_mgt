@@ -17,12 +17,6 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user: "UserInfo"
-
-
 class UserInfo(BaseModel):
     user_id: str
     full_name: str
@@ -33,6 +27,12 @@ class UserInfo(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserInfo
 
 
 class MeResponse(BaseModel):

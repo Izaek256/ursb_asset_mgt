@@ -39,10 +39,14 @@ app.add_middleware(
 from app.api.v1.routes_auth import router as auth_router
 from app.api.v1.routes_dashboard import router as dashboard_router
 from app.api.v1.routes_admin import router as admin_router
+from app.api.v1.routes_assets import router as assets_router
+from app.api.v1.routes_transfers import router as transfers_router
 
 app.include_router(auth_router)
 app.include_router(dashboard_router)
 app.include_router(admin_router)
+app.include_router(assets_router)
+app.include_router(transfers_router)
 
 
 # ── Health endpoints ─────────────────────────────────────────────────────────────

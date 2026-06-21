@@ -2,8 +2,11 @@ import React from "react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import AdminUsers from "./pages/AdminUsers";
 import AuditLogs from "./pages/AuditLogs";
+import Assets from "./pages/Assets";
 import Dashboard from "./pages/Dashboard";
 import LoginPage from "./pages/Login";
+import Settings from "./pages/Settings";
+import Transfers from "./pages/Transfers";
 import ProfileModal from "./components/ProfileModal";
 import NotificationPanel from "./components/NotificationPanel";
 
@@ -62,11 +65,20 @@ function AppShell() {
     case "dashboard":
       content = <Dashboard />;
       break;
+    case "assets":
+      content = <Assets />;
+      break;
+    case "transfers":
+      content = <Transfers />;
+      break;
     case "audit":
       content = <AuditLogs />;
       break;
     case "users":
       content = <AdminUsers />;
+      break;
+    case "settings":
+      content = <Settings />;
       break;
     default:
       content = (
