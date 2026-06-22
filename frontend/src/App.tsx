@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from "./AuthContext";
 import AdminUsers from "./pages/AdminUsers";
 import AuditLogs from "./pages/AuditLogs";
 import Assets from "./pages/Assets";
+import AssetRegistration from "./pages/AssetRegistration";
 import Dashboard from "./pages/Dashboard";
 import LoginPage from "./pages/Login";
 import Settings from "./pages/Settings";
@@ -11,7 +12,7 @@ import ProfileModal from "./components/ProfileModal";
 import NotificationPanel from "./components/NotificationPanel";
 
 // ── Navigation config ────────────────────────────────────────────────────────────
-type NavId = "dashboard" | "users" | "audit" | "assets" | "transfers" | "settings";
+type NavId = "dashboard" | "users" | "audit" | "assets" | "register-asset" | "transfers" | "settings";
 
 interface NavItem {
   id: NavId;
@@ -31,6 +32,7 @@ const ALL_ROLES = [
 const NAV_ITEMS: NavItem[] = [
   { id: "dashboard", label: "Dashboard", icon: "📊", path: "/dashboard", roles: ALL_ROLES },
   { id: "assets", label: "Assets", icon: "📦", path: "/assets", roles: ["System Administrator", "Asset Manager", "Asset Custodian"] },
+  { id: "register-asset", label: "Register Asset", icon: "➕", path: "/assets/register", roles: ["Asset Manager"] },
   { id: "transfers", label: "Transfers", icon: "🔄", path: "/transfers", roles: ["System Administrator", "Asset Manager"] },
   { id: "users", label: "User Management", icon: "👥", path: "/admin/users", roles: ["System Administrator", "Asset Manager"] },
   { id: "audit", label: "Audit Logs", icon: "🕐", path: "/admin/audit-logs", roles: ["System Administrator", "Asset Manager"] },
@@ -67,6 +69,9 @@ function AppShell() {
       break;
     case "assets":
       content = <Assets />;
+      break;
+    case "register-asset":
+      content = <AssetRegistration />;
       break;
     case "transfers":
       content = <Transfers />;
