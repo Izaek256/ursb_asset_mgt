@@ -124,7 +124,7 @@ def update_user_role(
     # Create audit log
     audit_entry = AuditLog(
         user_id=current_user.user_id,
-        action="UPDATE",
+        action="ROLE_CHANGE",
         table_affected="users",
         record_id=target.user_id,
         details=f"Role changed from '{old_role}' to '{new_role.value}' for {target.full_name}.",
