@@ -57,10 +57,8 @@ export default function AdminUsers() {
         token
       );
 
-      setUsers((prev) =>
-        prev.map((u) => (u.id === editing.id ? { ...u, role: pendingNewRole } : u))
-      );
       setSuccessMsg(res.message);
+      await fetchUsers();
       setTimeout(() => setSuccessMsg(null), 4000);
     } catch (err: any) {
       alert(err.message || "Failed to update role");

@@ -27,6 +27,10 @@ def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
 
+def hash_password(plain: str) -> str:
+    return pwd_context.hash(plain)
+
+
 def create_access_token(user_id: str, role: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     payload = {"sub": user_id, "role": role, "exp": expire}
@@ -60,6 +64,15 @@ def get_current_user(
     user = db.query(User).filter(User.user_id == user_id).first()
     if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+
+    # Enforce immediate role changes: if the DB role differs from the token role,
+    # force re-authentication so the user picks up their new permissions.
+    token_role: str = payload.get("role", "")
+    if token_role != user.role.value:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Role updated, please re-authenticate",
+        )
 
     return user
 

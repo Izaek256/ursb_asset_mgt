@@ -288,11 +288,11 @@ def update_user_role(
 
     target.role = new_role
 
-    _log(
-        db,
-        actor=current_user,
-        action="UPDATE",
-        table="users",
+    # Create audit log
+    audit_entry = AuditLog(
+        user_id=current_user.user_id,
+        action="ROLE_CHANGE",
+        table_affected="users",
         record_id=target.user_id,
         details=(
             f"Role changed from '{old_role}' to '{new_role.value}' "
