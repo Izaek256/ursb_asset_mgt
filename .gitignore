@@ -10,10 +10,22 @@ backend/__pycache__/
 backend/**/*.pyc
 backend/.env
 backend/*.db
+debug.log
+backend/app/middleware/
+backend/app/models/session.py
+backend/app/schemas/auth.py
+backend/app/services/auth.py
+backend/auth_test.py
 
 # Frontend / Node exclusions
 frontend/node_modules/
 frontend/dist/
 frontend/.env
 frontend/.env.local
+frontend/vite.config.js
+frontend/src/App/
+frontend/src/components/Login/
+frontend/public/ursb-logo.svg
+frontend/src/assets/ursb-logo.svg
 *.db
+backend/ursb_asset.db
