@@ -6,7 +6,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session as DbSession
 
-from app.models import User, Session as SessionModel
+from app.models import User, Session as SessionModel, UserRole
 
 SESSION_COOKIE_NAME = "ursb_session"
 SESSION_DURATION = timedelta(days=1)
@@ -88,6 +88,7 @@ def create_user(
     phone_number: str | None = None,
     department: str | None = None,
     username: str | None = None,
+    role: UserRole | None = UserRole.EMPLOYEE,
 ) -> User:
     salt, password_hash = create_password_hash(password)
     user = User(
@@ -97,6 +98,7 @@ def create_user(
         phone_number=phone_number,
         department=department,
         username=username.strip().lower() if username else None,
+        role=role,
         password_hash=password_hash,
         password_salt=salt,
     )
@@ -140,10 +142,18 @@ def get_session(db: DbSession, token: str) -> Optional[SessionModel]:
     )
     if not session:
         return None
-    if session.expires_at < datetime.utcnow():
+    
+    now = datetime.utcnow()
+    if session.expires_at < now:
         db.delete(session)
         db.commit()
         return None
+        
+    # Extend session expiration
+    session.expires_at = now + SESSION_DURATION
+    db.add(session)
+    db.commit()
+    
     return session
 
 
