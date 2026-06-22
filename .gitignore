@@ -28,3 +28,4 @@ frontend/src/components/Login/
 frontend/public/ursb-logo.svg
 frontend/src/assets/ursb-logo.svg
 *.db
+backend/ursb_asset.db
