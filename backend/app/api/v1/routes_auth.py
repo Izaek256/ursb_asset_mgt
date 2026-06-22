@@ -6,17 +6,12 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models.user import User
-from app.api.v1.auth import verify_password, create_access_token, get_current_user
+from app.api.v1.auth import verify_password, hash_password, create_access_token, get_current_user
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 # ── Schemas ──────────────────────────────────────────────────────────────────────
-class LoginRequest(BaseModel):
-    email: str
-    password: str
-
-
 class UserInfo(BaseModel):
     user_id: str
     full_name: str
@@ -27,6 +22,23 @@ class UserInfo(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class SignupRequest(BaseModel):
+    full_name: str
+    email: str
+    password: str
+    department: str
+
+
+class SignupResponse(BaseModel):
+    message: str
+    user: UserInfo
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
 
 
 class TokenResponse(BaseModel):
@@ -49,6 +61,49 @@ class MeResponse(BaseModel):
 
 
 # ── Endpoints ────────────────────────────────────────────────────────────────────
+@router.post("/signup", response_model=SignupResponse)
+def signup(body: SignupRequest, db: Session = Depends(get_db)):
+    """Create a new user account (defaults to Employee role)."""
+    existing = db.query(User).filter(User.email == body.email).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists.",
+        )
+
+    if len(body.password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Password must be at least 8 characters.",
+        )
+
+    from app.models.user import UserRole
+
+    new_user = User(
+        full_name=body.full_name,
+        email=body.email,
+        password_hash=hash_password(body.password),
+        role=UserRole.EMPLOYEE,
+        department=body.department,
+        is_active=True,
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return SignupResponse(
+        message="Account created successfully. You can now sign in.",
+        user=UserInfo(
+            user_id=new_user.user_id,
+            full_name=new_user.full_name,
+            email=new_user.email,
+            role=new_user.role.value,
+            department=new_user.department,
+            is_active=new_user.is_active,
+        ),
+    )
+
+
 @router.post("/login", response_model=TokenResponse)
 def login(body: LoginRequest, db: Session = Depends(get_db)):
     """Authenticate user and return JWT token."""

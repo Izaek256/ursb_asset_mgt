@@ -1603,6 +1603,40 @@ select.form-control {
   margin-top: 4px;
 }
 
+/* ── AUTH TOGGLE ──────────────────────────────────────────────────────────────── */
+.auth-toggle {
+  display: flex;
+  gap: 4px;
+  background: #f3f4f6;
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 1.25rem;
+}
+
+.auth-toggle-btn {
+  flex: 1;
+  padding: 9px 0;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-muted);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s ease;
+}
+
+.auth-toggle-btn:hover {
+  color: var(--color-text);
+}
+
+.auth-toggle-btn.active {
+  background: var(--color-white);
+  color: var(--color-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
 @media (max-width: 768px) {
   .notif-panel {
     right: 8px;
