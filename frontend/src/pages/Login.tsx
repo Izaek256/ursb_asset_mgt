@@ -69,13 +69,14 @@ export default function LoginPage() {
     setIsSigningUp(true);
     try {
       const data = await apiFetch<{ message: string }>(
-        "/auth/signup",
+        "/signup",
         {
           method: "POST",
           body: JSON.stringify({
             full_name: fullName,
             email: signupEmail,
             password: signupPassword,
+            confirm_password: confirmPassword,
             department,
           }),
         }

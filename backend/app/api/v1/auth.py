@@ -78,21 +78,28 @@ def signup(
             detail="Email is already registered",
         )
 
-    if payload.username and get_user_by_username(db, payload.username):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username is already taken",
-        )
+    # Generate a unique username from email prefix
+    base_username = payload.email.split("@")[0].strip().lower()
+    username = base_username
+    counter = 1
+    while get_user_by_username(db, username):
+        username = f"{base_username}{counter}"
+        counter += 1
+
+    # Extract first and last names
+    names = payload.full_name.strip().split(maxsplit=1)
+    first_name = names[0] if names else ""
+    last_name = names[1] if len(names) > 1 else ""
 
     create_user(
         db,
         email=payload.email,
         password=payload.password,
-        first_name=payload.first_name,
-        last_name=payload.last_name,
-        phone_number=payload.phone_number,
+        first_name=first_name,
+        last_name=last_name,
         department=payload.department,
-        username=payload.username,
+        username=username,
+        full_name=payload.full_name,
     )
     return {"message": "Account created successfully. Please sign in."}
 

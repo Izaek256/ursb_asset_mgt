@@ -3,17 +3,25 @@ from main import app
 from app.db import engine
 from app.db import Base
 
+from app.db import SessionLocal
+from app.models.user import User
+
 Base.metadata.create_all(engine)
+
+# Cleanup test user if exists to ensure test is reproducible
+with SessionLocal() as db:
+    existing = db.query(User).filter(User.email == 'testuser@example.com').first()
+    if existing:
+        db.delete(existing)
+        db.commit()
+
 client = TestClient(app)
 
 print('Testing /api/v1/login and /api/v1/signup')
 
 signup_payload = {
-    'first_name': 'Test',
-    'last_name': 'User',
-    'username': 'testuser123',
+    'full_name': 'Test User',
     'email': 'testuser@example.com',
-    'phone_number': '+1234567890',
     'department': 'it',
     'password': 'Password123!',
     'confirm_password': 'Password123!'
