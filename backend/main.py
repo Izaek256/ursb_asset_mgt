@@ -13,8 +13,9 @@ load_dotenv()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan: startup and shutdown events."""
-    from app.db import engine, SessionLocal
-    from app.models import Base, User
+    from app.db import engine, SessionLocal, Base
+    from app.models import User
+    from app.models.user import UserRole
     from app.services.auth import create_password_hash
 
     Base.metadata.create_all(engine)
@@ -53,6 +54,8 @@ async def lifespan(app: FastAPI):
                     email=default_email,
                     password_hash=password_hash,
                     password_salt=salt,
+                    role=UserRole.SYSTEM_ADMINISTRATOR,
+                    department="IT",
                 )
             )
             db.commit()
