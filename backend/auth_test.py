@@ -12,7 +12,7 @@ signup_payload = {
     'first_name': 'Test',
     'last_name': 'User',
     'username': 'testuser123',
-    'email': 'testuser+1@ursb.local',
+    'email': 'testuser@example.com',
     'phone_number': '+1234567890',
     'department': 'it',
     'password': 'Password123!',
@@ -21,7 +21,7 @@ signup_payload = {
 res = client.post('/api/v1/signup', json=signup_payload)
 print('signup status', res.status_code, res.json())
 
-login_payload = {'email': 'testuser+1@ursb.local', 'password': 'Password123!'}
+login_payload = {'email': 'testuser@example.com', 'password': 'Password123!'}
 res = client.post('/api/v1/login', json=login_payload)
 print('login status', res.status_code, res.json())
 print('cookies', res.cookies)

@@ -3,7 +3,7 @@ from datetime import date
 from sqlalchemy import Date, DECIMAL, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.database import Base
+from app.db import Base
 
 
 class MaintenanceRecord(Base):
@@ -24,7 +24,7 @@ class MaintenanceRecord(Base):
     next_service_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     recorded_by: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("users.user_id", ondelete="RESTRICT"),
+        ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
     )
 
