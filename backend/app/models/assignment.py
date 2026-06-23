@@ -25,12 +25,12 @@ class Assignment(Base):
     )
     assigned_to: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("users.id", ondelete="RESTRICT"),
+        ForeignKey("users.user_id", ondelete="RESTRICT"),
         nullable=False,
     )
     assigned_by: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("users.id", ondelete="RESTRICT"),
+        ForeignKey("users.user_id", ondelete="RESTRICT"),
         nullable=False,
     )
     assignment_date: Mapped[date] = mapped_column(Date, nullable=False)

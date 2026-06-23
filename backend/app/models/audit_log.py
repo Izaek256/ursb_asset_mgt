@@ -14,7 +14,7 @@ class AuditLog(Base):
     )
     user_id: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("users.id", ondelete="RESTRICT"),
+        ForeignKey("users.user_id", ondelete="RESTRICT"),
         nullable=False,
     )
     action: Mapped[str] = mapped_column(String(50), nullable=False)

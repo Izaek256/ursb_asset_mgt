@@ -11,6 +11,7 @@ from app.models.transfer import Transfer
 from app.models.maintenance_record import MaintenanceRecord
 from app.models.disposal_record import DisposalRecord, DisposalMethod
 from app.models.audit_log import AuditLog
+from app.models.session import Session
 
 __all__ = [
     "User",
@@ -27,4 +28,5 @@ __all__ = [
     "DisposalRecord",
     "DisposalMethod",
     "AuditLog",
+    "Session",
 ]
