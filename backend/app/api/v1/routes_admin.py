@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models.user import User, UserRole
 from app.models.audit_log import AuditLog
-from app.api.v1.auth import get_current_user, require_roles, hash_password
+from app.api.v1.auth import get_current_user, require_roles
+from app.services.auth import create_password_hash
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -180,10 +181,13 @@ def create_user(
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid role: {body.role}")
 
+    salt, p_hash = create_password_hash(body.password)
+
     new_user = User(
         full_name=body.full_name,
         email=body.email,
-        password_hash=hash_password(body.password),
+        password_hash=p_hash,
+        password_salt=salt,
         role=role,
         department=body.department,
         is_active=True,
