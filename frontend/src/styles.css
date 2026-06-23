@@ -1604,6 +1604,51 @@ select.form-control {
 }
 
 /* ── AUTH TOGGLE ──────────────────────────────────────────────────────────────── */
+
+/* ── USER MANAGEMENT ACTIONS ──────────────────────────────────────────────────── */
+.action-btns {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.btn-xs {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 5px;
+}
+
+.btn-danger {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+.btn-danger:hover {
+  background: #fecaca;
+}
+
+.btn-success {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #6ee7b7;
+}
+.btn-success:hover {
+  background: #a7f3d0;
+}
+
+.user-form-modal {
+  max-width: 460px;
+  width: 100%;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 1rem;
+}
+
+/* ── AUTH TOGGLE ──────────────────────────────────────────────────────────────── */
 .auth-toggle {
   display: flex;
   gap: 4px;

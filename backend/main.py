@@ -55,6 +55,7 @@ async def lifespan(app: FastAPI):
                 )
             )
             db.commit()
+
     yield
     engine.dispose()
 

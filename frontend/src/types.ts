@@ -10,6 +10,8 @@ export interface UserRow {
   email: string;
   role: Role;
   isActive: boolean;
+  department: string;
+  created_at: string;
 }
 
 export interface AuditLog {
