@@ -4,7 +4,7 @@ from datetime import date
 from sqlalchemy import Date, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.database import Base
+from app.db import Base
 
 
 class DisposalMethod(str, enum.Enum):
@@ -32,7 +32,7 @@ class DisposalRecord(Base):
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     authorised_by: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("users.user_id", ondelete="RESTRICT"),
+        ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
     )
 
