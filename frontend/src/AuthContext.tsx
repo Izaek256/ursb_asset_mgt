@@ -13,7 +13,7 @@ export interface AuthUser {
 
 interface AuthContextValue {
   user: AuthUser | null;
-  token: string | null;
+  token: string | null; // Keep for compatibility, but we use cookies now
   login: (email: string, password: string) => Promise<string | null>;
   logout: () => void;
   isLoading: boolean;
@@ -23,28 +23,30 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue>(null!);
 
 // ── API helper ───────────────────────────────────────────────────────────────────
-const API_BASE = "/api";
+const API_BASE = "/api/v1";
 
 export async function apiFetch<T>(
   path: string,
   opts: RequestInit = {},
-  token?: string | null
+  _token?: string | null // Unused, we use cookies
 ): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(opts.headers as Record<string, string> || {}),
   };
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-  const res = await fetch(`${API_BASE}${path}`, { ...opts, headers });
-  if (res.status === 401) {
-    // Token expired — clear session
-    localStorage.removeItem("ursb_token");
-    localStorage.removeItem("ursb_user");
+  
+  const res = await fetch(`${API_BASE}${path}`, { 
+    ...opts, 
+    headers,
+    credentials: "include" 
+  });
+  
+  if (res.status === 401 && path !== "/login" && path !== "/auth/check") {
+    // Session expired — redirect
     window.location.reload();
     throw new Error("Unauthorized");
   }
+  
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.detail || `Request failed (${res.status})`);
@@ -54,40 +56,22 @@ export async function apiFetch<T>(
 
 // ── Provider ─────────────────────────────────────────────────────────────────────
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    try {
-      const saved = localStorage.getItem("ursb_user");
-      return saved ? JSON.parse(saved) : null;
-    } catch { return null; }
-  });
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const [token, setToken] = useState<string | null>(() =>
-    localStorage.getItem("ursb_token")
-  );
-
-  const [isLoading, setIsLoading] = useState(false);
-
-  // Validate token on mount
+  // Validate session on mount
   useEffect(() => {
-    if (token && !user) {
-      refreshUser();
-    }
+    refreshUser();
   }, []);
 
   const login = useCallback(async (email: string, password: string): Promise<string | null> => {
     setIsLoading(true);
     try {
-      const data = await apiFetch<{ access_token: string; user: AuthUser }>(
-        "/auth/login",
-        {
-          method: "POST",
-          body: JSON.stringify({ email, password }),
-        }
-      );
-      setToken(data.access_token);
-      setUser(data.user);
-      localStorage.setItem("ursb_token", data.access_token);
-      localStorage.setItem("ursb_user", JSON.stringify(data.user));
+      await apiFetch("/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      });
+      await refreshUser();
       return null; // success
     } catch (err: any) {
       return err.message || "Login failed";
@@ -96,28 +80,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const logout = useCallback(() => {
-    setToken(null);
+  const logout = useCallback(async () => {
+    try {
+      await apiFetch("/logout", { method: "POST" });
+    } catch (e) {
+      // ignore
+    }
     setUser(null);
-    localStorage.removeItem("ursb_token");
-    localStorage.removeItem("ursb_user");
     window.location.pathname = "/login";
   }, []);
 
   const refreshUser = useCallback(async () => {
-    if (!token) return;
     try {
-      const data = await apiFetch<AuthUser>("/auth/me", {}, token);
-      setUser(data);
-      localStorage.setItem("ursb_user", JSON.stringify(data));
+      const data = await apiFetch<any>("/auth/check", { method: "GET" });
+      if (data.authenticated) {
+        setUser({
+          user_id: data.email, // backend schema might not return user_id currently
+          full_name: `${data.first_name || ""} ${data.last_name || ""}`.trim() || data.username || data.email,
+          email: data.email,
+          role: data.role || "Employee", // Default fallback if not sent
+          department: data.department || "",
+          is_active: data.is_active !== false,
+        });
+      } else {
+        setUser(null);
+      }
     } catch {
-      logout();
+      setUser(null);
+    } finally {
+      setIsLoading(false);
     }
-  }, [token, logout]);
+  }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isLoading, refreshUser }}>
-      {children}
+    <AuthContext.Provider value={{ user, token: "cookie-auth", login, logout, isLoading, refreshUser }}>
+      {!isLoading && children}
     </AuthContext.Provider>
   );
 }
