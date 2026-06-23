@@ -32,7 +32,7 @@ class DisposalRecord(Base):
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     authorised_by: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("users.id", ondelete="RESTRICT"),
+        ForeignKey("users.user_id", ondelete="RESTRICT"),
         nullable=False,
     )
 

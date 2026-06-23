@@ -22,21 +22,9 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer(auto_error=False)
 
 
-<<<<<<< HEAD
 # ── Helpers ──────────────────────────────────────────────────────────────────────
 def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
-=======
-def _cookie_settings(request: Request) -> dict:
-    secure = os.getenv("DEBUG", "true").lower() != "true"
-    return {
-        "httponly": True,
-        "secure": secure,
-        "samesite": "lax",
-        "path": "/",
-        "max_age": int(24 * 60 * 60),
-    }
->>>>>>> 29efb62ac62474fabe4e7de1e590a7ca9738837f
 
 
 def hash_password(plain: str) -> str:
@@ -89,7 +77,6 @@ def get_current_user(
     return user
 
 
-<<<<<<< HEAD
 def require_roles(*allowed_roles: str):
     """Return a dependency that checks if the current user has one of the allowed roles."""
     def _checker(current_user: User = Depends(get_current_user)) -> User:
@@ -100,44 +87,3 @@ def require_roles(*allowed_roles: str):
             )
         return current_user
     return _checker
-=======
-@router.post("/logout", response_model=LoginResponse)
-def logout(
-    request: Request,
-    response: Response,
-    db: Session = Depends(get_db),
-) -> dict[str, str]:
-    session_token = request.cookies.get(SESSION_COOKIE_NAME)
-    if session_token:
-        delete_session(db, session_token)
-    response.delete_cookie(SESSION_COOKIE_NAME, path="/")
-    return {"message": "Logout successful"}
-
-
-@router.get("/auth/check", response_model=AuthStatusResponse)
-def auth_check(request: Request) -> dict[str, object]:
-    user = getattr(request.state, "user", None)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-        )
-    return {
-        "authenticated": True,
-        "email": user.email,
-        "first_name": user.first_name,
-        "last_name": user.last_name,
-        "username": user.username,
-        "phone_number": user.phone_number,
-        "department": user.department,
-    }
-
-
-@router.get("/protected")
-def protected_route(request: Request) -> dict[str, str]:
-    user = getattr(request.state, "user", None)
-    return {
-        "message": "Protected route accessed",
-        "email": getattr(user, "email", "unknown"),
-    }
->>>>>>> 29efb62ac62474fabe4e7de1e590a7ca9738837f
