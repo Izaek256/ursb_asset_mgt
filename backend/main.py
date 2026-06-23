@@ -1,6 +1,7 @@
 import os
 from contextlib import asynccontextmanager
 
+from sqlalchemy import text
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,9 +12,6 @@ load_dotenv()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan: startup and shutdown events."""
-<<<<<<< HEAD
-    from app.db import engine
-=======
     from app.db import engine, SessionLocal
     from app.models import Base, User
     from app.services.auth import create_password_hash
@@ -58,7 +56,6 @@ async def lifespan(app: FastAPI):
             )
             db.commit()
 
->>>>>>> 29efb62ac62474fabe4e7de1e590a7ca9738837f
     yield
     engine.dispose()
 
