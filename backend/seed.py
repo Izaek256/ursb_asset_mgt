@@ -7,15 +7,14 @@ Usage:
     DATABASE_URL=sqlite:///./ursb_asset.db python seed.py
 
 Features:
-  - Idempotent: safe to run multiple times — existing records are skipped, not duplicated
+  - Idempotent: safe to run multiple times -- existing records are skipped, not duplicated
   - Covers all user roles, asset types, statuses, and required related records
-  - All passwords are securely hashed with bcrypt
+  - All passwords are securely hashed with pbkdf2_hmac (sha256)
 """
 
 import os
 import sys
 import uuid
-import secrets
 from datetime import date, datetime, timedelta
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -24,7 +23,7 @@ sys.path.insert(0, SCRIPT_DIR)
 from dotenv import load_dotenv
 load_dotenv()
 
-from passlib.context import CryptContext
+from app.services.auth import create_password_hash as _create_password_hash
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -61,13 +60,9 @@ if DATABASE_URL.startswith("sqlite"):
 
 Base.metadata.create_all(bind=engine)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
 def hash_password(plain: str):
-    """Returns (password_hash, password_salt) tuple."""
-    salt = secrets.token_hex(16)
-    hashed = pwd_context.hash(plain)
+    """Returns (password_hash, password_salt) tuple using the same algorithm as the auth service."""
+    salt, hashed = _create_password_hash(plain)
     return hashed, salt
 
 
@@ -117,7 +112,7 @@ def seed():
     db = SessionLocal()
     try:
         print("=" * 60)
-        print("  URSB Asset Management System — Database Seeder")
+        print("  URSB Asset Management System - Database Seeder")
         print("=" * 60)
 
         # ----------------------------------------------------------------
@@ -197,10 +192,10 @@ def seed():
         )
 
         db.commit()
-        print(f"   ✓ {db.query(User).count()} users in database")
+        print(f"   [OK] {db.query(User).count()} users in database")
 
         # ----------------------------------------------------------------
-        # 2. ASSETS — 22 assets across all types and statuses
+        # 2. ASSETS -- 22 assets across all types and statuses
         # ----------------------------------------------------------------
         print("\n[2/6] Seeding assets...")
 
@@ -416,7 +411,7 @@ def seed():
             get_or_create_asset(db, **data)
 
         db.commit()
-        print(f"   ✓ {db.query(Asset).count()} assets in database")
+        print(f"   [OK] {db.query(Asset).count()} assets in database")
 
         # ----------------------------------------------------------------
         # 3. ASSIGNMENTS
@@ -458,7 +453,7 @@ def seed():
                 db.add(Assignment(**a))
 
         db.commit()
-        print(f"   ✓ {db.query(Assignment).count()} assignments in database")
+        print(f"   [OK] {db.query(Assignment).count()} assignments in database")
 
         # ----------------------------------------------------------------
         # 4. MAINTENANCE RECORDS
@@ -514,7 +509,7 @@ def seed():
                 db.add(MaintenanceRecord(**m))
 
         db.commit()
-        print(f"   ✓ {db.query(MaintenanceRecord).count()} maintenance records in database")
+        print(f"   [OK] {db.query(MaintenanceRecord).count()} maintenance records in database")
 
         # ----------------------------------------------------------------
         # 5. DISPOSAL RECORDS
@@ -563,7 +558,7 @@ def seed():
                 db.add(DisposalRecord(**d))
 
         db.commit()
-        print(f"   ✓ {db.query(DisposalRecord).count()} disposal records in database")
+        print(f"   [OK] {db.query(DisposalRecord).count()} disposal records in database")
 
         # ----------------------------------------------------------------
         # 6. AUDIT LOGS
@@ -638,7 +633,7 @@ def seed():
                 db.add(AuditLog(**entry))
 
         db.commit()
-        print(f"   ✓ {db.query(AuditLog).count()} audit log entries in database")
+        print(f"   [OK] {db.query(AuditLog).count()} audit log entries in database")
 
         # ----------------------------------------------------------------
         # Summary
@@ -658,15 +653,15 @@ def seed():
         print(f"  Audit Log Entries  : {db.query(AuditLog).count()}")
         print("=" * 60)
         print("\n  Default Credentials:")
-        print("  ┌──────────────────────────────────────────────────────────────┐")
-        print("  │ Role                  │ Email                    │ Password   │")
-        print("  ├──────────────────────────────────────────────────────────────┤")
-        print("  │ System Administrator  │ admin@ursb.go.ug         │ Admin@1234 │")
-        print("  │ Asset Manager         │ asset.manager@ursb.go.ug │Manager@1234│")
-        print("  │ Asset Custodian (ICT) │ custodian.ict@ursb.go.ug │Custodian@1234│")
-        print("  │ Asset Custodian (Adm) │ custodian.admin@ursb.go.ug│Custodian@1234│")
-        print("  │ Employee              │ john.mukasa@ursb.go.ug   │Employee@1234│")
-        print("  └──────────────────────────────────────────────────────────────┘")
+        print("  +--------------------------------------------------------------+")
+        print("  | Role                  | Email                    | Password   |")
+        print("  +--------------------------------------------------------------+")
+        print("  | System Administrator  | admin@ursb.go.ug         | Admin@1234 |")
+        print("  | Asset Manager         | asset.manager@ursb.go.ug | Manager@1234|")
+        print("  | Asset Custodian (ICT) | custodian.ict@ursb.go.ug | Custodian@1234|")
+        print("  | Asset Custodian (Adm) | custodian.admin@ursb.go.ug| Custodian@1234|")
+        print("  | Employee              | john.mukasa@ursb.go.ug   | Employee@1234|")
+        print("  +--------------------------------------------------------------+")
         print("")
 
     except Exception as e:
