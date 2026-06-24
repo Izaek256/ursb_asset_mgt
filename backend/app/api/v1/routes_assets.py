@@ -13,7 +13,7 @@ from app.models.asset import Asset, AssetCondition, AssetStatus, AssetType, Sour
 from app.models.audit_log import AuditLog
 from app.api.v1.auth import get_current_user, require_roles
 
-router = APIRouter(prefix="/api/assets", tags=["assets"])
+router = APIRouter(prefix="/api/v1/assets", tags=["assets"])
 
 
 class AssetOut(BaseModel):

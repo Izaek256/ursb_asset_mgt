@@ -45,10 +45,10 @@ from app.api.v1.routes_transfers import router as transfers_router
 from app.middleware.auth_middleware import AuthMiddleware
 
 app.include_router(auth_router, prefix="/api/v1")
-app.include_router(dashboard_router)
-app.include_router(admin_router)
-app.include_router(assets_router)
-app.include_router(transfers_router)
+app.include_router(dashboard_router)   # prefix: /api/v1/dashboard
+app.include_router(admin_router)       # prefix: /api/v1/admin
+app.include_router(assets_router)      # prefix: /api/v1/assets
+app.include_router(transfers_router)   # prefix: /api/v1/transfers
 app.add_middleware(AuthMiddleware)
 
 

@@ -12,7 +12,7 @@ from app.models.asset import Asset
 from app.models.user import User
 from app.api.v1.auth import get_current_user
 
-router = APIRouter(prefix="/api/transfers", tags=["transfers"])
+router = APIRouter(prefix="/api/v1/transfers", tags=["transfers"])
 
 
 class TransferOut(BaseModel):
