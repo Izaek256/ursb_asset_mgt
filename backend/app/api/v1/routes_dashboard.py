@@ -16,7 +16,7 @@ from app.models.maintenance_record import MaintenanceRecord
 from app.models.disposal_record import DisposalRecord
 from app.api.v1.auth import get_current_user
 
-router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
+router = APIRouter(prefix="/api/v1/dashboard", tags=["dashboard"])
 
 
 # ── Schemas ──────────────────────────────────────────────────────────────────────

@@ -2,8 +2,9 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, Integer, String, func
+from sqlalchemy import Boolean, Column, DateTime, Enum, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.ext.hybrid import hybrid_property
 
 from app.db import Base
 
@@ -18,43 +19,41 @@ class UserRole(str, enum.Enum):
 class User(Base):
     __tablename__ = "users"
 
-    user_id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
-    full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    first_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    last_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    username: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True, index=True)
-    email: Mapped[str] = mapped_column(
-        String(255), nullable=False, unique=True, index=True
-    )
-    phone_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    password_salt: Mapped[str] = mapped_column(String(128), nullable=False, default="")
-    role: Mapped[UserRole] = mapped_column(
-        Enum(UserRole, native_enum=False, length=50), nullable=False
-    )
-    department: Mapped[str] = mapped_column(String(100), nullable=False)
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True
-    )
-    failed_login_attempts: Mapped[int] = mapped_column(
-        Integer, default=0, nullable=False
-    )
-    locked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, server_default=func.now()
-    )
+    # Primary key (support both integer and UUID patterns)
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Basic identity fields
+    email = Column(String(length=255), unique=True, nullable=False, index=True)
+    username = Column(String(length=128), unique=True, nullable=True, index=True)
+    first_name = Column(String(length=128), nullable=True)
+    last_name = Column(String(length=128), nullable=True)
+    phone_number = Column(String(length=64), nullable=True)
+    
+    # Department and role
+    department = Column(String(length=128), nullable=True)
+    role = Column(Enum(UserRole, native_enum=False, length=50), nullable=True)
+    
+    # Authentication fields
+    password_hash = Column(String(length=128), nullable=False)
+    password_salt = Column(String(length=128), nullable=False)
+    
+    # Account status
+    is_active = Column(Boolean, nullable=False, default=True)
+    failed_login_attempts = Column(Integer, default=0, nullable=False)
+    locked_until = Column(DateTime, nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    # Relationships
+    # Authentication relationship
     sessions = relationship(
         "Session",
         back_populates="user",
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
-
-    # Relationships
+    
+    # Asset management relationships
     assets_as_custodian = relationship(
         "Asset", back_populates="current_custodian", foreign_keys="Asset.current_custodian_id"
     )
@@ -80,3 +79,31 @@ class User(Base):
         "DisposalRecord", back_populates="authorised_by_user", foreign_keys="DisposalRecord.authorised_by"
     )
     audit_logs = relationship("AuditLog", back_populates="user")
+
+    @hybrid_property
+    def user_id(self):
+        return self.id
+
+    @user_id.setter
+    def user_id(self, value):
+        self.id = value
+
+    @hybrid_property
+    def full_name(self):
+        parts = [self.first_name, self.last_name]
+        return " ".join([p for p in parts if p]).strip()
+
+    @full_name.setter
+    def full_name(self, value):
+        if not value:
+            self.first_name = ""
+            self.last_name = ""
+            return
+        parts = value.strip().split(maxsplit=1)
+        if len(parts) == 1:
+            self.first_name = parts[0]
+            self.last_name = ""
+        else:
+            self.first_name = parts[0]
+            self.last_name = parts[1]
+

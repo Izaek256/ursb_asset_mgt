@@ -13,7 +13,7 @@ export interface AuthUser {
 
 interface AuthContextValue {
   user: AuthUser | null;
-  token: string | null; // Keep for compatibility, but we use cookies now
+  token: string | null;
   login: (email: string, password: string) => Promise<string | null>;
   logout: () => void;
   isLoading: boolean;
@@ -28,25 +28,29 @@ const API_BASE = "/api/v1";
 export async function apiFetch<T>(
   path: string,
   opts: RequestInit = {},
-  _token?: string | null // Unused, we use cookies
+  token?: string | null
 ): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(opts.headers as Record<string, string> || {}),
   };
+  // Note: JWT token header is ignored because we are using HTTP cookies.
   
-  const res = await fetch(`${API_BASE}${path}`, { 
-    ...opts, 
+  const res = await fetch(`${API_BASE}${path}`, {
+    credentials: "include",
+    ...opts,
     headers,
-    credentials: "include" 
   });
   
-  if (res.status === 401 && path !== "/login" && path !== "/auth/check") {
-    // Session expired — redirect
-    window.location.reload();
+  if (res.status === 401) {
+    // If we get 401, clear local user session
+    localStorage.removeItem("ursb_user");
+    // Only reload/redirect to login if not already on the login page
+    if (window.location.pathname !== "/login") {
+      window.location.pathname = "/login";
+    }
     throw new Error("Unauthorized");
   }
-  
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.detail || `Request failed (${res.status})`);
@@ -56,22 +60,50 @@ export async function apiFetch<T>(
 
 // ── Provider ─────────────────────────────────────────────────────────────────────
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    try {
+      const saved = localStorage.getItem("ursb_user");
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+
+  const [token, setToken] = useState<string | null>(() =>
+    user ? "session" : null
+  );
+
+  const [isLoading, setIsLoading] = useState(false);
+
+  const refreshUser = useCallback(async () => {
+    try {
+      const data = await apiFetch<{ authenticated: boolean } & AuthUser>("/auth/check");
+      setUser(data);
+      setToken("session");
+      localStorage.setItem("ursb_user", JSON.stringify(data));
+    } catch {
+      setUser(null);
+      setToken(null);
+      localStorage.removeItem("ursb_user");
+    }
+  }, []);
 
   // Validate session on mount
   useEffect(() => {
     refreshUser();
-  }, []);
+  }, [refreshUser]);
 
   const login = useCallback(async (email: string, password: string): Promise<string | null> => {
     setIsLoading(true);
     try {
+      // 1. Post credentials to /login
       await apiFetch("/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
-      await refreshUser();
+      // 2. Perform /auth/check to fetch user details
+      const checkData = await apiFetch<{ authenticated: boolean } & AuthUser>("/auth/check");
+      setUser(checkData);
+      setToken("session");
+      localStorage.setItem("ursb_user", JSON.stringify(checkData));
       return null; // success
     } catch (err: any) {
       return err.message || "Login failed";
@@ -84,37 +116,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await apiFetch("/logout", { method: "POST" });
     } catch (e) {
-      // ignore
+      console.error("Logout failed on server", e);
     }
+    setToken(null);
     setUser(null);
+    localStorage.removeItem("ursb_user");
     window.location.pathname = "/login";
   }, []);
 
-  const refreshUser = useCallback(async () => {
-    try {
-      const data = await apiFetch<any>("/auth/check", { method: "GET" });
-      if (data.authenticated) {
-        setUser({
-          user_id: data.email, // backend schema might not return user_id currently
-          full_name: `${data.first_name || ""} ${data.last_name || ""}`.trim() || data.username || data.email,
-          email: data.email,
-          role: data.role || "Employee", // Default fallback if not sent
-          department: data.department || "",
-          is_active: data.is_active !== false,
-        });
-      } else {
-        setUser(null);
-      }
-    } catch {
-      setUser(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
   return (
-    <AuthContext.Provider value={{ user, token: "cookie-auth", login, logout, isLoading, refreshUser }}>
-      {!isLoading && children}
+    <AuthContext.Provider value={{ user, token, login, logout, isLoading, refreshUser }}>
+      {children}
     </AuthContext.Provider>
   );
 }

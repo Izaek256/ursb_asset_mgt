@@ -22,7 +22,10 @@ export default function LoginPage() {
   const [password, setPassword] = React.useState("");
 
   // Signup fields
-  const [fullName, setFullName] = React.useState("");
+  const [firstName, setFirstName] = React.useState("");
+  const [lastName, setLastName] = React.useState("");
+  const [username, setUsername] = React.useState("");
+  const [phone, setPhone] = React.useState("");
   const [signupEmail, setSignupEmail] = React.useState("");
   const [signupPassword, setSignupPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
@@ -53,7 +56,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
 
-    if (!fullName || !signupEmail || !signupPassword) {
+    if (!firstName || !lastName || !username || !signupEmail || !phone || !signupPassword || !confirmPassword) {
       setError("Please fill in all fields.");
       return;
     }
@@ -73,11 +76,14 @@ export default function LoginPage() {
         {
           method: "POST",
           body: JSON.stringify({
-            full_name: fullName,
+            first_name: firstName,
+            last_name: lastName,
+            username: username,
             email: signupEmail,
+            phone_number: phone,
+            department: department,
             password: signupPassword,
             confirm_password: confirmPassword,
-            department,
           }),
         }
       );
@@ -85,7 +91,10 @@ export default function LoginPage() {
       setMode("login");
       setEmail(signupEmail);
       setPassword("");
-      setFullName("");
+      setFirstName("");
+      setLastName("");
+      setUsername("");
+      setPhone("");
       setSignupEmail("");
       setSignupPassword("");
       setConfirmPassword("");
@@ -168,16 +177,55 @@ export default function LoginPage() {
         {mode === "signup" && (
           <form onSubmit={handleSignup}>
             <div className="form-group">
-              <label className="form-label" htmlFor="signup-name">Full Name</label>
+              <label className="form-label" htmlFor="signup-firstname">First Name</label>
               <input
-                id="signup-name"
+                id="signup-firstname"
                 type="text"
                 className="form-control"
-                placeholder="e.g. John Mukasa"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
+                placeholder="e.g. John"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
                 autoFocus
-                autoComplete="name"
+                autoComplete="given-name"
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="signup-lastname">Last Name</label>
+              <input
+                id="signup-lastname"
+                type="text"
+                className="form-control"
+                placeholder="e.g. Mukasa"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                autoComplete="family-name"
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="signup-username">Username</label>
+              <input
+                id="signup-username"
+                type="text"
+                className="form-control"
+                placeholder="e.g. jmukasa"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoComplete="username"
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="signup-phone">Phone Number</label>
+              <input
+                id="signup-phone"
+                type="text"
+                className="form-control"
+                placeholder="e.g. +256700000000"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                autoComplete="tel"
               />
             </div>
 
@@ -214,7 +262,7 @@ export default function LoginPage() {
                 id="signup-password"
                 type="password"
                 className="form-control"
-                placeholder="Min. 8 characters"
+                placeholder="Min. 8 characters (with A-Z, a-z, 0-9, special)"
                 value={signupPassword}
                 onChange={(e) => setSignupPassword(e.target.value)}
                 autoComplete="new-password"
