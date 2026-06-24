@@ -23,7 +23,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue>(null!);
 
 // ── API helper ───────────────────────────────────────────────────────────────────
-const API_BASE = "/api";
+const API_BASE = "/api/v1";
 
 export async function apiFetch<T>(
   path: string,
@@ -34,15 +34,21 @@ export async function apiFetch<T>(
     "Content-Type": "application/json",
     ...(opts.headers as Record<string, string> || {}),
   };
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-  const res = await fetch(`${API_BASE}${path}`, { ...opts, headers });
+  // Note: JWT token header is ignored because we are using HTTP cookies.
+  
+  const res = await fetch(`${API_BASE}${path}`, {
+    credentials: "include",
+    ...opts,
+    headers,
+  });
+  
   if (res.status === 401) {
-    // Token expired — clear session
-    localStorage.removeItem("ursb_token");
+    // If we get 401, clear local user session
     localStorage.removeItem("ursb_user");
-    window.location.reload();
+    // Only reload/redirect to login if not already on the login page
+    if (window.location.pathname !== "/login") {
+      window.location.pathname = "/login";
+    }
     throw new Error("Unauthorized");
   }
   if (!res.ok) {
@@ -62,32 +68,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
 
   const [token, setToken] = useState<string | null>(() =>
-    localStorage.getItem("ursb_token")
+    user ? "session" : null
   );
 
   const [isLoading, setIsLoading] = useState(false);
 
-  // Validate token on mount
-  useEffect(() => {
-    if (token && !user) {
-      refreshUser();
+  const refreshUser = useCallback(async () => {
+    try {
+      const data = await apiFetch<{ authenticated: boolean } & AuthUser>("/auth/check");
+      setUser(data);
+      setToken("session");
+      localStorage.setItem("ursb_user", JSON.stringify(data));
+    } catch {
+      setUser(null);
+      setToken(null);
+      localStorage.removeItem("ursb_user");
     }
   }, []);
+
+  // Validate session on mount
+  useEffect(() => {
+    refreshUser();
+  }, [refreshUser]);
 
   const login = useCallback(async (email: string, password: string): Promise<string | null> => {
     setIsLoading(true);
     try {
-      const data = await apiFetch<{ access_token: string; user: AuthUser }>(
-        "/auth/login",
-        {
-          method: "POST",
-          body: JSON.stringify({ email, password }),
-        }
-      );
-      setToken(data.access_token);
-      setUser(data.user);
-      localStorage.setItem("ursb_token", data.access_token);
-      localStorage.setItem("ursb_user", JSON.stringify(data.user));
+      // 1. Post credentials to /login
+      await apiFetch("/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      });
+      // 2. Perform /auth/check to fetch user details
+      const checkData = await apiFetch<{ authenticated: boolean } & AuthUser>("/auth/check");
+      setUser(checkData);
+      setToken("session");
+      localStorage.setItem("ursb_user", JSON.stringify(checkData));
       return null; // success
     } catch (err: any) {
       return err.message || "Login failed";
@@ -96,24 +112,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    try {
+      await apiFetch("/logout", { method: "POST" });
+    } catch (e) {
+      console.error("Logout failed on server", e);
+    }
     setToken(null);
     setUser(null);
-    localStorage.removeItem("ursb_token");
     localStorage.removeItem("ursb_user");
     window.location.pathname = "/login";
   }, []);
-
-  const refreshUser = useCallback(async () => {
-    if (!token) return;
-    try {
-      const data = await apiFetch<AuthUser>("/auth/me", {}, token);
-      setUser(data);
-      localStorage.setItem("ursb_user", JSON.stringify(data));
-    } catch {
-      logout();
-    }
-  }, [token, logout]);
 
   return (
     <AuthContext.Provider value={{ user, token, login, logout, isLoading, refreshUser }}>

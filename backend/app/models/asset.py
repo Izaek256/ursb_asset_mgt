@@ -75,7 +75,7 @@ class Asset(Base):
     supplier: Mapped[str] = mapped_column(String(255), nullable=False)
     current_custodian_id: Mapped[str | None] = mapped_column(
         String(36),
-        ForeignKey("users.user_id", ondelete="RESTRICT"),
+        ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=True,
     )
     department: Mapped[str | None] = mapped_column(String(100), nullable=True)

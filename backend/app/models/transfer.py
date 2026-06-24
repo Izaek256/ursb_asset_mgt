@@ -19,19 +19,19 @@ class Transfer(Base):
     )
     from_user_id: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("users.user_id", ondelete="RESTRICT"),
+        ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
     )
     to_user_id: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("users.user_id", ondelete="RESTRICT"),
+        ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
     )
     transfer_date: Mapped[date] = mapped_column(Date, nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     authorised_by: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("users.user_id", ondelete="RESTRICT"),
+        ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
     )
     acknowledged_at: Mapped[datetime | None] = mapped_column(
