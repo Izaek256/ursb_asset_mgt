@@ -61,23 +61,28 @@ if DATABASE_URL.startswith("sqlite"):
 Base.metadata.create_all(bind=engine)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def hash_password(plain: str):
-    """Returns (password_hash, password_salt) tuple using the same algorithm as the auth service."""
+    """Returns (salt, password_hash) tuple using the same algorithm as the auth service."""
     salt, hashed = _create_password_hash(plain)
-    return hashed, salt
+    return salt, hashed
 
 
 # ---------------------------------------------------------------------------
 # Seed helpers
 # ---------------------------------------------------------------------------
+def uid(user) -> str:
+    """Cast user.user_id (int PK) to str for String FK columns in related tables."""
+    return str(user.user_id)
+
+
 def get_or_create_user(db, *, email: str, first_name: str, last_name: str,
                         username: str, role: UserRole, department: str,
                         password: str, phone_number: str = None) -> User:
     user = db.query(User).filter(User.email == email).first()
     if user:
         return user
-    hashed, salt = hash_password(password)
+    salt, hashed = hash_password(password)
     user = User(
-        user_id=str(uuid.uuid4()),
+        # No user_id= here: let the Integer auto-increment PK be assigned by SQLite
         email=email,
         username=username,
         first_name=first_name,
@@ -208,7 +213,7 @@ def seed():
                 "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2024/ICT/001", "cost": 3_200_000,
                 "acquisition_date": date(2024, 3, 10), "supplier": "Dawa Technologies Uganda Ltd",
-                "current_custodian_id": custodian1.user_id, "department": "ICT",
+                "current_custodian_id": uid(custodian1), "department": "ICT",
             },
             {
                 "asset_id": "AST-ICT00002", "asset_name": "HP LaserJet Pro M404dn Printer",
@@ -217,7 +222,7 @@ def seed():
                 "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2023/ICT/012", "cost": 1_450_000,
                 "acquisition_date": date(2023, 7, 15), "supplier": "Dawa Technologies Uganda Ltd",
-                "current_custodian_id": custodian1.user_id, "department": "ICT",
+                "current_custodian_id": uid(custodian1), "department": "ICT",
             },
             {
                 "asset_id": "AST-ICT00003", "asset_name": "Cisco Catalyst 2960 Network Switch",
@@ -226,7 +231,7 @@ def seed():
                 "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2023/ICT/008", "cost": 4_800_000,
                 "acquisition_date": date(2023, 1, 20), "supplier": "Infocom Networks Uganda",
-                "current_custodian_id": custodian1.user_id, "department": "ICT",
+                "current_custodian_id": uid(custodian1), "department": "ICT",
             },
             {
                 "asset_id": "AST-ICT00004", "asset_name": "Samsung 55\" LED Conference Room Display",
@@ -235,7 +240,7 @@ def seed():
                 "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2024/ICT/005", "cost": 2_100_000,
                 "acquisition_date": date(2024, 5, 2), "supplier": "Dawa Technologies Uganda Ltd",
-                "current_custodian_id": custodian1.user_id, "department": "Administration",
+                "current_custodian_id": uid(custodian1), "department": "Administration",
             },
             {
                 "asset_id": "AST-ICT00005", "asset_name": "APC Smart-UPS 1500VA",
@@ -244,7 +249,7 @@ def seed():
                 "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2022/ICT/019", "cost": 1_200_000,
                 "acquisition_date": date(2022, 11, 8), "supplier": "PowerTech Uganda",
-                "current_custodian_id": custodian1.user_id, "department": "ICT",
+                "current_custodian_id": uid(custodian1), "department": "ICT",
             },
             {
                 "asset_id": "AST-ICT00006", "asset_name": "Lenovo ThinkCentre Desktop",
@@ -253,7 +258,7 @@ def seed():
                 "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2023/ICT/022", "cost": 2_500_000,
                 "acquisition_date": date(2023, 4, 18), "supplier": "Dawa Technologies Uganda Ltd",
-                "current_custodian_id": employee1.user_id, "department": "Legal",
+                "current_custodian_id": uid(employee1), "department": "Legal",
             },
             {
                 "asset_id": "AST-ICT00007", "asset_name": "Logitech MeetUp Conference Camera",
@@ -262,7 +267,7 @@ def seed():
                 "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2024/ICT/009", "cost": 1_800_000,
                 "acquisition_date": date(2024, 2, 14), "supplier": "Infocom Networks Uganda",
-                "current_custodian_id": custodian2.user_id, "department": "Administration",
+                "current_custodian_id": uid(custodian2), "department": "Administration",
             },
             # --- Furniture (Active) ---
             {
@@ -272,7 +277,7 @@ def seed():
                 "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2022/ADM/003", "cost": 850_000,
                 "acquisition_date": date(2022, 6, 1), "supplier": "Quality Furniture Uganda",
-                "current_custodian_id": custodian2.user_id, "department": "Administration",
+                "current_custodian_id": uid(custodian2), "department": "Administration",
             },
             {
                 "asset_id": "AST-FRN00002", "asset_name": "Ergonomic Office Chair (Set of 10)",
@@ -281,7 +286,7 @@ def seed():
                 "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2022/ADM/004", "cost": 3_500_000,
                 "acquisition_date": date(2022, 6, 1), "supplier": "Quality Furniture Uganda",
-                "current_custodian_id": custodian2.user_id, "department": "Administration",
+                "current_custodian_id": uid(custodian2), "department": "Administration",
             },
             {
                 "asset_id": "AST-FRN00003", "asset_name": "6-Seater Conference Table",
@@ -290,7 +295,7 @@ def seed():
                 "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2021/ADM/007", "cost": 1_200_000,
                 "acquisition_date": date(2021, 9, 14), "supplier": "Quality Furniture Uganda",
-                "current_custodian_id": custodian2.user_id, "department": "Registry",
+                "current_custodian_id": uid(custodian2), "department": "Registry",
             },
             # --- Vehicles (Active) ---
             {
@@ -300,7 +305,7 @@ def seed():
                 "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2021/VEH/001", "cost": 120_000_000,
                 "acquisition_date": date(2021, 3, 5), "supplier": "CFAO Motors Uganda",
-                "current_custodian_id": manager.user_id, "department": "Finance & Administration",
+                "current_custodian_id": uid(manager), "department": "Finance & Administration",
             },
             {
                 "asset_id": "AST-VEH00002", "asset_name": "Toyota Hilux Double Cab (UAG 002B)",
@@ -309,7 +314,7 @@ def seed():
                 "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2022/VEH/002", "cost": 95_000_000,
                 "acquisition_date": date(2022, 8, 22), "supplier": "CFAO Motors Uganda",
-                "current_custodian_id": employee3.user_id, "department": "Finance & Administration",
+                "current_custodian_id": uid(employee3), "department": "Finance & Administration",
             },
             # --- Software (Active) ---
             {
@@ -319,7 +324,7 @@ def seed():
                 "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2024/SFT/001", "cost": 8_750_000,
                 "acquisition_date": date(2024, 1, 1), "supplier": "Microsoft East Africa",
-                "current_custodian_id": admin.user_id, "department": "ICT",
+                "current_custodian_id": uid(admin), "department": "ICT",
             },
             {
                 "asset_id": "AST-SFT00002", "asset_name": "Kaspersky Endpoint Security (50 Licenses)",
@@ -328,7 +333,7 @@ def seed():
                 "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2024/SFT/002", "cost": 5_600_000,
                 "acquisition_date": date(2024, 1, 15), "supplier": "Infocom Networks Uganda",
-                "current_custodian_id": admin.user_id, "department": "ICT",
+                "current_custodian_id": uid(admin), "department": "ICT",
             },
             # --- In Storage ---
             {
@@ -420,24 +425,24 @@ def seed():
 
         assignments_data = [
             {
-                "asset_id": "AST-ICT00006", "assigned_to": employee1.user_id,
-                "assigned_by": manager.user_id, "assignment_date": date(2023, 4, 20),
-                "status": AssignmentStatus.ACTIVE, "notes": "Assigned for Legal department use.",
-            },
-            {
-                "asset_id": "AST-ICT00001", "assigned_to": custodian1.user_id,
-                "assigned_by": manager.user_id, "assignment_date": date(2024, 3, 12),
+                "asset_id": "AST-ICT00001", "assigned_to": uid(custodian1),
+                "assigned_by": uid(manager), "assignment_date": date(2024, 3, 12),
                 "status": AssignmentStatus.ACTIVE, "notes": "Primary ICT custodian laptop.",
             },
             {
-                "asset_id": "AST-VEH00002", "assigned_to": employee3.user_id,
-                "assigned_by": manager.user_id, "assignment_date": date(2022, 9, 1),
+                "asset_id": "AST-ICT00006", "assigned_to": uid(employee1),
+                "assigned_by": uid(manager), "assignment_date": date(2023, 4, 20),
+                "status": AssignmentStatus.ACTIVE, "notes": "Assigned for Legal department use.",
+            },
+            {
+                "asset_id": "AST-VEH00002", "assigned_to": uid(employee3),
+                "assigned_by": uid(manager), "assignment_date": date(2022, 9, 1),
                 "status": AssignmentStatus.ACTIVE,
                 "notes": "Assigned for Finance & Administration field operations.",
             },
             {
-                "asset_id": "AST-ICT00008", "assigned_to": employee2.user_id,
-                "assigned_by": manager.user_id, "assignment_date": date(2021, 6, 1),
+                "asset_id": "AST-ICT00008", "assigned_to": uid(employee2),
+                "assigned_by": uid(manager), "assignment_date": date(2021, 6, 1),
                 "return_date": date(2023, 12, 31), "status": AssignmentStatus.RETURNED,
                 "notes": "Returned after upgrade cycle; asset sent to storage.",
             },
@@ -470,14 +475,14 @@ def seed():
                     "Full service including oil and filter change."
                 ),
                 "cost": 4_800_000, "next_service_date": date(2024, 10, 10),
-                "recorded_by": manager.user_id,
+                "recorded_by": uid(manager),
             },
             {
                 "asset_id": "AST-VEH00001", "service_date": date(2024, 1, 15),
                 "service_provider": "CFAO Motors Uganda",
                 "description": "Routine 40,000 km service. Oil, air and fuel filters replaced. Brake pads inspected and cleared.",
                 "cost": 1_200_000, "next_service_date": date(2024, 7, 15),
-                "recorded_by": manager.user_id,
+                "recorded_by": uid(manager),
             },
             {
                 "asset_id": "AST-ICT00010", "service_date": date(2024, 5, 20),
@@ -488,14 +493,14 @@ def seed():
                     "Server firmware updated to latest version."
                 ),
                 "cost": 2_500_000, "next_service_date": date(2025, 5, 20),
-                "recorded_by": custodian1.user_id,
+                "recorded_by": uid(custodian1),
             },
             {
                 "asset_id": "AST-ICT00002", "service_date": date(2024, 2, 28),
                 "service_provider": "PrintSolutions Uganda",
                 "description": "Fuser unit replaced. Paper feed rollers cleaned and lubricated. Test pages confirmed print quality.",
                 "cost": 320_000, "next_service_date": date(2025, 2, 28),
-                "recorded_by": custodian1.user_id,
+                "recorded_by": uid(custodian1),
             },
         ]
 
@@ -525,7 +530,7 @@ def seed():
                     "Motherboard failure; repair cost exceeds replacement value. "
                     "Board resolution ref: URSB/BD/2024/RES/003 approved write-off."
                 ),
-                "authorised_by": manager.user_id,
+                "authorised_by": uid(manager),
             },
             {
                 "asset_id": "AST-FRN00005", "disposal_date": date(2023, 11, 30),
@@ -535,7 +540,7 @@ def seed():
                     "office renovation. Structurally unsafe for use. Disposed per "
                     "Public Finance Management Act guidelines."
                 ),
-                "authorised_by": manager.user_id,
+                "authorised_by": uid(manager),
             },
             {
                 "asset_id": "AST-ICT00012", "disposal_date": date(2023, 6, 15),
@@ -545,7 +550,7 @@ def seed():
                     "URSB community outreach programme. Asset fully functional but "
                     "no longer meets minimum specifications for office use."
                 ),
-                "authorised_by": admin.user_id,
+                "authorised_by": uid(admin),
             },
         ]
 
@@ -567,54 +572,54 @@ def seed():
 
         audit_data = [
             {
-                "user_id": admin.user_id, "action": "LOGIN",
-                "table_affected": "users", "record_id": admin.user_id,
+                "user_id": uid(admin), "action": "LOGIN",
+                "table_affected": "users", "record_id": uid(admin),
                 "details": "System Administrator logged in from IP 196.43.12.5.",
                 "timestamp": now,
             },
             {
-                "user_id": admin.user_id, "action": "CREATE",
-                "table_affected": "users", "record_id": custodian1.user_id,
+                "user_id": uid(admin), "action": "CREATE",
+                "table_affected": "users", "record_id": uid(custodian1),
                 "details": f"Created new user account for {custodian1.first_name} {custodian1.last_name} "
                            f"with role '{custodian1.role}' in department '{custodian1.department}'.",
                 "timestamp": now + timedelta(minutes=5),
             },
             {
-                "user_id": manager.user_id, "action": "CREATE",
+                "user_id": uid(manager), "action": "CREATE",
                 "table_affected": "assets", "record_id": "AST-ICT00001",
                 "details": "Registered new asset 'Dell Latitude 5540 Laptop' (SN: DL5540-UG-001). "
                            "Procurement ref: PROC/2024/ICT/001. Value: UGX 3,200,000.",
                 "timestamp": now + timedelta(minutes=30),
             },
             {
-                "user_id": manager.user_id, "action": "UPDATE",
+                "user_id": uid(manager), "action": "UPDATE",
                 "table_affected": "assets", "record_id": "AST-VEH00003",
                 "details": "Asset status changed from 'Active' to 'Under Maintenance'. "
                            "Reason: Engine overhaul required. Sent to Uganda Motors Limited.",
                 "timestamp": now + timedelta(hours=1),
             },
             {
-                "user_id": manager.user_id, "action": "CREATE",
+                "user_id": uid(manager), "action": "CREATE",
                 "table_affected": "disposal_records", "record_id": "AST-ICT00011",
                 "details": "Disposal record created for 'Dell OptiPlex 390 Desktop'. "
                            "Method: Write-off. Board resolution ref: URSB/BD/2024/RES/003.",
                 "timestamp": now + timedelta(hours=2),
             },
             {
-                "user_id": admin.user_id, "action": "UPDATE",
-                "table_affected": "users", "record_id": employee2.user_id,
+                "user_id": uid(admin), "action": "UPDATE",
+                "table_affected": "users", "record_id": uid(employee2),
                 "details": f"User account for {employee2.first_name} {employee2.last_name} password reset by System Administrator.",
                 "timestamp": now + timedelta(hours=3),
             },
             {
-                "user_id": custodian1.user_id, "action": "CREATE",
+                "user_id": uid(custodian1), "action": "CREATE",
                 "table_affected": "maintenance_records", "record_id": "AST-ICT00010",
                 "details": "Maintenance record created for 'Dell PowerEdge T440 Server'. "
                            "Provider: Dell Technologies Uganda Support. Cost: UGX 2,500,000.",
                 "timestamp": now + timedelta(hours=4),
             },
             {
-                "user_id": manager.user_id, "action": "CREATE",
+                "user_id": uid(manager), "action": "CREATE",
                 "table_affected": "assignments", "record_id": "AST-VEH00002",
                 "details": f"Asset 'Toyota Hilux Double Cab' assigned to {employee3.first_name} {employee3.last_name} "
                            f"(Finance & Administration) effective 2022-09-01.",
