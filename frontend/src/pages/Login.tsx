@@ -109,7 +109,7 @@ export default function LoginPage() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-brand">
-          <div className="login-logo">≡ƒÅó</div>
+          <div className="login-logo">URSB</div>
           <h1>URSB Asset Management</h1>
           <p>{mode === "login" ? "Sign in to your account" : "Create a new account"}</p>
         </div>
