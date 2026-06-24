@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { apiFetch, useAuth } from "../AuthContext";
 
 type AuthMode = "login" | "signup";
@@ -109,7 +109,7 @@ export default function LoginPage() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-brand">
-          <div className="login-logo">🏢</div>
+          <div className="login-logo">≡ƒÅó</div>
           <h1>URSB Asset Management</h1>
           <p>{mode === "login" ? "Sign in to your account" : "Create a new account"}</p>
         </div>
@@ -133,7 +133,7 @@ export default function LoginPage() {
         {error && <div className="alert-error">{error}</div>}
         {success && <div className="alert-success">{success}</div>}
 
-        {/* ── Login Form ── */}
+        {/* ΓöÇΓöÇ Login Form ΓöÇΓöÇ */}
         {mode === "login" && (
           <form onSubmit={handleLogin}>
             <div className="form-group">
@@ -173,7 +173,7 @@ export default function LoginPage() {
           </form>
         )}
 
-        {/* ── Signup Form ── */}
+        {/* ΓöÇΓöÇ Signup Form ΓöÇΓöÇ */}
         {mode === "signup" && (
           <form onSubmit={handleSignup}>
             <div className="form-group">
