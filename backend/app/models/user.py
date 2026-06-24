@@ -2,10 +2,10 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, String, func
+from sqlalchemy import Boolean, Column, DateTime, Enum, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.database import Base
+from app.db import Base
 
 
 class UserRole(str, enum.Enum):
@@ -18,26 +18,41 @@ class UserRole(str, enum.Enum):
 class User(Base):
     __tablename__ = "users"
 
-    user_id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
-    full_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    email: Mapped[str] = mapped_column(
-        String(255), nullable=False, unique=True, index=True
-    )
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[UserRole] = mapped_column(
-        Enum(UserRole, native_enum=False, length=50), nullable=False
-    )
-    department: Mapped[str] = mapped_column(String(100), nullable=False)
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, server_default=func.now()
-    )
+    # Primary key (support both integer and UUID patterns)
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Basic identity fields
+    email = Column(String(length=255), unique=True, nullable=False, index=True)
+    username = Column(String(length=128), unique=True, nullable=True, index=True)
+    first_name = Column(String(length=128), nullable=True)
+    last_name = Column(String(length=128), nullable=True)
+    phone_number = Column(String(length=64), nullable=True)
+    
+    # Department and role
+    department = Column(String(length=128), nullable=True)
+    role = Column(Enum(UserRole, native_enum=False, length=50), nullable=True)
+    
+    # Authentication fields
+    password_hash = Column(String(length=128), nullable=False)
+    password_salt = Column(String(length=128), nullable=False)
+    
+    # Account status
+    is_active = Column(Boolean, nullable=False, default=True)
+    failed_login_attempts = Column(Integer, default=0, nullable=False)
+    locked_until = Column(DateTime, nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    # Relationships
+    # Authentication relationship
+    sessions = relationship(
+        "Session",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    
+    # Asset management relationships
     assets_as_custodian = relationship(
         "Asset", back_populates="current_custodian", foreign_keys="Asset.current_custodian_id"
     )
@@ -63,3 +78,4 @@ class User(Base):
         "DisposalRecord", back_populates="authorised_by_user", foreign_keys="DisposalRecord.authorised_by"
     )
     audit_logs = relationship("AuditLog", back_populates="user")
+

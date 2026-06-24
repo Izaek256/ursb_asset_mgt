@@ -1,4 +1,6 @@
+from app.db import Base
 from app.models.user import User, UserRole
+from app.models.session import Session
 from app.models.asset import (
     Asset,
     AssetCondition,
@@ -13,8 +15,10 @@ from app.models.disposal_record import DisposalRecord, DisposalMethod
 from app.models.audit_log import AuditLog
 
 __all__ = [
+    "Base",
     "User",
     "UserRole",
+    "Session",
     "Asset",
     "AssetType",
     "AssetCondition",

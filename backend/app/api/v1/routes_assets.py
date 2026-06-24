@@ -10,7 +10,7 @@ from app.db import get_db
 from app.models.asset import Asset
 from app.api.v1.auth import get_current_user
 
-router = APIRouter(prefix="/api/assets", tags=["assets"])
+router = APIRouter(prefix="/api/v1/assets", tags=["assets"])
 
 
 class AssetOut(BaseModel):
