@@ -93,6 +93,11 @@ class User(Base):
         parts = [self.first_name, self.last_name]
         return " ".join([p for p in parts if p]).strip()
 
+    @full_name.expression
+    @classmethod
+    def full_name(cls):
+        return func.coalesce(cls.first_name, "") + " " + func.coalesce(cls.last_name, "")
+
     @full_name.setter
     def full_name(self, value):
         if not value:
