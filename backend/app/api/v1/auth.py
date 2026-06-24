@@ -170,7 +170,7 @@ def auth_check(request: Request) -> dict[str, object]:
         "username": user.username,
         "phone_number": user.phone_number,
         "department": user.department,
-        "user_id": user.user_id,
+        "user_id": str(user.user_id) if user.user_id is not None else None,
         "role": user.role.value if hasattr(user.role, "value") else user.role,
         "full_name": user.full_name or f"{user.first_name or ''} {user.last_name or ''}".strip(),
     }
