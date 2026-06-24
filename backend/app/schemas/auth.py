@@ -8,8 +8,11 @@ class LoginRequest(BaseModel):
 
 
 class SignupRequest(BaseModel):
-    full_name: str = Field(min_length=1)
+    first_name: str = Field(min_length=1)
+    last_name: str = Field(min_length=1)
+    username: str = Field(min_length=3)
     email: EmailStr
+    phone_number: str = Field(min_length=7)
     department: str = Field(min_length=1)
     password: str = Field(min_length=8)
     confirm_password: str = Field(min_length=8)
