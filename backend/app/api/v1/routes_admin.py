@@ -121,7 +121,7 @@ class StatusChangeResponse(BaseModel):
 # ── Serialisers ───────────────────────────────────────────────────────────────────
 def _user_to_out(u: User) -> UserOut:
     return UserOut(
-        id=u.user_id,
+        id=str(u.user_id) if u.user_id is not None else "",
         name=_full_name(u),
         email=u.email,
         role=u.role.value if u.role else "",
@@ -284,7 +284,7 @@ def update_user_role(
     old_role = target.role.value
     if old_role == new_role.value:
         return RoleChangeResponse(
-            message="Role unchanged", user_id=target.user_id, new_role=new_role.value
+            message="Role unchanged", user_id=str(target.user_id), new_role=new_role.value
         )
 
     target.role = new_role
@@ -304,7 +304,7 @@ def update_user_role(
 
     return RoleChangeResponse(
         message=f"Role updated from '{old_role}' to '{new_role.value}'",
-        user_id=target.user_id,
+        user_id=str(target.user_id),
         new_role=new_role.value,
     )
 
