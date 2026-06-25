@@ -29,3 +29,36 @@ frontend/public/ursb-logo.svg
 frontend/src/assets/ursb-logo.svg
 *.db
 backend/ursb_asset.db
+# Graphify internal DB and build files (installer already handles this, but good to double-check)
+.code-review-graph/
+graphify-out/
+
+# Local AI settings that point to your local Windows paths (C:\Users\Izaek\...)
+.mcp.json
+.cursor/mcp.json
+.opencode.json
+.gemini/settings.json
+.kiro/settings/mcp.json
+.qoder/mcp.json
+.vscode/mcp.json
+.windsurfrules
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+QODER.md
+.claude/settings.json
+.claude/skills/debug-issue/skill.md
+.claude/skills/explore-codebase/skill.md
+.claude/skills/refactor-safely/skill.md
+.claude/skills/review-changes/skill.md
+.gemini/settings.json.bak
+.gemini/hooks/crg-session-start.sh
+.gemini/hooks/crg-update.sh
+.gemini/skills/debug-issue/SKILL.md
+.gemini/skills/explore-codebase/SKILL.md
+.gemini/skills/refactor-safely/SKILL.md
+.gemini/skills/review-changes/SKILL.md
+.github/code-review-graph.instruction.md
+.kiro/steering/code-review-graph.md
+.qoder/settings.json
+.cursorrules
