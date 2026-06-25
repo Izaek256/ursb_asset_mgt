@@ -62,3 +62,6 @@ QODER.md
 .kiro/steering/code-review-graph.md
 .qoder/settings.json
 .cursorrules
+.claude/settings.json.bak
+.qoder/settings.json.bak
+frontend/.graphifyignore
