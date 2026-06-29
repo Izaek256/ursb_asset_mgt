@@ -4,6 +4,7 @@ type Props = {
   message: string;
   onCancel: () => void;
   onConfirm: () => void;
+  isLoading?: boolean;
 };
 
 export default function ConfirmDialog({
@@ -12,6 +13,7 @@ export default function ConfirmDialog({
   message,
   onCancel,
   onConfirm,
+  isLoading = false,
 }: Props) {
   if (!open) return null;
 
@@ -26,8 +28,12 @@ export default function ConfirmDialog({
           <button className="btn btn-secondary" onClick={onCancel}>
             Cancel
           </button>
-          <button className="btn btn-danger" onClick={onConfirm}>
-            Confirm &amp; Apply
+          <button
+            className="btn btn-danger"
+            onClick={onConfirm}
+            disabled={isLoading}
+          >
+            {isLoading ? "Processing..." : "Confirm & Apply"}
           </button>
         </div>
       </div>

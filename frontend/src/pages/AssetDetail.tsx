@@ -939,15 +939,14 @@ export default function AssetDetail() {
       </div>
 
       {/* Deactivate Dialog */}
-      {showDeactivateDialog && (
-        <ConfirmDialog
-          title="Deactivate Asset"
-          message="Are you sure you want to deactivate this asset? It will not be available for assignment, transfer, or disposal."
-          onConfirm={handleDeactivate}
-          onCancel={() => setShowDeactivateDialog(false)}
-          isLoading={isDeactivating}
-        />
-      )}
+      <ConfirmDialog
+        open={showDeactivateDialog}
+        title="Deactivate Asset"
+        message="Are you sure you want to deactivate this asset? It will not be available for assignment, transfer, or disposal."
+        onConfirm={handleDeactivate}
+        onCancel={() => setShowDeactivateDialog(false)}
+        isLoading={isDeactivating}
+      />
 
       {/* Disposal Dialog */}
       {showDisposeDialog && (
