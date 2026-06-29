@@ -16,6 +16,17 @@ const DEPARTMENTS = [
 export default function LoginPage() {
   const { login, isLoading } = useAuth();
   const [mode, setMode] = React.useState<AuthMode>("login");
+  const [postAuthMessage, setPostAuthMessage] = React.useState<string | null>(null);
+
+  // Check for post_auth_message on mount
+  React.useEffect(() => {
+    const message = sessionStorage.getItem("post_auth_message");
+    if (message) {
+      setPostAuthMessage(message);
+      // Remove after first display — prevents re-showing on page refresh
+      sessionStorage.removeItem("post_auth_message");
+    }
+  }, []);
 
   // Login fields
   const [email, setEmail] = React.useState("");
@@ -130,6 +141,11 @@ export default function LoginPage() {
           </button>
         </div>
 
+        {postAuthMessage && (
+          <div className="alert-info" style={{ marginBottom: "16px" }}>
+            {postAuthMessage}
+          </div>
+        )}
         {error && <div className="alert-error">{error}</div>}
         {success && <div className="alert-success">{success}</div>}
 

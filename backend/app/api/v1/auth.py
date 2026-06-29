@@ -9,6 +9,7 @@ from app.services.auth import (
     SESSION_COOKIE_NAME,
     authenticate_user,
     create_session,
+    create_password_hash,
     create_user,
     delete_session,
     get_session,
@@ -183,3 +184,44 @@ def protected_route(request: Request) -> dict[str, str]:
         "message": "Protected route accessed",
         "email": getattr(user, "email", "unknown"),
     }
+
+
+@router.put("/password")
+def change_password(
+    current_password: str,
+    new_password: str,
+    confirm_new_password: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """
+    Change the current user's password.
+    Validates current password, ensures new passwords match, and deletes all sessions.
+    """
+    # Validate new passwords match
+    if new_password != confirm_new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New passwords do not match"
+        )
+
+    # Verify current password
+    if not verify_password(current_password, current_user.password_salt, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect"
+        )
+
+    # Update password
+    salt, password_hash = create_password_hash(new_password)
+    current_user.password_salt = salt
+    current_user.password_hash = password_hash
+
+    # Delete all sessions for this user (forces re-login)
+    from app.models.session import Session
+    db.query(Session).filter(Session.user_id == current_user.user_id).delete()
+
+    db.commit()
+
+    return {"message": "Password changed successfully. Please log in with your new password."}

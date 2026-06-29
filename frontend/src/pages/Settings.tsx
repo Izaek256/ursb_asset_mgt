@@ -1,14 +1,55 @@
 import React from "react";
-import { useAuth } from "../AuthContext";
+import { useAuth, apiFetch } from "../AuthContext";
 
 export default function Settings() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = React.useState("general");
   const [saved, setSaved] = React.useState(false);
+
+  // Password change form
+  const [currentPassword, setCurrentPassword] = React.useState("");
+  const [newPassword, setNewPassword] = React.useState("");
+  const [confirmPassword, setConfirmPassword] = React.useState("");
+  const [passwordError, setPasswordError] = React.useState<string | null>(null);
+  const [isChangingPassword, setIsChangingPassword] = React.useState(false);
 
   const handleSave = () => {
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(null);
+
+    // Client-side validation
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordError("All fields are required");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Passwords do not match");
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      await apiFetch("/auth/password", {
+        method: "PUT",
+        body: JSON.stringify({
+          current_password: currentPassword,
+          new_password: newPassword,
+          confirm_new_password: confirmPassword,
+        }),
+      });
+      // Success: logout and redirect to login
+      sessionStorage.setItem("post_auth_message", "Your password has been changed. Please log in with your new password.");
+      await logout();
+    } catch (err: any) {
+      setPasswordError(err.message || "Failed to change password");
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   return (
@@ -173,56 +214,56 @@ export default function Settings() {
       {activeTab === "security" && (
         <div className="card settings-card">
           <div className="card-header">
-            <h2 className="card-title">Security Settings</h2>
+            <h2 className="card-title">Change Password</h2>
           </div>
-          <div className="settings-form">
-            <div className="settings-row">
-              <div className="settings-label">
-                <span className="settings-label-title">Session Timeout</span>
-                <span className="settings-label-desc">Auto-logout after inactivity (minutes)</span>
-              </div>
-              <select className="settings-select" defaultValue="480">
-                <option value="30">30 minutes</option>
-                <option value="60">1 hour</option>
-                <option value="240">4 hours</option>
-                <option value="480">8 hours</option>
-              </select>
+          <form onSubmit={handlePasswordChange} className="settings-form">
+            <div className="form-group">
+              <label className="form-label">Current Password</label>
+              <input
+                type="password"
+                className="form-control"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+              />
             </div>
-            <div className="settings-row">
-              <div className="settings-label">
-                <span className="settings-label-title">Password Policy</span>
-                <span className="settings-label-desc">Minimum requirements for user passwords</span>
-              </div>
-              <select className="settings-select" defaultValue="strong">
-                <option value="basic">Basic (8+ characters)</option>
-                <option value="moderate">Moderate (uppercase, lowercase, number)</option>
-                <option value="strong">Strong (mixed case, number, special char)</option>
-              </select>
+            <div className="form-group">
+              <label className="form-label">New Password</label>
+              <input
+                type="password"
+                className="form-control"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
             </div>
-            <div className="settings-row">
-              <div className="settings-label">
-                <span className="settings-label-title">Two-Factor Authentication</span>
-                <span className="settings-label-desc">Require 2FA for all admin accounts</span>
-              </div>
-              <label className="settings-toggle">
-                <input type="checkbox" />
-                <span className="toggle-slider"></span>
-              </label>
+            <div className="form-group">
+              <label className="form-label">Confirm New Password</label>
+              <input
+                type="password"
+                className="form-control"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+              {passwordError && confirmPassword && newPassword !== confirmPassword && (
+                <div className="alert-error" style={{ marginTop: "8px" }}>
+                  Passwords do not match
+                </div>
+              )}
             </div>
-            <div className="settings-row">
-              <div className="settings-label">
-                <span className="settings-label-title">Audit Logging</span>
-                <span className="settings-label-desc">Record all user actions for compliance</span>
+            {passwordError && !confirmPassword && (
+              <div className="alert-error" style={{ marginBottom: "16px" }}>
+                {passwordError}
               </div>
-              <label className="settings-toggle">
-                <input type="checkbox" defaultChecked />
-                <span className="toggle-slider"></span>
-              </label>
+            )}
+            <div className="settings-footer">
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={isChangingPassword}
+              >
+                {isChangingPassword ? "Changing..." : "Change Password"}
+              </button>
             </div>
-          </div>
-          <div className="settings-footer">
-            <button className="btn btn-primary" onClick={handleSave}>Save Changes</button>
-          </div>
+          </form>
         </div>
       )}
 
