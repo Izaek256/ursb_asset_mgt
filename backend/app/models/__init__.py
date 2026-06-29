@@ -13,6 +13,8 @@ from app.models.transfer import Transfer
 from app.models.maintenance_record import MaintenanceRecord
 from app.models.disposal_record import DisposalRecord, DisposalMethod
 from app.models.audit_log import AuditLog
+from app.models.user_settings import UserSettings
+from app.models.system_settings import SystemSettings
 
 __all__ = [
     "Base",
@@ -31,4 +33,6 @@ __all__ = [
     "DisposalRecord",
     "DisposalMethod",
     "AuditLog",
+    "UserSettings",
+    "SystemSettings",
 ]

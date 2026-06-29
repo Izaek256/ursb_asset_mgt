@@ -79,6 +79,8 @@ class User(Base):
         "DisposalRecord", back_populates="authorised_by_user", foreign_keys="DisposalRecord.authorised_by"
     )
     audit_logs = relationship("AuditLog", back_populates="user")
+    # One-to-one relationship for user settings. uselist=False ensures a single settings row per user.
+    settings = relationship("UserSettings", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
     @hybrid_property
     def user_id(self):
