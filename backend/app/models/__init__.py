@@ -13,6 +13,7 @@ from app.models.transfer import Transfer
 from app.models.maintenance_record import MaintenanceRecord
 from app.models.disposal_record import DisposalRecord, DisposalMethod
 from app.models.audit_log import AuditLog
+from app.models.asset_request import AssetRequest, RequestPriority, RequestStatus
 
 __all__ = [
     "Base",
@@ -31,4 +32,7 @@ __all__ = [
     "DisposalRecord",
     "DisposalMethod",
     "AuditLog",
+    "AssetRequest",
+    "RequestPriority",
+    "RequestStatus",
 ]

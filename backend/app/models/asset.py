@@ -3,6 +3,7 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import (
+    Boolean,
     Date,
     DateTime,
     DECIMAL,
@@ -65,6 +66,9 @@ class Asset(Base):
         Enum(AssetStatus, native_enum=False, length=50),
         nullable=False,
         default=AssetStatus.ACTIVE,
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
     )
     source_type: Mapped[SourceType] = mapped_column(
         Enum(SourceType, native_enum=False, length=50), nullable=False
