@@ -1,13 +1,19 @@
 import os
+import re
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models.user import User
+from app.models.audit_log import AuditLog
+from app.models.session import Session
 from app.schemas import AuthStatusResponse, LoginRequest, LoginResponse, SignupRequest
 from app.services.auth import (
     SESSION_COOKIE_NAME,
     authenticate_user,
+    create_password_hash,
     create_session,
     create_user,
     delete_session,
@@ -17,21 +23,31 @@ from app.services.auth import (
     is_account_locked,
     register_failed_login_attempt,
     reset_failed_login_attempts,
+    validate_ursb_email,
     verify_password,
 )
 
 router = APIRouter()
 
 
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+    confirm_new_password: str
+
+
 def _cookie_settings(request: Request) -> dict:
-    secure = os.getenv("DEBUG", "true").lower() != "true"
-    return {
+    # In development, always use secure=false since we're on HTTP (localhost)
+    # In production, secure should be true for HTTPS
+    is_dev = os.getenv("DEBUG", "true").lower() == "true"
+    settings = {
         "httponly": True,
-        "secure": secure,
+        "secure": not is_dev,  # Only secure in production (HTTPS)
         "samesite": "lax",
         "path": "/",
         "max_age": int(24 * 60 * 60),
     }
+    return settings
 
 
 # ── FastAPI Dependencies ─────────────────────────────────────────────────────────
@@ -75,6 +91,9 @@ def signup(
     payload: SignupRequest,
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
+    # Validate email domain - only @ursb.go.ug addresses are permitted
+    validate_ursb_email(payload.email)
+
     if payload.password != payload.confirm_password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -93,7 +112,7 @@ def signup(
             detail="Username is already taken",
         )
 
-    create_user(
+    new_user = create_user(
         db,
         email=payload.email,
         password=payload.password,
@@ -103,6 +122,19 @@ def signup(
         department=payload.department,
         username=payload.username,
     )
+
+    # Write audit log for signup
+    audit = AuditLog(
+        user_id=new_user.user_id,
+        action="SIGNUP",
+        table_affected="users",
+        record_id=new_user.user_id,
+        details=f"New user registered: {payload.email}",
+        timestamp=datetime.utcnow(),
+    )
+    db.add(audit)
+    db.commit()
+
     return {"message": "Account created successfully. Please sign in."}
 
 
@@ -126,6 +158,18 @@ def login(
     if not user or not verify_password(payload.password, user.password_salt, user.password_hash):
         if user:
             register_failed_login_attempt(db, user)
+        # Write audit log for failed login attempt
+        # user_id is None if email does not exist
+        audit = AuditLog(
+            user_id=user.user_id if user else None,
+            action="FAILED_LOGIN",
+            table_affected="users",
+            record_id=user.user_id if user else None,
+            details=f"Failed login attempt for email {payload.email}",
+            timestamp=datetime.utcnow(),
+        )
+        db.add(audit)
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -133,6 +177,19 @@ def login(
 
     reset_failed_login_attempts(db, user)
     session = create_session(db, user)
+
+    # Write audit log for successful login
+    audit = AuditLog(
+        user_id=user.user_id,
+        action="LOGIN",
+        table_affected="sessions",
+        record_id=session.session_token[:8] + "...",
+        details=f"User {payload.email} logged in from session {session.session_token[:8]}...",
+        timestamp=datetime.utcnow(),
+    )
+    db.add(audit)
+    db.commit()
+
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=session.session_token,
@@ -148,9 +205,24 @@ def logout(
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
     session_token = request.cookies.get(SESSION_COOKIE_NAME)
+    user = getattr(request.state, "user", None)
     if session_token:
         delete_session(db, session_token)
     response.delete_cookie(SESSION_COOKIE_NAME, path="/")
+
+    # Write audit log for logout
+    if user:
+        audit = AuditLog(
+            user_id=user.user_id,
+            action="LOGOUT",
+            table_affected="sessions",
+            record_id=session_token[:8] + "..." if session_token else None,
+            details=f"User {user.email} logged out",
+            timestamp=datetime.utcnow(),
+        )
+        db.add(audit)
+        db.commit()
+
     return {"message": "Logout successful"}
 
 
@@ -183,3 +255,75 @@ def protected_route(request: Request) -> dict[str, str]:
         "message": "Protected route accessed",
         "email": getattr(user, "email", "unknown"),
     }
+
+
+@router.put("/password")
+def change_password(
+    body: PasswordChangeRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Change the current user's password. Requires authentication (all roles)."""
+
+    # Validate current password
+    if not verify_password(body.current_password, current_user.password_salt, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect"
+        )
+
+    # Validate new passwords match
+    if body.new_password != body.confirm_new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New passwords do not match"
+        )
+
+    # Validate password complexity: min 8 chars, at least one uppercase, one digit, one special character
+    if len(body.new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password does not meet requirements: minimum 8 characters"
+        )
+    if not re.search(r'[A-Z]', body.new_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password does not meet requirements: at least one uppercase letter"
+        )
+    if not re.search(r'\d', body.new_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password does not meet requirements: at least one digit"
+        )
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>]', body.new_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password does not meet requirements: at least one special character"
+        )
+
+    # Hash new password
+    salt, password_hash = create_password_hash(body.new_password)
+    current_user.password_hash = password_hash
+    current_user.password_salt = salt
+
+    # Invalidate all sessions for this user
+    db.query(Session).filter(Session.user_id == current_user.user_id).delete()
+
+    # Write audit log for password change
+    audit = AuditLog(
+        user_id=current_user.user_id,
+        action="CHANGE_PASSWORD",
+        table_affected="users",
+        record_id=current_user.user_id,
+        details=f"Password changed for user {current_user.email}",
+        timestamp=datetime.utcnow(),
+    )
+    db.add(audit)
+    db.commit()
+
+    # Clear session cookie
+    response.delete_cookie(SESSION_COOKIE_NAME, path="/")
+
+    return {"message": "Password changed successfully. Please log in again."}

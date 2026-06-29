@@ -10,8 +10,9 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models.user import User, UserRole
 from app.models.audit_log import AuditLog
+from app.models.session import Session
 from app.api.v1.auth import get_current_user, require_roles
-from app.services.auth import create_password_hash
+from app.services.auth import create_password_hash, validate_ursb_email
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
@@ -169,6 +170,9 @@ def create_user(
     current_user: User = Depends(require_roles("System Administrator")),
 ):
     """Create a new user account. Admin only."""
+    # Validate email domain - only @ursb.go.ug addresses are permitted
+    validate_ursb_email(body.email)
+
     existing = db.query(User).filter(User.email == body.email).first()
     if existing:
         raise HTTPException(status_code=409, detail="A user with this email already exists.")
@@ -197,10 +201,11 @@ def create_user(
 
     audit = AuditLog(
         user_id=current_user.user_id,
-        action="USER_CREATED",
+        action="CREATE_USER",
         table_affected="users",
         record_id=new_user.user_id,
-        details=f"Created user '{new_user.full_name}' ({new_user.email}) with role '{role.value}' in department '{body.department}'.",
+        details=f"User {new_user.email} created by admin {current_user.email}",
+        timestamp=datetime.utcnow(),
     )
     db.add(audit)
     db.commit()
@@ -223,6 +228,8 @@ def update_user(
     changes = []
 
     if body.email and body.email != target.email:
+        # Validate email domain - only @ursb.go.ug addresses are permitted
+        validate_ursb_email(body.email)
         dup = db.query(User).filter(User.email == body.email, User.user_id != user_id).first()
         if dup:
             raise HTTPException(status_code=409, detail="Another user already has this email.")
@@ -292,14 +299,14 @@ def update_user_role(
     # Create audit log
     audit_entry = AuditLog(
         user_id=current_user.user_id,
-        action="ROLE_CHANGE",
+        action="CHANGE_ROLE",
         table_affected="users",
         record_id=target.user_id,
-        details=(
-            f"Role changed from '{old_role}' to '{new_role.value}' "
-            f"for {_full_name(target)} by {_full_name(current_user)}."
-        ),
+        details=f"User {target.email} role changed from {old_role} to {new_role.value} by {current_user.email}",
+        timestamp=datetime.utcnow(),
     )
+    # Bug fix — audit_entry was constructed but never staged for commit
+    db.add(audit_entry)
     db.commit()
 
     return RoleChangeResponse(
@@ -326,12 +333,15 @@ def deactivate_user(
 
     target.is_active = False
 
+    # Invalidate all active sessions on deactivation — user cannot continue using the system
+    db.query(Session).filter(Session.user_id == target.user_id).delete()
+
     audit = AuditLog(
         user_id=current_user.user_id,
-        action="USER_DEACTIVATED",
+        action="DEACTIVATE_USER",
         table_affected="users",
         record_id=target.user_id,
-        details=f"Deactivated user '{target.full_name}' ({target.email}).",
+        details=f"User {target.email} deactivated by {current_user.email}. All sessions invalidated.",
     )
     db.add(audit)
     db.commit()
@@ -356,10 +366,10 @@ def reactivate_user(
 
     audit = AuditLog(
         user_id=current_user.user_id,
-        action="USER_REACTIVATED",
+        action="REACTIVATE_USER",
         table_affected="users",
         record_id=target.user_id,
-        details=f"Reactivated user '{target.full_name}' ({target.email}).",
+        details=f"User {target.email} reactivated by {current_user.email}",
     )
     db.add(audit)
     db.commit()

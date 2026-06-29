@@ -1,14 +1,60 @@
 import React from "react";
 import { useAuth } from "../AuthContext";
+import { apiFetch } from "../AuthContext";
 
 export default function Settings() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = React.useState("general");
   const [saved, setSaved] = React.useState(false);
+
+  // Password change state
+  const [currentPassword, setCurrentPassword] = React.useState("");
+  const [newPassword, setNewPassword] = React.useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = React.useState("");
+  const [passwordError, setPasswordError] = React.useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = React.useState<string | null>(null);
+  const [isChangingPassword, setIsChangingPassword] = React.useState(false);
 
   const handleSave = () => {
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    // Client-side validation
+    if (!currentPassword || !newPassword || !confirmNewPassword) {
+      setPasswordError("Please fill in all fields.");
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setPasswordError("Passwords do not match.");
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      await apiFetch("/password", {
+        method: "PUT",
+        body: JSON.stringify({
+          current_password: currentPassword,
+          new_password: newPassword,
+          confirm_new_password: confirmNewPassword,
+        }),
+      });
+
+      // Store success message in sessionStorage and redirect to login
+      sessionStorage.setItem("post_auth_message", "Your password has been changed. Please log in with your new password.");
+      logout();
+    } catch (err: any) {
+      setPasswordError(err.message || "Password change failed.");
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   return (
@@ -176,6 +222,59 @@ export default function Settings() {
             <h2 className="card-title">Security Settings</h2>
           </div>
           <div className="settings-form">
+            {/* Password Change Section */}
+            <div className="settings-section">
+              <h3 className="settings-section-title">Change Password</h3>
+              {passwordError && <div className="alert-error">{passwordError}</div>}
+              {passwordSuccess && <div className="alert-success">{passwordSuccess}</div>}
+              <form onSubmit={handlePasswordChange}>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="current-password">Current Password</label>
+                  <input
+                    id="current-password"
+                    type="password"
+                    className="form-control"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="new-password">New Password</label>
+                  <input
+                    id="new-password"
+                    type="password"
+                    className="form-control"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Min. 8 characters (with A-Z, a-z, 0-9, special)"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="confirm-new-password">Confirm New Password</label>
+                  <input
+                    id="confirm-new-password"
+                    type="password"
+                    className="form-control"
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    placeholder="Re-enter your new password"
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={isChangingPassword}
+                >
+                  {isChangingPassword ? "Changing Password..." : "Change Password"}
+                </button>
+              </form>
+            </div>
+
+            <hr className="settings-divider" />
+
             <div className="settings-row">
               <div className="settings-label">
                 <span className="settings-label-title">Session Timeout</span>
