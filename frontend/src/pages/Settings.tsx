@@ -1,11 +1,50 @@
 import React from "react";
 import { useAuth } from "../AuthContext";
 import { apiFetch } from "../AuthContext";
+import { UserSettings, SystemSettings } from "../types";
+import FormInput from "../components/FormInput";
+import LoadingSpinner from "../components/LoadingSpinner";
+import ErrorMessage from "../components/ErrorMessage";
+import SuccessBanner from "../components/SuccessBanner";
+import EmptyState from "../components/EmptyState";
 
 export default function Settings() {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = React.useState("general");
-  const [saved, setSaved] = React.useState(false);
+
+  // Settings data state
+  const [isLoadingSettings, setIsLoadingSettings] = React.useState(true);
+  const [settingsError, setSettingsError] = React.useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
+
+  // General tab form state
+  const [generalForm, setGeneralForm] = React.useState({
+    theme: "light" as "light" | "dark",
+    language: "en" as "en" | "fr",
+  });
+  const [isSavingGeneral, setIsSavingGeneral] = React.useState(false);
+  const [generalError, setGeneralError] = React.useState<string | null>(null);
+
+  // Notifications tab form state
+  const [notificationsForm, setNotificationsForm] = React.useState({
+    notifications_email: false,
+    notifications_in_app: false,
+    notifications_maintenance_alerts: false,
+    notifications_transfer_alerts: false,
+    notifications_request_updates: false,
+  });
+  const [isSavingNotifications, setIsSavingNotifications] = React.useState(false);
+  const [notificationsError, setNotificationsError] = React.useState<string | null>(null);
+
+  // System tab form state
+  const [systemForm, setSystemForm] = React.useState({
+    organisation_name: "",
+    asset_id_prefix: "",
+    session_timeout_hours: 8,
+    max_failed_login_attempts: 5,
+  });
+  const [isSavingSystem, setIsSavingSystem] = React.useState(false);
+  const [systemFormError, setSystemFormError] = React.useState<string | null>(null);
 
   // Password change state
   const [currentPassword, setCurrentPassword] = React.useState("");
@@ -15,9 +54,114 @@ export default function Settings() {
   const [passwordSuccess, setPasswordSuccess] = React.useState<string | null>(null);
   const [isChangingPassword, setIsChangingPassword] = React.useState(false);
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+  // Load settings on mount
+  React.useEffect(() => {
+    const loadSettings = async () => {
+      setIsLoadingSettings(true);
+      setSettingsError(null);
+
+      try {
+        // Parallel fetch — both calls are independent and can resolve concurrently
+        const [userSettingsData, systemSettingsData] = await Promise.all([
+          apiFetch<UserSettings>("/settings"),
+          user?.role === "System Administrator" 
+            ? apiFetch<SystemSettings>("/settings/system")
+            : Promise.resolve(null),
+        ]);
+
+        if (userSettingsData) {
+          setGeneralForm({
+            theme: userSettingsData.theme,
+            language: userSettingsData.language,
+          });
+          setNotificationsForm({
+            notifications_email: userSettingsData.notifications_email,
+            notifications_in_app: userSettingsData.notifications_in_app,
+            notifications_maintenance_alerts: userSettingsData.notifications_maintenance_alerts,
+            notifications_transfer_alerts: userSettingsData.notifications_transfer_alerts,
+            notifications_request_updates: userSettingsData.notifications_request_updates,
+          });
+        }
+
+        if (systemSettingsData) {
+          setSystemForm({
+            organisation_name: systemSettingsData.organisation_name,
+            asset_id_prefix: systemSettingsData.asset_id_prefix,
+            session_timeout_hours: systemSettingsData.session_timeout_hours,
+            max_failed_login_attempts: systemSettingsData.max_failed_login_attempts,
+          });
+        }
+      } catch (err: any) {
+        setSettingsError(err.message || "Failed to load settings");
+      } finally {
+        setIsLoadingSettings(false);
+      }
+    };
+
+    loadSettings();
+  }, [user?.role]);
+
+  // General tab handlers
+  const handleGeneralSave = async () => {
+    setGeneralError(null);
+    setIsSavingGeneral(true);
+
+    try {
+      await apiFetch("/settings", {
+        method: "PUT",
+        body: JSON.stringify({
+          theme: generalForm.theme,
+          language: generalForm.language,
+        }),
+      });
+
+      setSuccessMessage("General settings saved.");
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (err: any) {
+      setGeneralError(err.message || "Failed to save general settings");
+    } finally {
+      setIsSavingGeneral(false);
+    }
+  };
+
+  // Notifications tab handlers
+  const handleNotificationsSave = async () => {
+    setNotificationsError(null);
+    setIsSavingNotifications(true);
+
+    try {
+      await apiFetch("/settings", {
+        method: "PUT",
+        body: JSON.stringify(notificationsForm),
+      });
+
+      setSuccessMessage("Notification preferences saved.");
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (err: any) {
+      setNotificationsError(err.message || "Failed to save notification preferences");
+    } finally {
+      setIsSavingNotifications(false);
+    }
+  };
+
+  // System tab handlers
+  const handleSystemSave = async () => {
+    setSystemFormError(null);
+    setIsSavingSystem(true);
+
+    try {
+      await apiFetch("/settings/system", {
+        method: "PUT",
+        body: JSON.stringify(systemForm),
+      });
+
+      setSuccessMessage("System settings saved.");
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (err: any) {
+      setSystemFormError(err.message || "Failed to save system settings");
+    } finally {
+      setIsSavingSystem(false);
+    }
   };
 
   const handlePasswordChange = async (e: React.FormEvent) => {
@@ -59,7 +203,9 @@ export default function Settings() {
 
   return (
     <div className="settings-page">
-      {saved && <div className="alert-success">Settings saved successfully.</div>}
+      {successMessage && <SuccessBanner message={successMessage} onDismiss={() => setSuccessMessage(null)} />}
+      {isLoadingSettings && <div className="page-loading"><LoadingSpinner /> Loading settings...</div>}
+      {settingsError && <ErrorMessage message={settingsError} />}
 
       {/* Tabs */}
       <div className="settings-tabs">
@@ -96,57 +242,32 @@ export default function Settings() {
             <h2 className="card-title">General Settings</h2>
           </div>
           <div className="settings-form">
-            <div className="settings-row">
-              <div className="settings-label">
-                <span className="settings-label-title">Organization Name</span>
-                <span className="settings-label-desc">Displayed in the sidebar and login page</span>
-              </div>
-              <input className="settings-input" defaultValue="URSB - Uganda Registration Services Bureau" />
-            </div>
-            <div className="settings-row">
-              <div className="settings-label">
-                <span className="settings-label-title">System Name</span>
-                <span className="settings-label-desc">Name of this application</span>
-              </div>
-              <input className="settings-input" defaultValue="Asset Management System" />
-            </div>
-            <div className="settings-row">
-              <div className="settings-label">
-                <span className="settings-label-title">Currency</span>
-                <span className="settings-label-desc">Default currency for asset values</span>
-              </div>
-              <select className="settings-select" defaultValue="UGX">
-                <option value="UGX">UGX - Ugandan Shilling</option>
-                <option value="USD">USD - US Dollar</option>
-                <option value="EUR">EUR - Euro</option>
-              </select>
-            </div>
-            <div className="settings-row">
-              <div className="settings-label">
-                <span className="settings-label-title">Date Format</span>
-                <span className="settings-label-desc">How dates are displayed throughout the system</span>
-              </div>
-              <select className="settings-select" defaultValue="DD/MM/YYYY">
-                <option value="DD/MM/YYYY">DD/MM/YYYY</option>
-                <option value="MM/DD/YYYY">MM/DD/YYYY</option>
-                <option value="YYYY-MM-DD">YYYY-MM-DD</option>
-              </select>
-            </div>
-            <div className="settings-row">
-              <div className="settings-label">
-                <span className="settings-label-title">Fiscal Year Start</span>
-                <span className="settings-label-desc">Starting month for the fiscal year</span>
-              </div>
-              <select className="settings-select" defaultValue="7">
-                <option value="1">January</option>
-                <option value="4">April</option>
-                <option value="7">July</option>
-                <option value="10">October</option>
-              </select>
-            </div>
+            <FormInput
+              type="select"
+              label="Theme"
+              value={generalForm.theme}
+              onChange={(v) => setGeneralForm({ ...generalForm, theme: v as "light" | "dark" })}
+              options={[
+                { value: "light", label: "Light" },
+                { value: "dark", label: "Dark" },
+              ]}
+            />
+            <FormInput
+              type="select"
+              label="Language"
+              value={generalForm.language}
+              onChange={(v) => setGeneralForm({ ...generalForm, language: v as "en" | "fr" })}
+              options={[
+                { value: "en", label: "English" },
+                { value: "fr", label: "French" },
+              ]}
+            />
           </div>
+          {generalError && <ErrorMessage message={generalError} />}
           <div className="settings-footer">
-            <button className="btn btn-primary" onClick={handleSave}>Save Changes</button>
+            <button className="btn btn-primary" onClick={handleGeneralSave} disabled={isSavingGeneral}>
+              {isSavingGeneral ? <LoadingSpinner size="sm" /> : "Save Changes"}
+            </button>
           </div>
         </div>
       )}
@@ -158,59 +279,47 @@ export default function Settings() {
             <h2 className="card-title">Notification Preferences</h2>
           </div>
           <div className="settings-form">
-            <div className="settings-row">
-              <div className="settings-label">
-                <span className="settings-label-title">Email Notifications</span>
-                <span className="settings-label-desc">Receive email alerts for important events</span>
-              </div>
-              <label className="settings-toggle">
-                <input type="checkbox" defaultChecked />
-                <span className="toggle-slider"></span>
-              </label>
-            </div>
-            <div className="settings-row">
-              <div className="settings-label">
-                <span className="settings-label-title">Maintenance Reminders</span>
-                <span className="settings-label-desc">Alert when assets are due for maintenance</span>
-              </div>
-              <label className="settings-toggle">
-                <input type="checkbox" defaultChecked />
-                <span className="toggle-slider"></span>
-              </label>
-            </div>
-            <div className="settings-row">
-              <div className="settings-label">
-                <span className="settings-label-title">Transfer Requests</span>
-                <span className="settings-label-desc">Notify when a new asset transfer is requested</span>
-              </div>
-              <label className="settings-toggle">
-                <input type="checkbox" defaultChecked />
-                <span className="toggle-slider"></span>
-              </label>
-            </div>
-            <div className="settings-row">
-              <div className="settings-label">
-                <span className="settings-label-title">Role Change Alerts</span>
-                <span className="settings-label-desc">Notify when user roles are modified</span>
-              </div>
-              <label className="settings-toggle">
-                <input type="checkbox" defaultChecked />
-                <span className="toggle-slider"></span>
-              </label>
-            </div>
-            <div className="settings-row">
-              <div className="settings-label">
-                <span className="settings-label-title">Disposal Approvals</span>
-                <span className="settings-label-desc">Alert for asset disposal approval</span>
-              </div>
-              <label className="settings-toggle">
-                <input type="checkbox" />
-                <span className="toggle-slider"></span>
-              </label>
-            </div>
+            <FormInput
+              type="checkbox"
+              label="Email Notifications"
+              checked={notificationsForm.notifications_email}
+              onChange={(v) => setNotificationsForm({ ...notificationsForm, notifications_email: v })}
+              helper="Receive email alerts for important events"
+            />
+            <FormInput
+              type="checkbox"
+              label="In-App Notifications"
+              checked={notificationsForm.notifications_in_app}
+              onChange={(v) => setNotificationsForm({ ...notificationsForm, notifications_in_app: v })}
+              helper="Receive in-app notifications"
+            />
+            <FormInput
+              type="checkbox"
+              label="Maintenance Alerts"
+              checked={notificationsForm.notifications_maintenance_alerts}
+              onChange={(v) => setNotificationsForm({ ...notificationsForm, notifications_maintenance_alerts: v })}
+              helper="Alert when assets are due for maintenance"
+            />
+            <FormInput
+              type="checkbox"
+              label="Transfer Alerts"
+              checked={notificationsForm.notifications_transfer_alerts}
+              onChange={(v) => setNotificationsForm({ ...notificationsForm, notifications_transfer_alerts: v })}
+              helper="Notify when a new asset transfer is requested"
+            />
+            <FormInput
+              type="checkbox"
+              label="Request Updates"
+              checked={notificationsForm.notifications_request_updates}
+              onChange={(v) => setNotificationsForm({ ...notificationsForm, notifications_request_updates: v })}
+              helper="Notify about asset request status updates"
+            />
           </div>
+          {notificationsError && <ErrorMessage message={notificationsError} />}
           <div className="settings-footer">
-            <button className="btn btn-primary" onClick={handleSave}>Save Changes</button>
+            <button className="btn btn-primary" onClick={handleNotificationsSave} disabled={isSavingNotifications}>
+              {isSavingNotifications ? <LoadingSpinner size="sm" /> : "Save Changes"}
+            </button>
           </div>
         </div>
       )}
@@ -319,9 +428,6 @@ export default function Settings() {
               </label>
             </div>
           </div>
-          <div className="settings-footer">
-            <button className="btn btn-primary" onClick={handleSave}>Save Changes</button>
-          </div>
         </div>
       )}
 
@@ -329,38 +435,57 @@ export default function Settings() {
       {activeTab === "system" && (
         <div className="card settings-card">
           <div className="card-header">
-            <h2 className="card-title">System Information</h2>
+            <h2 className="card-title">System Settings</h2>
           </div>
-          <div className="settings-form">
-            <div className="settings-row">
-              <div className="settings-label">
-                <span className="settings-label-title">Logged In As</span>
-                <span className="settings-label-desc">Current administrator account</span>
+          {/* Conditional render by role — non-admins see a placeholder */}
+          {user?.role === "System Administrator" ? (
+            <>
+              <div className="settings-form">
+                <FormInput
+                  type="text"
+                  label="Organisation Name"
+                  value={systemForm.organisation_name}
+                  onChange={(v) => setSystemForm({ ...systemForm, organisation_name: v })}
+                  helper="Name of the organization"
+                />
+                <FormInput
+                  type="text"
+                  label="Asset ID Prefix"
+                  value={systemForm.asset_id_prefix}
+                  onChange={(v) => setSystemForm({ ...systemForm, asset_id_prefix: v })}
+                  helper="Prefix for asset IDs"
+                />
+                <FormInput
+                  type="number"
+                  label="Session Timeout Hours"
+                  value={systemForm.session_timeout_hours}
+                  onChange={(v) => setSystemForm({ ...systemForm, session_timeout_hours: parseInt(v, 10) })}
+                  helper="Session timeout in hours"
+                  error={systemForm.session_timeout_hours < 1 || systemForm.session_timeout_hours > 168 ? "Must be between 1 and 168 hours" : undefined}
+                />
+                <FormInput
+                  type="number"
+                  label="Max Failed Login Attempts"
+                  value={systemForm.max_failed_login_attempts}
+                  onChange={(v) => setSystemForm({ ...systemForm, max_failed_login_attempts: parseInt(v, 10) })}
+                  helper="Maximum failed login attempts before lockout"
+                  error={systemForm.max_failed_login_attempts < 1 || systemForm.max_failed_login_attempts > 10 ? "Must be between 1 and 10" : undefined}
+                />
               </div>
-              <span className="settings-value">{user?.full_name} ({user?.email})</span>
-            </div>
-            <div className="settings-row">
-              <div className="settings-label">
-                <span className="settings-label-title">System Version</span>
-                <span className="settings-label-desc">Current application version</span>
+              {systemFormError && <ErrorMessage message={systemFormError} />}
+              <div className="settings-footer">
+                <button
+                  className="btn btn-primary"
+                  onClick={handleSystemSave}
+                  disabled={isSavingSystem || systemForm.session_timeout_hours < 1 || systemForm.session_timeout_hours > 168 || systemForm.max_failed_login_attempts < 1 || systemForm.max_failed_login_attempts > 10}
+                >
+                  {isSavingSystem ? <LoadingSpinner size="sm" /> : "Save Changes"}
+                </button>
               </div>
-              <span className="settings-value">v1.0.0</span>
-            </div>
-            <div className="settings-row">
-              <div className="settings-label">
-                <span className="settings-label-title">Database</span>
-                <span className="settings-label-desc">Backend database status</span>
-              </div>
-              <span className="badge badge-active">Connected</span>
-            </div>
-            <div className="settings-row">
-              <div className="settings-label">
-                <span className="settings-label-title">Export Data</span>
-                <span className="settings-label-desc">Download a full system data export</span>
-              </div>
-              <button className="btn btn-secondary btn-sm">Export CSV</button>
-            </div>
-          </div>
+            </>
+          ) : (
+            <EmptyState icon="⚙️" title="System Settings" description="System settings are only available to System Administrators." />
+          )}
         </div>
       )}
     </div>
