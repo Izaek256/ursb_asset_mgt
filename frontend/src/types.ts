@@ -15,10 +15,20 @@ export interface UserRow {
 }
 
 export interface AuditLog {
-  id: string;
-  timestamp: string; // ISO
-  performedBy: string;
-  targetUser: string;
+  log_id: string;
+  timestamp: string;
+  user_id: number | null;
+  user_name: string;
   action: string;
-  ipAddress?: string;
+  table_affected: string;
+  record_id: string;
+  details: string;
+}
+
+export interface AuditLogListResponse {
+  logs: AuditLog[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
 }
