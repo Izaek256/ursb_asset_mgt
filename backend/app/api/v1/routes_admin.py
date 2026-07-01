@@ -1,6 +1,6 @@
 """Admin routes: user management and audit logs."""
 
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -104,6 +104,27 @@ class AuditLogOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+class AuditLogResponse(BaseModel):
+    log_id: str
+    timestamp:str
+    user_id: Optional[int] = None
+    user_name: str
+    action: str
+    table_affected: str
+    record_id: str
+    details:str
+
+    class Config:
+        from_attributes = True   
+
+class AuditLogListResponse(BaseModel):
+    logs: List[AuditLogResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+    
 
 
 class RoleChangeResponse(BaseModel):
@@ -367,19 +388,82 @@ def reactivate_user(
     return _user_to_out(target)
 
 
-@router.get("/audit-logs", response_model=List[AuditLogOut])
+@router.get("/audit-logs", response_model=AuditLogListResponse)
 def list_audit_logs(
-    limit: int = 100,
+    page: int = 1,
+    page_size: int = 20,
+    user_id: Optional[int] = None,
+    action: Optional[str] = None,
+    table_affected: Optional[str] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(
         require_roles("System Administrator", "Asset Manager")
     ),
 ):
-    """Return recent audit log entries."""
+    
+    if page < 1:
+        raise HTTPException(status_code=400, detail="Page must be 1 or greater")
+    if page_size < 1 or page_size > 100:
+        raise HTTPException(status_code=400, detail="page_size must be between 1 and 100")
+
+    # Validate date range
+    if from_date and to_date and from_date > to_date:
+        raise HTTPException(status_code=400, detail="from_date cannot be after to_date")
+
+    # Build base query
+    filtered_query = db.query(AuditLog)
+
+    # Apply filters — only if provided
+    if user_id is not None:
+        filtered_query = filtered_query.filter(AuditLog.user_id == user_id)
+    if action is not None:
+        # ilike enables partial matching — "ASSET" returns all asset-related actions
+        filtered_query = filtered_query.filter(AuditLog.action.ilike(f"%{action}%"))
+    if table_affected is not None:
+        filtered_query = filtered_query.filter(AuditLog.table_affected == table_affected)
+    if from_date is not None:
+        # inclusive lower bound
+        filtered_query = filtered_query.filter(AuditLog.timestamp >= from_date)
+    if to_date is not None:
+        # +1 day includes the full to_date day (upper bound is exclusive)
+        filtered_query = filtered_query.filter(
+            AuditLog.timestamp < to_date + timedelta(days=1)
+        )
+
+    total = filtered_query.count()
+
     logs = (
-        db.query(AuditLog)
+        filtered_query
         .order_by(AuditLog.timestamp.desc())
-        .limit(limit)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
         .all()
     )
-    return [_log_to_out(l, db) for l in logs]
+    log_responses = []
+    for log in logs:
+        user = db.query(User).filter(User.user_id == log.user_id).first()
+        user_name = _full_name(user) if user else "Unknown User"
+        log_responses.append(AuditLogResponse(
+            log_id=str(log.log_id),
+            timestamp=log.timestamp.isoformat() if log.timestamp else "",
+            user_id=log.user_id,
+            user_name=user_name,
+            action=log.action,
+            table_affected=log.table_affected or "",
+            record_id=str(log.record_id) if log.record_id else "",
+            details=log.details or "",
+        ))
+
+    import math
+    # math.ceil ensures a partial last page still counts as a full page
+    total_pages = math.ceil(total / page_size) if total > 0 else 1
+
+    return AuditLogListResponse(
+        logs=log_responses,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
