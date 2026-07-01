@@ -5,24 +5,30 @@ from fastapi import Request, status
 from app.db import SessionLocal
 from app.services.auth import get_session, SESSION_COOKIE_NAME
 
+# Public routes are endpoints that do not require authentication.
+# These include health checks, login/signup pages, and API documentation.
+# To add a new public route, add it to this tuple.
+PUBLIC_ROUTES = (
+    "/login",  # Login page
+    "/logout",  # Logout page
+    "/signup",  # Signup page
+    "/health",  # Health check endpoint
+    "/",  # Root endpoint
+    "/openapi.json",  # OpenAPI schema
+    "/docs",  # Swagger UI documentation
+    "/redoc",  # ReDoc documentation
+    "/api/v1/login",  # Login API endpoint
+    "/api/v1/signup",  # Signup API endpoint
+    "/api/v1/logout",  # Logout API endpoint
+    "/api/v1/protected",  # Protected route test endpoint
+)
+
 
 class AuthMiddleware(BaseHTTPMiddleware):
     def __init__(
         self,
         app,
-        exempt_paths: tuple[str, ...] = (
-            "/login",
-            "/logout",
-            "/signup",
-            "/health",
-            "/",
-            "/openapi.json",
-            "/docs",
-            "/redoc",
-            "/api/v1/login",
-            "/api/v1/signup",
-            "/api/v1/logout",
-        ),
+        exempt_paths: tuple[str, ...] = PUBLIC_ROUTES,
     ):
         super().__init__(app)
         self.exempt_paths = exempt_paths
@@ -39,6 +45,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 return JSONResponse(
                     {"detail": "Authentication required"},
                     status_code=status.HTTP_401_UNAUTHORIZED,
+                )
+            # Check if user is active - prevent deactivated users from continuing to use the system
+            if not session.user.is_active:
+                return JSONResponse(
+                    {"detail": "Account is deactivated. Contact your administrator."},
+                    status_code=status.HTTP_403_FORBIDDEN,
                 )
             request.state.user = session.user
 

@@ -14,6 +14,8 @@ from app.models.maintenance_record import MaintenanceRecord
 from app.models.disposal_record import DisposalRecord, DisposalMethod
 from app.models.audit_log import AuditLog
 from app.models.asset_request import AssetRequest, RequestPriority, RequestStatus
+from app.models.user_settings import UserSettings
+from app.models.system_settings import SystemSettings
 
 __all__ = [
     "Base",
@@ -35,4 +37,6 @@ __all__ = [
     "AssetRequest",
     "RequestPriority",
     "RequestStatus",
+    "UserSettings",
+    "SystemSettings",
 ]

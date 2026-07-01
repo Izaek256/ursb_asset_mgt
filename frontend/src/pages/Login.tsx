@@ -3,6 +3,15 @@ import { apiFetch, useAuth } from "../AuthContext";
 
 type AuthMode = "login" | "signup";
 
+// Email domain validation function - only @ursb.go.ug addresses are permitted
+// This enforces the institutional email restriction for URSB employees
+const validateUrsbEmail = (email: string): string | null => {
+  if (!email.toLowerCase().endsWith("@ursb.go.ug")) {
+    return "Only @ursb.go.ug email addresses are permitted";
+  }
+  return null;
+};
+
 const DEPARTMENTS = [
   "ICT",
   "Finance & Administration",
@@ -14,7 +23,7 @@ const DEPARTMENTS = [
 ];
 
 export default function LoginPage() {
-  const { login, isLoading } = useAuth();
+  const { login, isLoading, user } = useAuth();
   const [mode, setMode] = React.useState<AuthMode>("login");
 
   // Login fields
@@ -35,6 +44,23 @@ export default function LoginPage() {
   const [success, setSuccess] = React.useState<string | null>(null);
   const [isSigningUp, setIsSigningUp] = React.useState(false);
 
+  // Check for deactivated user message in URL
+  const [isDeactivated, setIsDeactivated] = React.useState(false);
+  const [postAuthMessage, setPostAuthMessage] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("deactivated") === "true") {
+      setIsDeactivated(true);
+    }
+    // Check for post_auth_message in sessionStorage
+    const message = sessionStorage.getItem("post_auth_message");
+    if (message) {
+      setPostAuthMessage(message);
+      sessionStorage.removeItem("post_auth_message"); // Remove after display so it does not reappear on refresh
+    }
+  }, []);
+
   const switchMode = (m: AuthMode) => {
     setMode(m);
     setError(null);
@@ -49,7 +75,12 @@ export default function LoginPage() {
       return;
     }
     const err = await login(email, password);
-    if (err) setError(err);
+    if (err) {
+      setError(err);
+    } else {
+      // Successful login - redirect to dashboard
+      window.location.pathname = "/dashboard";
+    }
   };
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -60,6 +91,14 @@ export default function LoginPage() {
       setError("Please fill in all fields.");
       return;
     }
+
+    // Validate email domain - only @ursb.go.ug addresses are permitted
+    const emailError = validateUrsbEmail(signupEmail);
+    if (emailError) {
+      setError(emailError);
+      return;
+    }
+
     if (signupPassword.length < 8) {
       setError("Password must be at least 8 characters.");
       return;
@@ -130,6 +169,8 @@ export default function LoginPage() {
           </button>
         </div>
 
+        {isDeactivated && <div className="alert-error">Your account has been deactivated. Contact your administrator.</div>}
+        {postAuthMessage && <div className="alert-info">{postAuthMessage}</div>}
         {error && <div className="alert-error">{error}</div>}
         {success && <div className="alert-success">{success}</div>}
 

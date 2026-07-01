@@ -175,10 +175,43 @@ function AppShell() {
 
 // ── Root (auth gate) ─────────────────────────────────────────────────────────────
 function AppRoot() {
-  const { user, token } = useAuth();
+  const { user, isInitialLoading } = useAuth();
+
+  // Show loading spinner during initial auth check
+  if (isInitialLoading) {
+    return (
+      <div style={{
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        alignItems: "center",
+        height: "100vh",
+        backgroundColor: "#f5f5f5",
+        gap: "20px"
+      }}>
+        <div style={{
+          width: "50px",
+          height: "50px",
+          border: "4px solid #e0e0e0",
+          borderTop: "4px solid #4a90e2",
+          borderRadius: "50%",
+          animation: "spin 1s linear infinite"
+        }} />
+        <div style={{ fontSize: "18px", color: "#666", fontWeight: "500" }}>
+          Loading...
+        </div>
+        <style>{`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   // Not logged in → show login
-  if (!user || !token) {
+  if (!user) {
     return <LoginPage />;
   }
 
