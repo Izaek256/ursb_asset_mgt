@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { apiFetch, useAuth } from "../AuthContext";
 
 type AuthMode = "login" | "signup";
@@ -23,7 +23,7 @@ const DEPARTMENTS = [
 ];
 
 export default function LoginPage() {
-  const { login, isLoading, user } = useAuth();
+  const { login, isLoading } = useAuth();
   const [mode, setMode] = React.useState<AuthMode>("login");
 
   // Login fields

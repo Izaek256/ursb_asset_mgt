@@ -8,11 +8,26 @@ import Dashboard from "./pages/Dashboard";
 import LoginPage from "./pages/Login";
 import Settings from "./pages/Settings";
 import Transfers from "./pages/Transfers";
+import Requests from "./pages/Requests";
+import Assignments from "./pages/Assignments";
+import Storage from "./pages/Storage";
+import Maintenance from "./pages/Maintenance";
 import ProfileModal from "./components/ProfileModal";
 import NotificationPanel from "./components/NotificationPanel";
 
 // ── Navigation config ────────────────────────────────────────────────────────────
-type NavId = "dashboard" | "users" | "audit" | "assets" | "register-asset" | "transfers" | "settings";
+type NavId = 
+  | "dashboard" 
+  | "users" 
+  | "audit" 
+  | "assets" 
+  | "register-asset" 
+  | "transfers" 
+  | "settings"
+  | "requests"
+  | "assignments"
+  | "storage"
+  | "maintenance";
 
 interface NavItem {
   id: NavId;
@@ -31,9 +46,13 @@ const ALL_ROLES = [
 
 const NAV_ITEMS: NavItem[] = [
   { id: "dashboard", label: "Dashboard", icon: "📊", path: "/dashboard", roles: ALL_ROLES },
+  { id: "requests", label: "Requests", icon: "📋", path: "/requests", roles: ALL_ROLES },
   { id: "assets", label: "Assets", icon: "📦", path: "/assets", roles: ["System Administrator", "Asset Manager", "Asset Custodian"] },
   { id: "register-asset", label: "Register Asset", icon: "➕", path: "/assets/register", roles: ["Asset Manager"] },
+  { id: "assignments", label: "Assignments", icon: "🔑", path: "/assignments", roles: ["System Administrator", "Asset Manager"] },
+  { id: "storage", label: "Storage", icon: "🏪", path: "/storage", roles: ["System Administrator", "Asset Manager"] },
   { id: "transfers", label: "Transfers", icon: "🔄", path: "/transfers", roles: ["System Administrator", "Asset Manager"] },
+  { id: "maintenance", label: "Maintenance", icon: "🔧", path: "/maintenance", roles: ["System Administrator", "Asset Manager"] },
   { id: "users", label: "User Management", icon: "👥", path: "/admin/users", roles: ["System Administrator", "Asset Manager"] },
   { id: "audit", label: "Audit Logs", icon: "🕐", path: "/admin/audit-logs", roles: ["System Administrator", "Asset Manager"] },
   { id: "settings", label: "Settings", icon: "⚙️", path: "/settings", roles: ["System Administrator"] },
@@ -67,11 +86,23 @@ function AppShell() {
     case "dashboard":
       content = <Dashboard />;
       break;
+    case "requests":
+      content = <Requests />;
+      break;
     case "assets":
       content = <Assets />;
       break;
     case "register-asset":
       content = <AssetRegistration />;
+      break;
+    case "assignments":
+      content = <Assignments />;
+      break;
+    case "storage":
+      content = <Storage />;
+      break;
+    case "maintenance":
+      content = <Maintenance />;
       break;
     case "transfers":
       content = <Transfers />;
@@ -103,6 +134,17 @@ function AppShell() {
     .toUpperCase()
     .slice(0, 2);
 
+  // Dynamic label for requests based on role
+  const getRequestsLabel = () => {
+    return ["System Administrator", "Asset Manager"].includes(user!.role) ? "Requests" : "My Requests";
+  };
+
+  const getPageTitle = (item: NavItem | undefined) => {
+    if (!item) return "Dashboard";
+    if (item.id === "requests") return getRequestsLabel();
+    return item.label;
+  };
+
   return (
     <div className="app-container">
       {/* ── Sidebar ──────────────────────────────────────────────────────────── */}
@@ -124,7 +166,9 @@ function AppShell() {
               onClick={() => navigate(item.path)}
             >
               <span className="nav-icon">{item.icon}</span>
-              <span className="nav-label">{item.label}</span>
+              <span className="nav-label">
+                {item.id === "requests" ? getRequestsLabel() : item.label}
+              </span>
             </button>
           ))}
         </nav>
@@ -145,8 +189,8 @@ function AppShell() {
       <div className="main-content">
         <header className="header">
           <div>
-            <h1 className="header-title">{activeItem?.label ?? "Dashboard"}</h1>
-            <p className="header-breadcrumb">Home / {activeItem?.label ?? "Dashboard"}</p>
+            <h1 className="header-title">{getPageTitle(activeItem)}</h1>
+            <p className="header-breadcrumb">Home / {getPageTitle(activeItem)}</p>
           </div>
           <div className="header-actions">
             <button

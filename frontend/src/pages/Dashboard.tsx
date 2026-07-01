@@ -1,5 +1,5 @@
 import React from "react";
-import { apiFetch, useAuth } from "../AuthContext";
+import { apiFetch } from "../AuthContext";
 
 // ── Types ────────────────────────────────────────────────────────────────────────
 interface StatCard { label: string; value: number; icon: string; color: string; }
@@ -52,7 +52,6 @@ const MOCK: DashboardData = {
 
 // ── Component ────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const { token } = useAuth();
   const [data, setData] = React.useState<DashboardData | null>(null);
   const [loading, setLoading] = React.useState(true);
   const dashRef = React.useRef<HTMLDivElement>(null);
@@ -61,7 +60,7 @@ export default function Dashboard() {
     let cancelled = false;
     (async () => {
       try {
-        const result = await apiFetch<DashboardData>("/dashboard/stats", {}, token);
+        const result = await apiFetch<DashboardData>("/dashboard/stats", {});
         if (!cancelled) setData(result);
       } catch {
         if (!cancelled) setData(MOCK);
@@ -70,7 +69,7 @@ export default function Dashboard() {
       }
     })();
     return () => { cancelled = true; };
-  }, [token]);
+  }, []);
 
   // Apply dynamic styles from data-* attributes (keeps CSS rules external)
   React.useEffect(() => {
