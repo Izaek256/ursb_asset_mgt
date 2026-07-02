@@ -5,9 +5,13 @@ import AuditLogs from "./pages/AuditLogs";
 import Assets from "./pages/Assets";
 import AssetDetail from "./pages/AssetDetail";
 import AssetRegistration from "./pages/AssetRegistration";
+import Assignments from "./pages/Assignments";
 import Dashboard from "./pages/Dashboard";
 import LoginPage from "./pages/Login";
+import Maintenance from "./pages/Maintenance";
+import Requests from "./pages/Requests";
 import Settings from "./pages/Settings";
+import Storage from "./pages/Storage";
 import Transfers from "./pages/Transfers";
 import ProfileModal from "./components/ProfileModal";
 import NotificationPanel from "./components/NotificationPanel";
@@ -16,7 +20,7 @@ import pdfIcon from "./assets/icons8-export-pdf-50.png";
 import excelIcon from "./assets/icons8-export-excel-50.png";
 
 // ── Navigation config ────────────────────────────────────────────────────────────
-type NavId = "dashboard" | "users" | "audit" | "assets" | "register-asset" | "transfers" | "settings";
+type NavId = "dashboard" | "requests" | "assets" | "register-asset" | "assignments" | "storage" | "transfers" | "maintenance" | "users" | "audit" | "settings";
 
 interface NavItem {
   id: NavId;
@@ -34,13 +38,17 @@ const ALL_ROLES = [
 ];
 
 const NAV_ITEMS: NavItem[] = [
-  { id: "dashboard", label: "Dashboard", icon: "📊", path: "/dashboard", roles: ALL_ROLES },
-  { id: "assets", label: "Assets", icon: "📦", path: "/assets", roles: ["System Administrator", "Asset Manager", "Asset Custodian"] },
+  { id: "dashboard",    label: "Dashboard",       icon: "📊", path: "/dashboard",       roles: ALL_ROLES },
+  { id: "requests",     label: "Requests",         icon: "📋", path: "/requests",        roles: ALL_ROLES },
+  { id: "assets",       label: "Assets",           icon: "📦", path: "/assets",          roles: ["System Administrator", "Asset Manager", "Asset Custodian"] },
   { id: "register-asset", label: "Register Asset", icon: "➕", path: "/assets/register", roles: ["Asset Manager"] },
-  { id: "transfers", label: "Transfers", icon: "🔄", path: "/transfers", roles: ["System Administrator", "Asset Manager"] },
-  { id: "users", label: "User Management", icon: "👥", path: "/admin/users", roles: ["System Administrator", "Asset Manager"] },
-  { id: "audit", label: "Audit Logs", icon: "🕐", path: "/admin/audit-logs", roles: ["System Administrator", "Asset Manager"] },
-  { id: "settings", label: "Settings", icon: "⚙️", path: "/settings", roles: ["System Administrator"] },
+  { id: "assignments",  label: "Assignments",      icon: "🔑", path: "/assignments",     roles: ["System Administrator", "Asset Manager"] },
+  { id: "storage",      label: "Storage",          icon: "🏪", path: "/storage",         roles: ["System Administrator", "Asset Manager"] },
+  { id: "transfers",    label: "Transfers",        icon: "🔄", path: "/transfers",       roles: ["System Administrator", "Asset Manager"] },
+  { id: "maintenance",  label: "Maintenance",      icon: "🔧", path: "/maintenance",     roles: ["System Administrator", "Asset Manager"] },
+  { id: "users",        label: "User Management",  icon: "👥", path: "/admin/users",     roles: ["System Administrator", "Asset Manager"] },
+  { id: "audit",        label: "Audit Logs",       icon: "🕐", path: "/admin/audit-logs",roles: ["System Administrator", "Asset Manager"] },
+  { id: "settings",     label: "Settings",         icon: "⚙️", path: "/settings",        roles: ["System Administrator"] },
 ];
 
 // ── Inner app (requires auth) ────────────────────────────────────────────────────
@@ -126,8 +134,20 @@ function AppShell() {
     setPath(to);
   };
 
-  // Filter nav items by user role
-  const visibleNav = NAV_ITEMS.filter((n) => n.roles.includes(user!.role));
+  // Dynamic label for Requests based on role
+  const getRequestsLabel = () =>
+    ["System Administrator", "Asset Manager"].includes(user!.role) ? "Requests" : "My Requests";
+
+  const getPageTitle = (item: NavItem | undefined) => {
+    if (!item) return "Dashboard";
+    if (item.id === "requests") return getRequestsLabel();
+    return item.label;
+  };
+
+  // Filter nav items by user role (case-insensitive)
+  const visibleNav = NAV_ITEMS.filter((n) =>
+    n.roles.some((r) => user!.role?.toLowerCase().includes(r.toLowerCase()))
+  );
   const activeItem = visibleNav.find((n) => n.path === path) ?? visibleNav[0];
 
   // Route to correct content
@@ -141,14 +161,26 @@ function AppShell() {
       case "dashboard":
         content = <Dashboard />;
         break;
+      case "requests":
+        content = <Requests />;
+        break;
       case "assets":
         content = <Assets />;
         break;
       case "register-asset":
         content = <AssetRegistration />;
         break;
+      case "assignments":
+        content = <Assignments />;
+        break;
+      case "storage":
+        content = <Storage />;
+        break;
       case "transfers":
         content = <Transfers />;
+        break;
+      case "maintenance":
+        content = <Maintenance />;
         break;
       case "audit":
         content = <AuditLogs />;
@@ -199,7 +231,7 @@ function AppShell() {
               onClick={() => navigate(item.path)}
             >
               <span className="nav-icon">{item.icon}</span>
-              <span className="nav-label">{item.label}</span>
+              <span className="nav-label">{item.id === "requests" ? getRequestsLabel() : item.label}</span>
             </button>
           ))}
         </nav>
@@ -231,8 +263,8 @@ function AppShell() {
         )}
         <header className="header">
           <div>
-            <h1 className="header-title">{activeItem?.label ?? "Dashboard"}</h1>
-            <p className="header-breadcrumb">Home / {activeItem?.label ?? "Dashboard"}</p>
+            <h1 className="header-title">{getPageTitle(activeItem)}</h1>
+            <p className="header-breadcrumb">Home / {getPageTitle(activeItem)}</p>
           </div>
           <div className="header-actions">
             {canManageAssets && (
