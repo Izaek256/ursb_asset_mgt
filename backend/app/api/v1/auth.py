@@ -1,6 +1,5 @@
-def auth_check(request: Request) -> dict[str, object]:
-def protected_route(request: Request) -> dict[str, str]:
 import os
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
@@ -200,38 +199,6 @@ def protected_route(request: Request) -> dict[str, str]:
 @router.put("/password")
 def change_password(
     payload: PasswordChangeRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> dict[str, str]:
-    if payload.new_password != payload.confirm_new_password:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="New passwords do not match",
-        )
-
-    if not verify_password(
-        payload.current_password,
-        current_user.password_salt,
-        current_user.password_hash,
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Current password is incorrect",
-        )
-
-    salt, password_hash = create_password_hash(payload.new_password)
-    current_user.password_salt = salt
-    current_user.password_hash = password_hash
-
-    db.query(UserSession).filter(UserSession.user_id == current_user.user_id).delete()
-    db.commit()
-
-    return {"message": "Password changed successfully. Please log in with your new password."}
-
-
-@router.put("/password")
-def change_password(
-    body: PasswordChangeRequest,
     request: Request,
     response: Response,
     db: Session = Depends(get_db),
@@ -240,50 +207,53 @@ def change_password(
     """Change the current user's password. Requires authentication (all roles)."""
 
     # Validate current password
-    if not verify_password(body.current_password, current_user.password_salt, current_user.password_hash):
+    if not verify_password(payload.current_password, current_user.password_salt, current_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Current password is incorrect"
         )
 
     # Validate new passwords match
-    if body.new_password != body.confirm_new_password:
+    if payload.new_password != payload.confirm_new_password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="New passwords do not match"
         )
 
     # Validate password complexity: min 8 chars, at least one uppercase, one digit, one special character
-    if len(body.new_password) < 8:
+    if len(payload.new_password) < 8:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Password does not meet requirements: minimum 8 characters"
         )
-    if not re.search(r'[A-Z]', body.new_password):
+    if not re.search(r'[A-Z]', payload.new_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Password does not meet requirements: at least one uppercase letter"
         )
-    if not re.search(r'\d', body.new_password):
+    if not re.search(r'\d', payload.new_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Password does not meet requirements: at least one digit"
         )
-    if not re.search(r'[!@#$%^&*(),.?":{}|<>]', body.new_password):
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>]', payload.new_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Password does not meet requirements: at least one special character"
         )
 
     # Hash new password
-    salt, password_hash = create_password_hash(body.new_password)
+    salt, password_hash = create_password_hash(payload.new_password)
     current_user.password_hash = password_hash
     current_user.password_salt = salt
 
     # Invalidate all sessions for this user
+    from app.models.session import Session
     db.query(Session).filter(Session.user_id == current_user.user_id).delete()
 
     # Write audit log for password change
+    from app.models.audit_log import AuditLog
+    from datetime import datetime
     audit = AuditLog(
         user_id=current_user.user_id,
         action="CHANGE_PASSWORD",

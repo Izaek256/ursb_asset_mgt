@@ -48,6 +48,16 @@ export default function Transfers() {
     }
   }, []);
 
+  // Handle ?openModal=true in URL
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("openModal") === "true") {
+      // When Create Transfer modal is implemented, open it here
+      // For now, this is a placeholder for future functionality
+      console.log("Create Transfer modal would open here");
+    }
+  }, []);
+
   React.useEffect(() => {
     fetchTransfers();
   }, []);

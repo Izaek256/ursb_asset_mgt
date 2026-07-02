@@ -22,6 +22,7 @@ async def lifespan(app: FastAPI):
 
     # Ensure any new columns are added to existing tables before querying
     with engine.begin() as connection:
+        # Add columns to users table
         existing_columns = {
             row[1] for row in connection.execute(text("PRAGMA table_info(users)")).all()
         }
@@ -42,6 +43,17 @@ async def lifespan(app: FastAPI):
         for column_name, definition in additional_columns.items():
             if column_name not in existing_columns:
                 connection.execute(text(f"ALTER TABLE users ADD COLUMN {definition}"))
+
+        # Add columns to assets table
+        existing_asset_columns = {
+            row[1] for row in connection.execute(text("PRAGMA table_info(assets)")).all()
+        }
+        asset_additional_columns = {
+            "is_active": "is_active BOOLEAN NOT NULL DEFAULT 1",
+        }
+        for column_name, definition in asset_additional_columns.items():
+            if column_name not in existing_asset_columns:
+                connection.execute(text(f"ALTER TABLE assets ADD COLUMN {definition}"))
 
     default_email = os.getenv("AUTH_DEFAULT_EMAIL", "admin@ursb.local").strip().lower()
     default_password = os.getenv("AUTH_DEFAULT_PASSWORD", "Admin123!")
@@ -93,6 +105,7 @@ from app.api.v1.routes_assignments import router as assignments_router
 from app.api.v1.routes_storage import router as storage_router
 from app.api.v1.routes_maintenance import router as maintenance_router
 from app.api.v1.routes_settings import router as settings_router
+from app.api.v1.routes_disposals import router as disposals_router
 from app.middleware.auth_middleware import AuthMiddleware
 
 app.include_router(auth_router, prefix="/api/v1")
@@ -105,6 +118,7 @@ app.include_router(assignments_router)
 app.include_router(storage_router)
 app.include_router(maintenance_router)
 app.include_router(settings_router)    # prefix: /api/v1/settings
+app.include_router(disposals_router)   # prefix: /api/v1/disposals
 app.add_middleware(AuthMiddleware)
 
 

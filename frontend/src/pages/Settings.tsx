@@ -328,7 +328,7 @@ export default function Settings() {
       {activeTab === "security" && (
         <div className="card settings-card">
           <div className="card-header">
-            <h2 className="card-title">Security Settings</h2>
+            <h2 className="card-title">Change Password</h2>
           </div>
           <div className="settings-form">
             {/* Password Change Section */}
@@ -395,37 +395,6 @@ export default function Settings() {
                 <option value="240">4 hours</option>
                 <option value="480">8 hours</option>
               </select>
-            </div>
-            <div className="settings-row">
-              <div className="settings-label">
-                <span className="settings-label-title">Password Policy</span>
-                <span className="settings-label-desc">Minimum requirements for user passwords</span>
-              </div>
-              <select className="settings-select" defaultValue="strong">
-                <option value="basic">Basic (8+ characters)</option>
-                <option value="moderate">Moderate (uppercase, lowercase, number)</option>
-                <option value="strong">Strong (mixed case, number, special char)</option>
-              </select>
-            </div>
-            <div className="settings-row">
-              <div className="settings-label">
-                <span className="settings-label-title">Two-Factor Authentication</span>
-                <span className="settings-label-desc">Require 2FA for all admin accounts</span>
-              </div>
-              <label className="settings-toggle">
-                <input type="checkbox" />
-                <span className="toggle-slider"></span>
-              </label>
-            </div>
-            <div className="settings-row">
-              <div className="settings-label">
-                <span className="settings-label-title">Audit Logging</span>
-                <span className="settings-label-desc">Record all user actions for compliance</span>
-              </div>
-              <label className="settings-toggle">
-                <input type="checkbox" defaultChecked />
-                <span className="toggle-slider"></span>
-              </label>
             </div>
           </div>
         </div>
