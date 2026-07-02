@@ -46,9 +46,9 @@ export default function AuditLogs() {
     apiFetch<AuditLogListResponse>(`/admin/audit-logs?${params.toString()}`, {}, token)
       .then((data) => {
         if (!cancelled) {
-          setLogs(data.logs);
-          setTotal(data.total);
-          setTotalPages(data.total_pages);
+          setLogs(Array.isArray(data.logs) ? data.logs : []);
+          setTotal(data.total || 0);
+          setTotalPages(data.total_pages || 1);
         }
       })
       .catch(() => {
