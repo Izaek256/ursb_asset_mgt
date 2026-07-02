@@ -227,9 +227,27 @@ def list_assets(
 ):
     q = db.query(Asset)
     if status:
-        q = q.filter(Asset.status == status)
+        # Convert string to enum - Asset.status is an AssetStatus enum, not a raw string
+        try:
+            status_enum = AssetStatus(status)
+            q = q.filter(Asset.status == status_enum)
+        except ValueError:
+            valid_values = [e.value for e in AssetStatus]
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid status value. Valid values are: {', '.join(valid_values)}"
+            )
     if asset_type:
-        q = q.filter(Asset.asset_type == asset_type)
+        # Convert string to enum - Asset.asset_type is an AssetType enum, not a raw string
+        try:
+            asset_type_enum = AssetType(asset_type)
+            q = q.filter(Asset.asset_type == asset_type_enum)
+        except ValueError:
+            valid_values = [e.value for e in AssetType]
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid asset_type value. Valid values are: {', '.join(valid_values)}"
+            )
     if search:
         q = q.filter(
             Asset.asset_name.ilike(f"%{search}%")
