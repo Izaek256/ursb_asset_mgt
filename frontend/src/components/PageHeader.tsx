@@ -8,12 +8,16 @@ type Props = {
 
 export default function PageHeader({ title, subtitle, actions }: Props) {
   return (
-    <div className="page-header-actions-bar" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-1">
       <div>
-        <h2 style={{ fontSize: "1.5rem", fontWeight: 600, color: "var(--color-primary)" }}>{title}</h2>
-        {subtitle && <p className="text-small text-muted" style={{ marginTop: "0.25rem" }}>{subtitle}</p>}
+        <h2 className="text-xl sm:text-2xl font-bold text-ink leading-tight">{title}</h2>
+        {subtitle && (
+          <p className="text-sm text-ink-dim mt-1.5 font-medium">{subtitle}</p>
+        )}
       </div>
-      {actions && <div className="page-header-buttons" style={{ display: "flex", gap: "0.5rem" }}>{actions}</div>}
+      {actions && (
+        <div className="flex flex-wrap items-center gap-2 shrink-0">{actions}</div>
+      )}
     </div>
   );
 }

@@ -3,6 +3,14 @@ import { Role, UserRow } from "../types";
 import { apiFetch, useAuth } from "../AuthContext";
 import EditRoleModal from "../components/EditRoleModal";
 import ConfirmDialog from "../components/ConfirmDialog";
+import Table, { Column } from "../components/common/Table";
+import Button from "../components/common/Button";
+import PageHeader from "../components/PageHeader";
+import FilterBar, { FilterField, filterInputCls, filterSelectCls } from "../components/common/FilterBar";
+import StatusBadge from "../components/common/badges/StatusBadge";
+import RoleBadge from "../components/common/badges/RoleBadge";
+import SuccessBanner from "../components/common/SuccessBanner";
+import ErrorMessage from "../components/ErrorMessage";
 
 const ROLES: Role[] = ["System Administrator", "Asset Manager", "Asset Custodian", "Employee"];
 const ROLE_FILTERS: (Role | "All")[] = ["All", ...ROLES];
@@ -130,73 +138,103 @@ export default function AdminUsers() {
     return true;
   });
 
-  if (isLoading) return <div className="page-loading">Loading users...</div>;
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-20">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ursb" />
+      </div>
+    );
+  }
+
+  const columns: Column<UserRow>[] = [
+    {
+      header: "Name / Email",
+      render: (u) => (
+        <div>
+          <div className="font-bold text-ink text-sm">{u.name}</div>
+          <div className="text-[11px] text-ink-dim mt-0.5">{u.email}</div>
+        </div>
+      ),
+    },
+    {
+      header: "Role",
+      render: (u) => <RoleBadge role={u.role} />,
+    },
+    {
+      header: "Department",
+      render: (u) => u.department || "—",
+    },
+    {
+      header: "Status",
+      render: (u) => <StatusBadge status={u.isActive ? "Active" : "Deactivated"} />,
+    },
+    ...(canManage
+      ? [
+          {
+            header: "Actions",
+            render: (u: UserRow) => (
+              <div className="flex flex-wrap gap-1.5">
+                <Button variant="outline" onClick={() => openEdit(u)}>Edit</Button>
+                <Button variant="outline" onClick={() => openRoleEdit(u)}>Role</Button>
+                {u.isActive ? (
+                  <Button variant="danger-outline" onClick={() => setStatusAction({ user: u, action: "deactivate" })}>
+                    Deactivate
+                  </Button>
+                ) : (
+                  <Button onClick={() => setStatusAction({ user: u, action: "reactivate" })}>
+                    Reactivate
+                  </Button>
+                )}
+              </div>
+            ),
+          } as Column<UserRow>,
+        ]
+      : []),
+  ];
 
   return (
-    <>
-      {successMsg && <div className="alert-success">{successMsg}</div>}
-      {errorMsg && <div className="alert-error">{errorMsg}</div>}
+    <div className="w-full flex flex-col gap-6 select-none font-sans">
+      {successMsg && <SuccessBanner message={successMsg} onDismiss={() => setSuccessMsg(null)} />}
+      {errorMsg && <ErrorMessage message={errorMsg} />}
 
-      {/* Filters */}
-      <div className="filter-bar">
-        <div className="filter-group">
-          <input type="text" className="filter-search" placeholder="Search users..." value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
-        <div className="filter-group">
-          <label htmlFor="role-filter" className="filter-label">Role</label>
-          <select id="role-filter" value={filter} onChange={(e) => setFilter(e.target.value as any)} className="filter-select">
-            {ROLE_FILTERS.map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
-        </div>
-        <div className="filter-count">{visible.length} users</div>
-        {canManage && <button className="btn btn-primary btn-sm" onClick={openCreate}>+ Create User</button>}
-      </div>
+      <PageHeader
+        title="User Management"
+        subtitle="Manage staff accounts, roles, and access"
+        actions={
+          canManage && <Button onClick={openCreate}>+ Create User</Button>
+        }
+      />
 
-      {/* Table */}
-      <div className="card">
-        <table>
-          <thead>
-            <tr>
-              <th>Name / Email</th>
-              <th>Role</th>
-              <th>Department</th>
-              <th>Status</th>
-              {canManage && <th>Actions</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {visible.map((u) => (
-              <tr key={u.id}>
-                <td>
-                  <div className="user-name">{u.name}</div>
-                  <div className="text-small text-muted">{u.email}</div>
-                </td>
-                <td>{u.role}</td>
-                <td>{u.department || "—"}</td>
-                <td>
-                  <span className={`badge ${u.isActive ? "badge-active" : "badge-inactive"}`}>
-                    {u.isActive ? "Active" : "Inactive"}
-                  </span>
-                </td>
-                {canManage && (
-                  <td>
-                    <div className="action-btns">
-                      <button className="btn btn-secondary btn-xs" onClick={() => openEdit(u)}>Edit</button>
-                      <button className="btn btn-secondary btn-xs" onClick={() => openRoleEdit(u)}>Role</button>
-                      {u.isActive ? (
-                        <button className="btn btn-danger btn-xs" onClick={() => setStatusAction({ user: u, action: "deactivate" })}>Deactivate</button>
-                      ) : (
-                        <button className="btn btn-success btn-xs" onClick={() => setStatusAction({ user: u, action: "reactivate" })}>Reactivate</button>
-                      )}
-                    </div>
-                  </td>
-                )}
-              </tr>
+      <FilterBar count={{ value: visible.length, label: "users" }}>
+        <FilterField className="flex-1 min-w-[200px]">
+          <input
+            type="text"
+            className={filterInputCls}
+            placeholder="Search users..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </FilterField>
+        <FilterField label="Role" htmlFor="role-filter">
+          <select
+            id="role-filter"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as Role | "All")}
+            className={filterSelectCls}
+          >
+            {ROLE_FILTERS.map((r) => (
+              <option key={r} value={r}>{r}</option>
             ))}
-          </tbody>
-        </table>
-        {visible.length === 0 && <div className="page-empty">No users found.</div>}
-      </div>
+          </select>
+        </FilterField>
+      </FilterBar>
+
+      <Table
+        data={visible}
+        columns={columns}
+        rowKey={(u) => u.id}
+        emptyMessage="No users found."
+      />
 
       {/* Role Change Modal */}
       <EditRoleModal user={editing} open={isEditOpen} onClose={() => setEditOpen(false)} onRequestConfirm={handleRequestConfirm} />
@@ -223,46 +261,46 @@ export default function AdminUsers() {
 
       {/* Create / Edit Modal */}
       {modalMode && (
-        <div className="modal-overlay" onClick={closeForm}>
-          <div className="modal-content user-form-modal" onClick={(e) => e.stopPropagation()}>
-            <h2 className="modal-title">{modalMode === "create" ? "Create New User" : "Edit User"}</h2>
-            <form onSubmit={submitForm}>
-              <div className="form-group">
-                <label className="form-label">Full Name</label>
-                <input className="form-control" value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="e.g. Jane Nabirye" autoFocus />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-deep/40 backdrop-blur-sm p-4" onClick={closeForm}>
+          <div className="bg-white border border-sky-cardBorder rounded-2xl p-6 w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="font-bold text-lg text-ink mb-5">{modalMode === "create" ? "Create New User" : "Edit User"}</h2>
+            <form onSubmit={submitForm} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">Full Name</label>
+                <input className={filterInputCls} value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="e.g. Jane Nabirye" autoFocus />
               </div>
-              <div className="form-group">
-                <label className="form-label">Email</label>
-                <input className="form-control" type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} placeholder="e.g. jane@ursb.go.ug" />
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">Email</label>
+                <input className={filterInputCls} type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} placeholder="e.g. jane@ursb.go.ug" />
               </div>
               {modalMode === "create" && (
-                <div className="form-group">
-                  <label className="form-label">Password</label>
-                  <input className="form-control" type="password" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} placeholder="Min. 8 characters" />
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">Password</label>
+                  <input className={filterInputCls} type="password" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} placeholder="Min. 8 characters" />
                 </div>
               )}
-              <div className="form-group">
-                <label className="form-label">Role</label>
-                <select className="form-control" value={formRole} onChange={(e) => setFormRole(e.target.value as Role)}>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">Role</label>
+                <select className={filterSelectCls} value={formRole} onChange={(e) => setFormRole(e.target.value as Role)}>
                   {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
-              <div className="form-group">
-                <label className="form-label">Department</label>
-                <select className="form-control" value={formDept} onChange={(e) => setFormDept(e.target.value)}>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">Department</label>
+                <select className={filterSelectCls} value={formDept} onChange={(e) => setFormDept(e.target.value)}>
                   {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
               </div>
-              <div className="modal-actions">
-                <button type="button" className="btn btn-secondary" onClick={closeForm}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={formSubmitting}>
-                  {formSubmitting ? "Saving..." : modalMode === "create" ? "Create User" : "Save Changes"}
-                </button>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="ghost" type="button" onClick={closeForm}>Cancel</Button>
+                <Button type="submit" isLoading={formSubmitting}>
+                  {modalMode === "create" ? "Create User" : "Save Changes"}
+                </Button>
               </div>
             </form>
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

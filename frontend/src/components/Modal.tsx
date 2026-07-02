@@ -1,4 +1,6 @@
-import React from "react";
+import React, { Fragment } from "react";
+import { Dialog, Transition } from "@headlessui/react";
+import { ICONS } from "../utils/icons";
 
 type Props = {
   open: boolean;
@@ -8,18 +10,56 @@ type Props = {
 };
 
 export default function Modal({ open, onClose, title, children }: Props) {
-  if (!open) return null;
-
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        {title && (
-          <div className="modal-header">
-            <h3 className="modal-title">{title}</h3>
+    <Transition.Root show={open} as={Fragment}>
+      <Dialog as="div" className="relative z-50 select-none font-sans" onClose={onClose}>
+        <Transition.Child
+          as={Fragment}
+          enter="ease-out duration-300 motion-reduce:duration-0"
+          enterFrom="opacity-0"
+          enterTo="opacity-100"
+          leave="ease-in duration-200 motion-reduce:duration-0"
+          leaveFrom="opacity-100"
+          leaveTo="opacity-0"
+        >
+          <div className="fixed inset-0 bg-navy-deep/40 backdrop-blur-sm transition-opacity" />
+        </Transition.Child>
+
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+            <Transition.Child
+              as={Fragment}
+              enter="ease-out duration-300 motion-reduce:duration-0"
+              enterFrom="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+              enterTo="opacity-100 translate-y-0 sm:scale-100"
+              leave="ease-in duration-200 motion-reduce:duration-0"
+              leaveFrom="opacity-100 translate-y-0 sm:scale-100"
+              leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+            >
+              <Dialog.Panel className="relative transform overflow-hidden rounded-2xl bg-white border border-sky-cardBorder text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg p-5 sm:p-6">
+                <div className="absolute right-4 top-4">
+                  <button
+                    type="button"
+                    className="rounded-lg p-1.5 text-ink-dim hover:text-ursb hover:bg-sky-topbar focus:outline-none transition-colors cursor-pointer"
+                    onClick={onClose}
+                  >
+                    <ICONS.close className="h-4.5 w-4.5 stroke-[2.4]" aria-hidden="true" />
+                  </button>
+                </div>
+                {title && (
+                  <Dialog.Title
+                    as="h3"
+                    className="text-sm sm:text-base font-bold text-ink leading-tight mb-4 border-b border-sky-page/20 pb-3 pr-8"
+                  >
+                    {title}
+                  </Dialog.Title>
+                )}
+                <div>{children}</div>
+              </Dialog.Panel>
+            </Transition.Child>
           </div>
-        )}
-        <div className="modal-body">{children}</div>
-      </div>
-    </div>
+        </div>
+      </Dialog>
+    </Transition.Root>
   );
 }

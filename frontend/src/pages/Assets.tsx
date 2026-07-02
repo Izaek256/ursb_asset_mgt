@@ -1,5 +1,12 @@
 import React from "react";
 import { apiFetch } from "../AuthContext";
+import Table, { Column } from "../components/common/Table";
+import FilterBar, { FilterField, filterInputCls, filterSelectCls } from "../components/common/FilterBar";
+import StatusBadge from "../components/common/badges/StatusBadge";
+import ConditionBadge from "../components/common/badges/ConditionBadge";
+import Button from "../components/common/Button";
+import PageHeader from "../components/PageHeader";
+import { ICONS } from "../utils/icons";
 
 interface AssetRow {
   asset_id: string;
@@ -17,13 +24,6 @@ interface AssetRow {
 
 const STATUS_FILTERS = ["All", "Active", "In Storage", "Under Maintenance", "Disposed"];
 const TYPE_FILTERS = ["All", "ICT Equipment", "Furniture", "Vehicle", "Software", "Other"];
-
-const STATUS_CLASS: Record<string, string> = {
-  Active: "badge-active",
-  "In Storage": "badge-info",
-  "Under Maintenance": "badge-warning",
-  Disposed: "badge-inactive",
-};
 
 export default function Assets() {
   const [assets, setAssets] = React.useState<AssetRow[]>([]);
@@ -49,113 +49,109 @@ export default function Assets() {
     return () => { cancelled = true; };
   }, [statusFilter, typeFilter, search]);
 
-  if (isLoading) {
-    return <div className="page-loading">Loading assets...</div>;
-  }
+  const navigateToRegister = () => {
+    window.history.pushState({}, "", "/assets/register");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+
+  const columns: Column<AssetRow>[] = [
+    {
+      header: "Asset Name",
+      render: (a) => (
+        <div>
+          <div className="font-bold text-ink text-sm">{a.asset_name}</div>
+          <div className="text-[11px] text-ink-dim mt-0.5">{a.supplier}</div>
+        </div>
+      ),
+    },
+    {
+      header: "Asset ID",
+      render: (a) => <span className="text-xs text-ink-dim font-medium">{a.asset_id}</span>,
+    },
+    { header: "Type", render: (a) => a.asset_type },
+    {
+      header: "Serial No.",
+      render: (a) => <span className="text-xs text-ink-dim">{a.serial_number}</span>,
+    },
+    {
+      header: "Status",
+      render: (a) => <StatusBadge status={a.status} />,
+    },
+    {
+      header: "Condition",
+      render: (a) => <ConditionBadge condition={a.condition} />,
+    },
+    {
+      header: "Cost (UGX)",
+      render: (a) => <span className="font-semibold">{a.cost.toLocaleString()}</span>,
+    },
+    {
+      header: "Department",
+      render: (a) => a.department ?? "—",
+    },
+    {
+      header: "Acquired",
+      render: (a) => <span className="text-xs text-ink-dim">{a.acquisition_date}</span>,
+    },
+  ];
 
   return (
-    <>
-      {/* Filters */}
-      <div className="filter-bar">
-        <div className="filter-group">
+    <div className="w-full flex flex-col gap-5 select-none font-sans">
+      <PageHeader
+        title="Assets"
+        subtitle="Full inventory of registered organisation assets"
+        actions={
+          <Button onClick={navigateToRegister}>
+            <ICONS.plus className="w-4 h-4 mr-1.5 stroke-[2.4]" />
+            Add Asset
+          </Button>
+        }
+      />
+
+      <FilterBar count={{ value: assets.length, label: "assets" }}>
+        <FilterField label="Search" htmlFor="asset-search">
           <input
+            id="asset-search"
             type="text"
-            className="filter-search"
+            className={filterInputCls}
             placeholder="Search assets..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-        </div>
-        <div className="filter-group">
-          <label htmlFor="status-filter" className="filter-label">Status</label>
+        </FilterField>
+        <FilterField label="Status" htmlFor="status-filter">
           <select
             id="status-filter"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="filter-select"
+            className={filterSelectCls}
           >
             {STATUS_FILTERS.map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
-        </div>
-        <div className="filter-group">
-          <label htmlFor="type-filter" className="filter-label">Type</label>
+        </FilterField>
+        <FilterField label="Type" htmlFor="type-filter">
           <select
             id="type-filter"
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
-            className="filter-select"
+            className={filterSelectCls}
           >
             {TYPE_FILTERS.map((t) => (
               <option key={t} value={t}>{t}</option>
             ))}
           </select>
-        </div>
-        <div className="filter-count">{assets.length} assets</div>
-      </div>
+        </FilterField>
+      </FilterBar>
 
-      {/* Table */}
-      <div className="card">
-        <table>
-          <thead>
-            <tr>
-              <th>Asset Name</th>
-              <th>Asset ID</th>
-              <th>Type</th>
-              <th>Serial No.</th>
-              <th>Status</th>
-              <th>Condition</th>
-              <th>Cost (UGX)</th>
-              <th>Department</th>
-              <th>Acquired</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {assets.map((a) => (
-              <tr key={a.asset_id}>
-                <td>
-                  <div className="user-name">{a.asset_name}</div>
-                  <div className="text-small text-muted">{a.supplier}</div>
-                </td>
-                <td className="text-small">{a.asset_id}</td>
-                <td>{a.asset_type}</td>
-                <td className="text-small">{a.serial_number}</td>
-                <td>
-                  <span className={`badge ${STATUS_CLASS[a.status] || "badge"}`}>
-                    {a.status}
-                  </span>
-                </td>
-                <td>{a.condition}</td>
-                <td>{a.cost.toLocaleString()}</td>
-                <td>{a.department ?? "—"}</td>
-                <td className="text-small">{a.acquisition_date}</td>
-                <td>
-                  <button
-                    className="btn btn-sm btn-secondary"
-                    onClick={() => {
-                      window.history.pushState({}, "", `/assets/${a.asset_id}`);
-                      window.dispatchEvent(new PopStateEvent('popstate'));
-                    }}
-                    style={{
-                      border: "2px solid #ef4444",
-                      color: "#ef4444",
-                      background: "white",
-                    }}
-                  >
-                    View
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {assets.length === 0 && (
-          <div className="page-empty">No assets found matching your filters.</div>
-        )}
-      </div>
-    </>
+      <Table
+        data={assets}
+        columns={columns}
+        rowKey={(a) => a.asset_id}
+        isLoading={isLoading}
+        emptyMessage="No assets found matching your filters."
+      />
+    </div>
   );
 }

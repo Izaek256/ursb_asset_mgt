@@ -1,0 +1,587 @@
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
+import React from "react";
+import { apiFetch, useAuth } from "../AuthContext";
+import ConfirmDialog from "../components/ConfirmDialog";
+const STATUS_CLASS = {
+    Active: "badge-active",
+    "In Storage": "badge-info",
+    "Under Maintenance": "badge-warning",
+    Disposed: "badge-inactive",
+};
+const CONDITION_CLASS = {
+    New: "badge-active",
+    Good: "badge-info",
+    Refurbished: "badge-warning",
+    Damaged: "badge-inactive",
+};
+export default function AssetDetail() {
+    const { token, user } = useAuth();
+    const [assetId, setAssetId] = React.useState("");
+    const [asset, setAsset] = React.useState(null);
+    const [isLoading, setIsLoading] = React.useState(true);
+    const [error, setError] = React.useState(null);
+    const [successMessage, setSuccessMessage] = React.useState(null);
+    // Edit mode
+    const [isEditing, setIsEditing] = React.useState(false);
+    const [editForm, setEditForm] = React.useState({});
+    const [editError, setEditError] = React.useState(null);
+    // Disposal dialog
+    const [showDisposeDialog, setShowDisposeDialog] = React.useState(false);
+    const [disposalReason, setDisposalReason] = React.useState("");
+    const [disposalError, setDisposalError] = React.useState(null);
+    const [isDisposing, setIsDisposing] = React.useState(false);
+    // Deactivate dialog
+    const [showDeactivateDialog, setShowDeactivateDialog] = React.useState(false);
+    const [isDeactivating, setIsDeactivating] = React.useState(false);
+    // Active tab
+    const [activeTab, setActiveTab] = React.useState(1);
+    // Extract asset_id from URL
+    React.useEffect(() => {
+        const pathParts = window.location.pathname.split("/");
+        const id = pathParts[pathParts.length - 1];
+        if (id && id !== "assets") {
+            setAssetId(id);
+        }
+    }, []);
+    // Fetch asset detail
+    React.useEffect(() => {
+        if (!assetId)
+            return;
+        let cancelled = false;
+        setIsLoading(true);
+        setError(null);
+        apiFetch(`/assets/${assetId}`, {}, token)
+            .then((data) => {
+            if (!cancelled) {
+                setAsset(data);
+                setEditForm(data);
+            }
+        })
+            .catch((err) => {
+            if (!cancelled)
+                setError(err.message || "Failed to load asset");
+        })
+            .finally(() => {
+            if (!cancelled)
+                setIsLoading(false);
+        });
+        return () => { cancelled = true; };
+    }, [assetId, token]);
+    const handleSaveEdit = async () => {
+        if (!asset)
+            return;
+        // Only include changed fields
+        const changes = {};
+        if (editForm.asset_name !== asset.asset_name)
+            changes.asset_name = editForm.asset_name;
+        if (editForm.category !== asset.category)
+            changes.category = editForm.category;
+        if (editForm.condition !== asset.condition)
+            changes.condition = editForm.condition;
+        if (editForm.status !== asset.status)
+            changes.status = editForm.status;
+        if (editForm.department !== asset.department)
+            changes.department = editForm.department;
+        if (editForm.supplier !== asset.supplier)
+            changes.supplier = editForm.supplier;
+        if (editForm.procurement_ref !== asset.procurement_ref)
+            changes.procurement_ref = editForm.procurement_ref;
+        if (editForm.cost !== asset.cost)
+            changes.cost = editForm.cost;
+        if (Object.keys(changes).length === 0) {
+            setIsEditing(false);
+            return;
+        }
+        setEditError(null);
+        try {
+            await apiFetch(`/assets/${assetId}`, {
+                method: "PUT",
+                body: JSON.stringify(changes),
+            }, token);
+            setSuccessMessage("Asset updated successfully");
+            setTimeout(() => setSuccessMessage(null), 3000);
+            setIsEditing(false);
+            // Re-fetch asset
+            const updated = await apiFetch(`/assets/${assetId}`, {}, token);
+            setAsset(updated);
+            setEditForm(updated);
+        }
+        catch (err) {
+            setEditError(err.message || "Failed to update asset");
+        }
+    };
+    const handleCancelEdit = () => {
+        setIsEditing(false);
+        setEditForm(asset || {});
+        setEditError(null);
+    };
+    const handleDeactivate = async () => {
+        if (!assetId)
+            return;
+        setIsDeactivating(true);
+        try {
+            await apiFetch(`/assets/${assetId}/deactivate`, {
+                method: "PATCH",
+            }, token);
+            setSuccessMessage("Asset deactivated successfully");
+            setTimeout(() => setSuccessMessage(null), 3000);
+            setShowDeactivateDialog(false);
+            // Re-fetch asset
+            const updated = await apiFetch(`/assets/${assetId}`, {}, token);
+            setAsset(updated);
+            setEditForm(updated);
+        }
+        catch (err) {
+            setEditError(err.message || "Failed to deactivate asset");
+        }
+        finally {
+            setIsDeactivating(false);
+        }
+    };
+    const handleReactivate = async () => {
+        if (!assetId)
+            return;
+        try {
+            await apiFetch(`/assets/${assetId}/reactivate`, {
+                method: "PATCH",
+            }, token);
+            setSuccessMessage("Asset reactivated successfully");
+            setTimeout(() => setSuccessMessage(null), 3000);
+            // Re-fetch asset
+            const updated = await apiFetch(`/assets/${assetId}`, {}, token);
+            setAsset(updated);
+            setEditForm(updated);
+        }
+        catch (err) {
+            setEditError(err.message || "Failed to reactivate asset");
+        }
+    };
+    const handleDispose = async () => {
+        if (!assetId || disposalReason.length < 10)
+            return;
+        setIsDisposing(true);
+        setDisposalError(null);
+        try {
+            await apiFetch("/disposals", {
+                method: "POST",
+                body: JSON.stringify({
+                    asset_id: assetId,
+                    disposal_method: "Write-off",
+                    reason: disposalReason,
+                }),
+            }, token);
+            setSuccessMessage("Asset disposed successfully");
+            setTimeout(() => setSuccessMessage(null), 3000);
+            setShowDisposeDialog(false);
+            setDisposalReason("");
+            // Re-fetch asset
+            const updated = await apiFetch(`/assets/${assetId}`, {}, token);
+            setAsset(updated);
+            setEditForm(updated);
+        }
+        catch (err) {
+            setDisposalError(err.message || "Failed to dispose asset");
+        }
+        finally {
+            setIsDisposing(false);
+        }
+    };
+    const canEdit = user?.role === "Asset Manager" || user?.role === "System Administrator";
+    if (isLoading) {
+        return _jsx("div", { className: "page-loading", children: "Loading asset details..." });
+    }
+    if (error || !asset) {
+        return (_jsxs("div", { className: "page-error", children: [_jsx("div", { className: "alert-error", children: error || "Asset not found" }), _jsx("button", { className: "btn btn-secondary", onClick: () => window.history.back(), children: "\u2190 Back to Assets" })] }));
+    }
+    return (_jsxs("div", { style: { padding: "24px", maxWidth: "1200px", margin: "0 auto" }, children: [successMessage && (_jsxs("div", { style: {
+                    backgroundColor: "#10b981",
+                    color: "white",
+                    padding: "12px 16px",
+                    borderRadius: "8px",
+                    marginBottom: "24px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                }, children: [_jsx("span", { children: "\u2713" }), _jsx("span", { children: successMessage })] })), _jsxs("div", { style: {
+                    marginBottom: "32px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    flexWrap: "wrap",
+                    gap: "16px",
+                }, children: [_jsxs("div", { children: [_jsx("button", { onClick: () => window.history.back(), style: {
+                                    background: "none",
+                                    border: "none",
+                                    color: "#64748b",
+                                    cursor: "pointer",
+                                    fontSize: "14px",
+                                    marginBottom: "12px",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                }, children: "\u2190 Back to Assets" }), _jsx("h1", { style: {
+                                    fontSize: "28px",
+                                    fontWeight: "600",
+                                    color: "#1e293b",
+                                    margin: "0 0 8px 0",
+                                }, children: asset.asset_name }), _jsxs("div", { style: {
+                                    display: "flex",
+                                    gap: "16px",
+                                    color: "#64748b",
+                                    fontSize: "14px",
+                                }, children: [_jsxs("span", { children: ["ID: ", asset.asset_id] }), _jsx("span", { children: "\u2022" }), _jsx("span", { children: asset.asset_type })] })] }), _jsx("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap" }, children: canEdit && (_jsxs(_Fragment, { children: [asset.is_active ? (_jsx("button", { onClick: () => setShowDeactivateDialog(true), style: {
+                                        padding: "10px 16px",
+                                        borderRadius: "8px",
+                                        border: "1px solid #e2e8f0",
+                                        background: "white",
+                                        color: "#475569",
+                                        cursor: "pointer",
+                                        fontSize: "14px",
+                                        fontWeight: "500",
+                                    }, children: "Deactivate" })) : (_jsx("button", { onClick: handleReactivate, style: {
+                                        padding: "10px 16px",
+                                        borderRadius: "8px",
+                                        border: "1px solid #e2e8f0",
+                                        background: "white",
+                                        color: "#475569",
+                                        cursor: "pointer",
+                                        fontSize: "14px",
+                                        fontWeight: "500",
+                                    }, children: "Reactivate" })), _jsx("button", { onClick: () => setIsEditing(!isEditing), style: {
+                                        padding: "10px 16px",
+                                        borderRadius: "8px",
+                                        border: "none",
+                                        background: "#3b82f6",
+                                        color: "white",
+                                        cursor: "pointer",
+                                        fontSize: "14px",
+                                        fontWeight: "500",
+                                    }, children: isEditing ? "Cancel" : "Edit Asset" }), _jsx("button", { onClick: () => setShowDisposeDialog(true), disabled: asset.status === "Disposed", style: {
+                                        padding: "10px 16px",
+                                        borderRadius: "8px",
+                                        border: "none",
+                                        background: asset.status === "Disposed" ? "#cbd5e1" : "#ef4444",
+                                        color: "white",
+                                        cursor: asset.status === "Disposed" ? "not-allowed" : "pointer",
+                                        fontSize: "14px",
+                                        fontWeight: "500",
+                                    }, children: "Dispose Asset" })] })) })] }), _jsxs("div", { style: {
+                    display: "flex",
+                    gap: "12px",
+                    marginBottom: "32px",
+                    flexWrap: "wrap",
+                }, children: [_jsx("span", { style: {
+                            padding: "6px 12px",
+                            borderRadius: "20px",
+                            fontSize: "13px",
+                            fontWeight: "500",
+                            background: STATUS_CLASS[asset.status] === "badge-active" ? "#dcfce7" :
+                                STATUS_CLASS[asset.status] === "badge-info" ? "#dbeafe" :
+                                    STATUS_CLASS[asset.status] === "badge-warning" ? "#fef3c7" : "#fee2e2",
+                            color: STATUS_CLASS[asset.status] === "badge-active" ? "#166534" :
+                                STATUS_CLASS[asset.status] === "badge-info" ? "#1e40af" :
+                                    STATUS_CLASS[asset.status] === "badge-warning" ? "#92400e" : "#991b1b",
+                        }, children: asset.status }), _jsx("span", { style: {
+                            padding: "6px 12px",
+                            borderRadius: "20px",
+                            fontSize: "13px",
+                            fontWeight: "500",
+                            background: CONDITION_CLASS[asset.condition] === "badge-active" ? "#dcfce7" :
+                                CONDITION_CLASS[asset.condition] === "badge-info" ? "#dbeafe" :
+                                    CONDITION_CLASS[asset.condition] === "badge-warning" ? "#fef3c7" : "#fee2e2",
+                            color: CONDITION_CLASS[asset.condition] === "badge-active" ? "#166534" :
+                                CONDITION_CLASS[asset.condition] === "badge-info" ? "#1e40af" :
+                                    CONDITION_CLASS[asset.condition] === "badge-warning" ? "#92400e" : "#991b1b",
+                        }, children: asset.condition }), _jsx("span", { style: {
+                            padding: "6px 12px",
+                            borderRadius: "20px",
+                            fontSize: "13px",
+                            fontWeight: "500",
+                            background: asset.is_active ? "#dcfce7" : "#fee2e2",
+                            color: asset.is_active ? "#166534" : "#991b1b",
+                        }, children: asset.is_active ? "Active" : "Inactive" })] }), _jsxs("div", { style: { display: "grid", gridTemplateColumns: "1fr", gap: "24px" }, children: [_jsxs("div", { style: {
+                            background: "white",
+                            borderRadius: "12px",
+                            border: "1px solid #e2e8f0",
+                            overflow: "hidden",
+                        }, children: [_jsx("div", { style: {
+                                    padding: "20px 24px",
+                                    borderBottom: "1px solid #e2e8f0",
+                                    background: "#f8fafc",
+                                }, children: _jsx("h2", { style: {
+                                        fontSize: "18px",
+                                        fontWeight: "600",
+                                        color: "#1e293b",
+                                        margin: 0,
+                                    }, children: "Asset Information" }) }), _jsx("div", { style: { padding: "24px" }, children: isEditing ? (_jsxs("div", { children: [editError && (_jsx("div", { style: {
+                                                backgroundColor: "#fee2e2",
+                                                color: "#991b1b",
+                                                padding: "12px 16px",
+                                                borderRadius: "8px",
+                                                marginBottom: "16px",
+                                            }, children: editError })), _jsxs("div", { style: { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }, children: [_jsxs("div", { children: [_jsx("label", { style: { display: "block", fontSize: "14px", fontWeight: "500", color: "#475569", marginBottom: "6px" }, children: "Asset Name" }), _jsx("input", { style: {
+                                                                width: "100%",
+                                                                padding: "10px 12px",
+                                                                borderRadius: "8px",
+                                                                border: "1px solid #e2e8f0",
+                                                                fontSize: "14px",
+                                                            }, value: editForm.asset_name || "", onChange: (e) => setEditForm({ ...editForm, asset_name: e.target.value }) })] }), _jsxs("div", { children: [_jsx("label", { style: { display: "block", fontSize: "14px", fontWeight: "500", color: "#475569", marginBottom: "6px" }, children: "Category" }), _jsx("input", { style: {
+                                                                width: "100%",
+                                                                padding: "10px 12px",
+                                                                borderRadius: "8px",
+                                                                border: "1px solid #e2e8f0",
+                                                                fontSize: "14px",
+                                                            }, value: editForm.category || "", onChange: (e) => setEditForm({ ...editForm, category: e.target.value }) })] }), _jsxs("div", { children: [_jsx("label", { style: { display: "block", fontSize: "14px", fontWeight: "500", color: "#475569", marginBottom: "6px" }, children: "Condition" }), _jsxs("select", { style: {
+                                                                width: "100%",
+                                                                padding: "10px 12px",
+                                                                borderRadius: "8px",
+                                                                border: "1px solid #e2e8f0",
+                                                                fontSize: "14px",
+                                                            }, value: editForm.condition || "", onChange: (e) => setEditForm({ ...editForm, condition: e.target.value }), children: [_jsx("option", { value: "New", children: "New" }), _jsx("option", { value: "Good", children: "Good" }), _jsx("option", { value: "Refurbished", children: "Refurbished" }), _jsx("option", { value: "Damaged", children: "Damaged" })] })] }), _jsxs("div", { children: [_jsx("label", { style: { display: "block", fontSize: "14px", fontWeight: "500", color: "#475569", marginBottom: "6px" }, children: "Status" }), _jsxs("select", { style: {
+                                                                width: "100%",
+                                                                padding: "10px 12px",
+                                                                borderRadius: "8px",
+                                                                border: "1px solid #e2e8f0",
+                                                                fontSize: "14px",
+                                                            }, value: editForm.status || "", onChange: (e) => setEditForm({ ...editForm, status: e.target.value }), children: [_jsx("option", { value: "Active", children: "Active" }), _jsx("option", { value: "In Storage", children: "In Storage" }), _jsx("option", { value: "Under Maintenance", children: "Under Maintenance" }), asset.status === "Disposed" && _jsx("option", { value: "Disposed", children: "Disposed" })] }), editForm.status === "Disposed" && (_jsx("div", { style: {
+                                                                backgroundColor: "#fef3c7",
+                                                                color: "#92400e",
+                                                                padding: "8px 12px",
+                                                                borderRadius: "6px",
+                                                                marginTop: "8px",
+                                                                fontSize: "13px",
+                                                            }, children: "Warning: Disposed is a terminal state. No further changes will be allowed." }))] }), _jsxs("div", { children: [_jsx("label", { style: { display: "block", fontSize: "14px", fontWeight: "500", color: "#475569", marginBottom: "6px" }, children: "Department" }), _jsx("input", { style: {
+                                                                width: "100%",
+                                                                padding: "10px 12px",
+                                                                borderRadius: "8px",
+                                                                border: "1px solid #e2e8f0",
+                                                                fontSize: "14px",
+                                                            }, value: editForm.department || "", onChange: (e) => setEditForm({ ...editForm, department: e.target.value }) })] }), _jsxs("div", { children: [_jsx("label", { style: { display: "block", fontSize: "14px", fontWeight: "500", color: "#475569", marginBottom: "6px" }, children: "Supplier" }), _jsx("input", { style: {
+                                                                width: "100%",
+                                                                padding: "10px 12px",
+                                                                borderRadius: "8px",
+                                                                border: "1px solid #e2e8f0",
+                                                                fontSize: "14px",
+                                                            }, value: editForm.supplier || "", onChange: (e) => setEditForm({ ...editForm, supplier: e.target.value }) })] }), _jsxs("div", { children: [_jsx("label", { style: { display: "block", fontSize: "14px", fontWeight: "500", color: "#475569", marginBottom: "6px" }, children: "Cost (UGX)" }), _jsx("input", { type: "number", style: {
+                                                                width: "100%",
+                                                                padding: "10px 12px",
+                                                                borderRadius: "8px",
+                                                                border: "1px solid #e2e8f0",
+                                                                fontSize: "14px",
+                                                            }, value: editForm.cost || 0, onChange: (e) => setEditForm({ ...editForm, cost: parseFloat(e.target.value) }) })] }), _jsxs("div", { children: [_jsx("label", { style: { display: "block", fontSize: "14px", fontWeight: "500", color: "#475569", marginBottom: "6px" }, children: "Procurement Ref" }), _jsx("input", { style: {
+                                                                width: "100%",
+                                                                padding: "10px 12px",
+                                                                borderRadius: "8px",
+                                                                border: "1px solid #e2e8f0",
+                                                                fontSize: "14px",
+                                                            }, value: editForm.procurement_ref || "", onChange: (e) => setEditForm({ ...editForm, procurement_ref: e.target.value }) })] })] }), _jsxs("div", { style: { marginTop: "24px", display: "flex", gap: "12px", justifyContent: "flex-end" }, children: [_jsx("button", { onClick: handleCancelEdit, style: {
+                                                        padding: "10px 20px",
+                                                        borderRadius: "8px",
+                                                        border: "1px solid #e2e8f0",
+                                                        background: "white",
+                                                        color: "#475569",
+                                                        cursor: "pointer",
+                                                        fontSize: "14px",
+                                                        fontWeight: "500",
+                                                    }, children: "Cancel" }), _jsx("button", { onClick: handleSaveEdit, style: {
+                                                        padding: "10px 20px",
+                                                        borderRadius: "8px",
+                                                        border: "none",
+                                                        background: "#3b82f6",
+                                                        color: "white",
+                                                        cursor: "pointer",
+                                                        fontSize: "14px",
+                                                        fontWeight: "500",
+                                                    }, children: "Save Changes" })] })] })) : (_jsxs("div", { style: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px" }, children: [_jsxs("div", { style: { padding: "16px", background: "#f8fafc", borderRadius: "8px" }, children: [_jsx("div", { style: { fontSize: "12px", color: "#64748b", marginBottom: "4px" }, children: "Asset ID" }), _jsx("div", { style: { fontSize: "15px", fontWeight: "500", color: "#1e293b" }, children: asset.asset_id })] }), _jsxs("div", { style: { padding: "16px", background: "#f8fafc", borderRadius: "8px" }, children: [_jsx("div", { style: { fontSize: "12px", color: "#64748b", marginBottom: "4px" }, children: "Serial Number" }), _jsx("div", { style: { fontSize: "15px", fontWeight: "500", color: "#1e293b" }, children: asset.serial_number })] }), _jsxs("div", { style: { padding: "16px", background: "#f8fafc", borderRadius: "8px" }, children: [_jsx("div", { style: { fontSize: "12px", color: "#64748b", marginBottom: "4px" }, children: "Asset Type" }), _jsx("div", { style: { fontSize: "15px", fontWeight: "500", color: "#1e293b" }, children: asset.asset_type })] }), _jsxs("div", { style: { padding: "16px", background: "#f8fafc", borderRadius: "8px" }, children: [_jsx("div", { style: { fontSize: "12px", color: "#64748b", marginBottom: "4px" }, children: "Category" }), _jsx("div", { style: { fontSize: "15px", fontWeight: "500", color: "#1e293b" }, children: asset.category })] }), _jsxs("div", { style: { padding: "16px", background: "#f8fafc", borderRadius: "8px" }, children: [_jsx("div", { style: { fontSize: "12px", color: "#64748b", marginBottom: "4px" }, children: "Condition" }), _jsx("div", { style: { fontSize: "15px", fontWeight: "500", color: "#1e293b" }, children: asset.condition })] }), _jsxs("div", { style: { padding: "16px", background: "#f8fafc", borderRadius: "8px" }, children: [_jsx("div", { style: { fontSize: "12px", color: "#64748b", marginBottom: "4px" }, children: "Status" }), _jsx("div", { style: { fontSize: "15px", fontWeight: "500", color: "#1e293b" }, children: asset.status })] }), _jsxs("div", { style: { padding: "16px", background: "#f8fafc", borderRadius: "8px" }, children: [_jsx("div", { style: { fontSize: "12px", color: "#64748b", marginBottom: "4px" }, children: "Source Type" }), _jsx("div", { style: { fontSize: "15px", fontWeight: "500", color: "#1e293b" }, children: asset.source_type })] }), _jsxs("div", { style: { padding: "16px", background: "#f8fafc", borderRadius: "8px" }, children: [_jsx("div", { style: { fontSize: "12px", color: "#64748b", marginBottom: "4px" }, children: "Cost" }), _jsxs("div", { style: { fontSize: "15px", fontWeight: "500", color: "#1e293b" }, children: [asset.cost.toLocaleString(), " UGX"] })] }), _jsxs("div", { style: { padding: "16px", background: "#f8fafc", borderRadius: "8px" }, children: [_jsx("div", { style: { fontSize: "12px", color: "#64748b", marginBottom: "4px" }, children: "Acquisition Date" }), _jsx("div", { style: { fontSize: "15px", fontWeight: "500", color: "#1e293b" }, children: asset.acquisition_date })] }), _jsxs("div", { style: { padding: "16px", background: "#f8fafc", borderRadius: "8px" }, children: [_jsx("div", { style: { fontSize: "12px", color: "#64748b", marginBottom: "4px" }, children: "Supplier" }), _jsx("div", { style: { fontSize: "15px", fontWeight: "500", color: "#1e293b" }, children: asset.supplier })] }), _jsxs("div", { style: { padding: "16px", background: "#f8fafc", borderRadius: "8px" }, children: [_jsx("div", { style: { fontSize: "12px", color: "#64748b", marginBottom: "4px" }, children: "Department" }), _jsx("div", { style: { fontSize: "15px", fontWeight: "500", color: "#1e293b" }, children: asset.department || "—" })] }), _jsxs("div", { style: { padding: "16px", background: "#f8fafc", borderRadius: "8px" }, children: [_jsx("div", { style: { fontSize: "12px", color: "#64748b", marginBottom: "4px" }, children: "Procurement Ref" }), _jsx("div", { style: { fontSize: "15px", fontWeight: "500", color: "#1e293b" }, children: asset.procurement_ref || "—" })] }), asset.current_custodian && (_jsxs("div", { style: { padding: "16px", background: "#f8fafc", borderRadius: "8px", gridColumn: "1 / -1" }, children: [_jsx("div", { style: { fontSize: "12px", color: "#64748b", marginBottom: "4px" }, children: "Current Custodian" }), _jsxs("div", { style: { fontSize: "15px", fontWeight: "500", color: "#1e293b" }, children: [asset.current_custodian.first_name, " ", asset.current_custodian.last_name, _jsxs("span", { style: { fontSize: "13px", color: "#64748b", marginLeft: "8px" }, children: ["(", asset.current_custodian.email, ")"] })] })] }))] })) })] }), _jsxs("div", { style: {
+                            background: "white",
+                            borderRadius: "12px",
+                            border: "1px solid #e2e8f0",
+                            overflow: "hidden",
+                        }, children: [_jsx("div", { style: {
+                                    padding: "20px 24px",
+                                    borderBottom: "1px solid #e2e8f0",
+                                    background: "#f8fafc",
+                                }, children: _jsx("h2", { style: {
+                                        fontSize: "18px",
+                                        fontWeight: "600",
+                                        color: "#1e293b",
+                                        margin: 0,
+                                    }, children: "History" }) }), _jsxs("div", { style: { padding: "24px" }, children: [_jsxs("div", { style: {
+                                            display: "flex",
+                                            gap: "4px",
+                                            borderBottom: "1px solid #e2e8f0",
+                                            marginBottom: "20px",
+                                        }, children: [_jsxs("button", { onClick: () => setActiveTab(1), style: {
+                                                    padding: "10px 16px",
+                                                    borderRadius: "6px 6px 0 0",
+                                                    border: "none",
+                                                    background: activeTab === 1 ? "#3b82f6" : "transparent",
+                                                    color: activeTab === 1 ? "white" : "#64748b",
+                                                    cursor: "pointer",
+                                                    fontSize: "14px",
+                                                    fontWeight: "500",
+                                                    borderBottom: activeTab === 1 ? "2px solid #3b82f6" : "2px solid transparent",
+                                                    marginBottom: "-1px",
+                                                }, children: ["Assignments (", asset.assignment_history.length, ")"] }), _jsxs("button", { onClick: () => setActiveTab(2), style: {
+                                                    padding: "10px 16px",
+                                                    borderRadius: "6px 6px 0 0",
+                                                    border: "none",
+                                                    background: activeTab === 2 ? "#3b82f6" : "transparent",
+                                                    color: activeTab === 2 ? "white" : "#64748b",
+                                                    cursor: "pointer",
+                                                    fontSize: "14px",
+                                                    fontWeight: "500",
+                                                    borderBottom: activeTab === 2 ? "2px solid #3b82f6" : "2px solid transparent",
+                                                    marginBottom: "-1px",
+                                                }, children: ["Maintenance (", asset.maintenance_history.length, ")"] }), _jsxs("button", { onClick: () => setActiveTab(3), style: {
+                                                    padding: "10px 16px",
+                                                    borderRadius: "6px 6px 0 0",
+                                                    border: "none",
+                                                    background: activeTab === 3 ? "#3b82f6" : "transparent",
+                                                    color: activeTab === 3 ? "white" : "#64748b",
+                                                    cursor: "pointer",
+                                                    fontSize: "14px",
+                                                    fontWeight: "500",
+                                                    borderBottom: activeTab === 3 ? "2px solid #3b82f6" : "2px solid transparent",
+                                                    marginBottom: "-1px",
+                                                }, children: ["Transfers (", asset.transfer_history.length, ")"] }), asset.status === "Disposed" && (_jsx("button", { onClick: () => setActiveTab(4), style: {
+                                                    padding: "10px 16px",
+                                                    borderRadius: "6px 6px 0 0",
+                                                    border: "none",
+                                                    background: activeTab === 4 ? "#3b82f6" : "transparent",
+                                                    color: activeTab === 4 ? "white" : "#64748b",
+                                                    cursor: "pointer",
+                                                    fontSize: "14px",
+                                                    fontWeight: "500",
+                                                    borderBottom: activeTab === 4 ? "2px solid #3b82f6" : "2px solid transparent",
+                                                    marginBottom: "-1px",
+                                                }, children: "Disposal" }))] }), activeTab === 1 && (_jsx("div", { children: asset.assignment_history.length === 0 ? (_jsx("div", { style: {
+                                                textAlign: "center",
+                                                padding: "40px",
+                                                color: "#64748b",
+                                            }, children: "No assignment history" })) : (_jsx("div", { style: { display: "flex", flexDirection: "column", gap: "12px" }, children: asset.assignment_history.map((entry) => (_jsxs("div", { style: {
+                                                    padding: "16px",
+                                                    background: "#f8fafc",
+                                                    borderRadius: "8px",
+                                                    border: "1px solid #e2e8f0",
+                                                }, children: [_jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }, children: [_jsxs("span", { style: { fontSize: "15px", fontWeight: "500", color: "#1e293b" }, children: ["Assigned to: ", entry.assigned_to_name || "Unknown"] }), _jsx("span", { style: {
+                                                                    padding: "4px 10px",
+                                                                    borderRadius: "12px",
+                                                                    fontSize: "12px",
+                                                                    fontWeight: "500",
+                                                                    background: entry.status === "Active" ? "#dcfce7" : "#dbeafe",
+                                                                    color: entry.status === "Active" ? "#166534" : "#1e40af",
+                                                                }, children: entry.status })] }), _jsxs("div", { style: { display: "flex", flexDirection: "column", gap: "4px" }, children: [_jsxs("div", { style: { fontSize: "13px", color: "#64748b" }, children: ["Assigned by: ", entry.assigned_by_name || "Unknown"] }), _jsxs("div", { style: { fontSize: "13px", color: "#64748b" }, children: ["Date: ", entry.assignment_date] }), entry.return_date && (_jsxs("div", { style: { fontSize: "13px", color: "#64748b" }, children: ["Returned: ", entry.return_date] })), entry.notes && (_jsxs("div", { style: { fontSize: "13px", color: "#64748b" }, children: ["Notes: ", entry.notes] }))] })] }, entry.assignment_id))) })) })), activeTab === 2 && (_jsx("div", { children: asset.maintenance_history.length === 0 ? (_jsx("div", { style: {
+                                                textAlign: "center",
+                                                padding: "40px",
+                                                color: "#64748b",
+                                            }, children: "No maintenance history" })) : (_jsx("div", { style: { display: "flex", flexDirection: "column", gap: "12px" }, children: asset.maintenance_history.map((entry) => (_jsxs("div", { style: {
+                                                    padding: "16px",
+                                                    background: "#f8fafc",
+                                                    borderRadius: "8px",
+                                                    border: "1px solid #e2e8f0",
+                                                }, children: [_jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }, children: [_jsx("span", { style: { fontSize: "15px", fontWeight: "500", color: "#1e293b" }, children: entry.service_provider }), _jsx("span", { style: { fontSize: "13px", color: "#64748b" }, children: entry.service_date })] }), _jsx("div", { style: { marginBottom: "8px" }, children: entry.description }), _jsxs("div", { style: { display: "flex", flexDirection: "column", gap: "4px" }, children: [_jsxs("div", { style: { fontSize: "13px", color: "#64748b" }, children: ["Cost: ", entry.cost.toLocaleString(), " UGX"] }), entry.next_service_date && (_jsxs("div", { style: { fontSize: "13px", color: "#64748b" }, children: ["Next service: ", entry.next_service_date] }))] })] }, entry.maintenance_id))) })) })), activeTab === 3 && (_jsx("div", { children: asset.transfer_history.length === 0 ? (_jsx("div", { style: {
+                                                textAlign: "center",
+                                                padding: "40px",
+                                                color: "#64748b",
+                                            }, children: "No transfer history" })) : (_jsx("div", { style: { display: "flex", flexDirection: "column", gap: "12px" }, children: asset.transfer_history.map((entry) => (_jsxs("div", { style: {
+                                                    padding: "16px",
+                                                    background: "#f8fafc",
+                                                    borderRadius: "8px",
+                                                    border: "1px solid #e2e8f0",
+                                                }, children: [_jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }, children: [_jsxs("span", { style: { fontSize: "15px", fontWeight: "500", color: "#1e293b" }, children: [entry.from_user_name || "Unknown", " \u2192 ", entry.to_user_name || "Unknown"] }), _jsx("span", { style: { fontSize: "13px", color: "#64748b" }, children: entry.transfer_date })] }), _jsxs("div", { style: { display: "flex", flexDirection: "column", gap: "4px" }, children: [_jsxs("div", { style: { fontSize: "13px", color: "#64748b" }, children: ["Reason: ", entry.reason] }), entry.acknowledged_at && (_jsxs("div", { style: { fontSize: "13px", color: "#64748b" }, children: ["Acknowledged: ", entry.acknowledged_at] }))] })] }, entry.transfer_id))) })) })), activeTab === 4 && asset.disposal_record && (_jsxs("div", { style: {
+                                            padding: "16px",
+                                            background: "#fef2f2",
+                                            borderRadius: "8px",
+                                            border: "1px solid #fecaca",
+                                        }, children: [_jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }, children: [_jsx("span", { style: { fontSize: "15px", fontWeight: "500", color: "#991b1b" }, children: asset.disposal_record.disposal_method }), _jsx("span", { style: { fontSize: "13px", color: "#64748b" }, children: asset.disposal_record.disposal_date })] }), _jsx("div", { style: { marginBottom: "8px" }, children: asset.disposal_record.reason }), _jsxs("div", { style: { fontSize: "13px", color: "#64748b" }, children: ["Authorised by: ", asset.disposal_record.authorised_by_name] })] }))] })] })] }), _jsx(ConfirmDialog, { open: showDeactivateDialog, title: "Deactivate Asset", message: "Are you sure you want to deactivate this asset? It will not be available for assignment, transfer, or disposal.", onConfirm: handleDeactivate, onCancel: () => setShowDeactivateDialog(false), isLoading: isDeactivating }), showDisposeDialog && (_jsx("div", { style: {
+                    position: "fixed",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: "rgba(0, 0, 0, 0.5)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    zIndex: 1000,
+                }, children: _jsxs("div", { style: {
+                        background: "white",
+                        borderRadius: "12px",
+                        maxWidth: "500px",
+                        width: "90%",
+                        maxHeight: "90vh",
+                        overflow: "auto",
+                    }, children: [_jsxs("div", { style: {
+                                padding: "20px 24px",
+                                borderBottom: "1px solid #e2e8f0",
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                            }, children: [_jsx("h3", { style: {
+                                        fontSize: "18px",
+                                        fontWeight: "600",
+                                        color: "#1e293b",
+                                        margin: 0,
+                                    }, children: "Dispose Asset" }), _jsx("button", { onClick: () => {
+                                        setShowDisposeDialog(false);
+                                        setDisposalReason("");
+                                        setDisposalError(null);
+                                    }, style: {
+                                        background: "none",
+                                        border: "none",
+                                        fontSize: "24px",
+                                        color: "#64748b",
+                                        cursor: "pointer",
+                                        padding: 0,
+                                        lineHeight: 1,
+                                    }, children: "\u00D7" })] }), _jsxs("div", { style: { padding: "24px" }, children: [_jsxs("div", { style: { marginBottom: "16px" }, children: [_jsx("label", { style: {
+                                                display: "block",
+                                                fontSize: "14px",
+                                                fontWeight: "500",
+                                                color: "#475569",
+                                                marginBottom: "6px",
+                                            }, children: "Reason for disposal (min. 10 characters)" }), _jsx("textarea", { style: {
+                                                width: "100%",
+                                                padding: "10px 12px",
+                                                borderRadius: "8px",
+                                                border: "1px solid #e2e8f0",
+                                                fontSize: "14px",
+                                                minHeight: "100px",
+                                                resize: "vertical",
+                                            }, value: disposalReason, onChange: (e) => setDisposalReason(e.target.value), placeholder: "Explain why this asset is being disposed..." })] }), disposalError && (_jsx("div", { style: {
+                                        backgroundColor: "#fee2e2",
+                                        color: "#991b1b",
+                                        padding: "12px 16px",
+                                        borderRadius: "8px",
+                                        marginBottom: "16px",
+                                    }, children: disposalError }))] }), _jsxs("div", { style: {
+                                padding: "16px 24px",
+                                borderTop: "1px solid #e2e8f0",
+                                display: "flex",
+                                justifyContent: "flex-end",
+                                gap: "12px",
+                            }, children: [_jsx("button", { onClick: () => {
+                                        setShowDisposeDialog(false);
+                                        setDisposalReason("");
+                                        setDisposalError(null);
+                                    }, style: {
+                                        padding: "10px 20px",
+                                        borderRadius: "8px",
+                                        border: "1px solid #e2e8f0",
+                                        background: "white",
+                                        color: "#475569",
+                                        cursor: "pointer",
+                                        fontSize: "14px",
+                                        fontWeight: "500",
+                                    }, children: "Cancel" }), _jsx("button", { onClick: handleDispose, disabled: disposalReason.length < 10 || isDisposing, style: {
+                                        padding: "10px 20px",
+                                        borderRadius: "8px",
+                                        border: "none",
+                                        background: disposalReason.length < 10 || isDisposing ? "#cbd5e1" : "#ef4444",
+                                        color: "white",
+                                        cursor: disposalReason.length < 10 || isDisposing ? "not-allowed" : "pointer",
+                                        fontSize: "14px",
+                                        fontWeight: "500",
+                                    }, children: isDisposing ? "Disposing..." : "Confirm Disposal" })] })] }) }))] }));
+}

@@ -1,6 +1,6 @@
 import React from "react";
 import { apiFetch, useAuth } from "../AuthContext";
-import { AssetDetail } from "../types";
+import type { AssetDetail } from "../types";
 import ConfirmDialog from "../components/ConfirmDialog";
 
 const STATUS_CLASS: Record<string, string> = {

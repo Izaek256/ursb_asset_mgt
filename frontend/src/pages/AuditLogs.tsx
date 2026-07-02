@@ -1,21 +1,25 @@
 import React from "react";
 import { AuditLog, AuditLogListResponse } from "../types";
 import { apiFetch, useAuth } from "../AuthContext";
+import Table, { Column } from "../components/common/Table";
+import Button from "../components/common/Button";
+import FilterBar, { FilterField, filterInputCls, filterSelectCls } from "../components/common/FilterBar";
+import ErrorMessage from "../components/ErrorMessage";
+import PageHeader from "../components/PageHeader";
+
+function formatActionDescription(log: AuditLog): string {
+  const action = log.action.replace(/_/g, " ");
+  if (log.action === "LOGIN") {
+    return `LOGIN — User ${log.user_name} logged in from session ${log.table_affected}`;
+  }
+  if (log.action === "ACKNOWLEDGE_TRANSFER") {
+    return `${log.action} — Transfer acknowledged by ${log.user_name}`;
+  }
+  return `${log.action} — ${action} on ${log.table_affected}`;
+}
 
 export default function AuditLogs() {
   const { token } = useAuth();
-  // Action colour map — cosmetic only, does not affect filtering
-  const ACTION_COLOURS: Record<string, string> = {
-    LOGIN: "blue", LOGOUT: "blue", SIGNUP: "blue",
-    FAILED_LOGIN: "blue", CREATE_USER: "blue", CHANGE_ROLE: "blue",
-    DEACTIVATE_USER: "red", REACTIVATE_USER: "blue", CHANGE_PASSWORD: "blue",
-    REGISTER_ASSET: "green", UPDATE_ASSET: "green", DEACTIVATE_ASSET: "red",
-    REACTIVATE_ASSET: "green", DISPOSE_ASSET: "red",
-    EXPORT_ASSETS_PDF: "green", EXPORT_ASSETS_EXCEL: "green",
-    TRANSFER_ASSET: "purple", ACKNOWLEDGE_TRANSFER: "purple",
-    ASSIGN_ASSET: "green", RETURN_ASSET: "green",
-    RECORD_MAINTENANCE: "green", COMPLETE_MAINTENANCE: "green",
-  };
   const [logs, setLogs] = React.useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -61,183 +65,147 @@ export default function AuditLogs() {
     return () => { cancelled = true; };
   }, [token, page, pageSize, userId, action, tableAffected, fromDate, toDate, retryCount]);
 
-  if (isLoading) {
-    return (
-      <div className="page-loading">
-        Loading audit logs...
-      </div>
-    );
-  }
-  if (error) {
-    return (
-      <div className="card">
-        <p>{error}</p>
-        <button onClick={() => {setError(null); setRetryCount(c => c + 1);}}>Retry</button>
-      </div>
-    );
-  }
+  const dateInvalid = fromDate && toDate && fromDate > toDate;
+
+  const columns: Column<AuditLog>[] = [
+    {
+      header: "Timestamp",
+      render: (l) => (
+        <span className="text-xs text-ink-dim">{new Date(l.timestamp).toLocaleString()}</span>
+      ),
+    },
+    { header: "Performed By", render: (l) => l.user_name },
+    { header: "Target", render: (l) => <span className="text-xs text-ink-dim">{l.table_affected}</span> },
+    {
+      header: "Action",
+      render: (l) => (
+        <span className="text-xs text-ink font-medium">{formatActionDescription(l)}</span>
+      ),
+    },
+  ];
+
+  const clearFilters = () => {
+    setUserId("");
+    setAction("");
+    setTableAffected("");
+    setFromDate("");
+    setToDate("");
+    setPage(1);
+  };
+
   return (
-    <div className="card">
-      <div className="card-header">
-        <h2 className="card-title">Activity Log</h2>
-        <div className="text-small text-muted">{total} records</div>
-      </div>
-    
-<div className="filter-bar">
-
-  {/* User ID filter */}
-  <div>
-    <label>User ID</label>
-    <input
-      type="number"
-      value={userId}
-      disabled={isLoading}
-      onChange={(e) => { setUserId(e.target.value); setPage(1); }}
-      placeholder="User ID"
-    />
-    {userId && <button onClick={() => { setUserId(""); setPage(1); }}>×</button>}
-  </div>
-
-  {/* Action filter — debounce prevents a fetch on every keystroke */}
-  <div>
-    <label>Action</label>
-    <input
-      type="text"
-      value={action}
-      disabled={isLoading}
-      onChange={(e) => { setAction(e.target.value); setPage(1); }}
-      placeholder="e.g. ASSET, TRANSFER, LOGIN"
-    />
-    {action && <button onClick={() => { setAction(""); setPage(1); }}>×</button>}
-  </div>
-
-  {/* Table select */}
-  <div>
-    <label>Table</label>
-    <select
-      value={tableAffected}
-      disabled={isLoading}
-      onChange={(e) => { setTableAffected(e.target.value); setPage(1); }}
-    >
-      <option value="">All Tables</option>
-      <option value="assets">assets</option>
-      <option value="users">users</option>
-      <option value="assignments">assignments</option>
-      <option value="transfers">transfers</option>
-      <option value="maintenance_records">maintenance_records</option>
-      <option value="disposal_records">disposal_records</option>
-      <option value="asset_requests">asset_requests</option>
-      <option value="sessions">sessions</option>
-    </select>
-  </div>
-
-  {/* Date range */}
-  <div>
-    <label>From</label>
-    <input
-      type="date"
-      value={fromDate}
-      disabled={isLoading}
-      onChange={(e) => { setFromDate(e.target.value); setPage(1); }}
-    />
-  </div>
-
-  <div>
-    <label>To</label>
-    <input
-      type="date"
-      value={toDate}
-      disabled={isLoading}
-      onChange={(e) => { setToDate(e.target.value); setPage(1); }}
-    />
-    {/* Inline date validation */}
-    {fromDate && toDate && fromDate > toDate && (
-      <span style={{ color: "red" }}>From date must be before To date</span>
-    )}
-  </div>
-
-  {/* Clear all filters */}
-  <button
-    onClick={() => {
-      setUserId("");
-      setAction("");
-      setTableAffected("");
-      setFromDate("");
-      setToDate("");
-      setPage(1);
-    }}
-  >
-    Clear All Filters
-  </button>
-
-</div>
-      <table>
-        <thead>
-          <tr>
-            <th>Timestamp</th>
-            <th>User</th>
-            <th>Table</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {logs.map((l) => (
-            <tr key={l.log_id}>
-              <td className="text-small">{new Date(l.timestamp).toLocaleString()}</td>
-              <td>{l.user_name}</td>
-              <td>{l.table_affected}</td>
-              <td
-                className="text-small"
-                style={{ color: ACTION_COLOURS[l.action] || "inherit" }}>
-                {l.action}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {/* Pagination Controls */}
-<div className="pagination">
-
-  {/* disabled on first page */}
-  <button
-    onClick={() => setPage(p => p - 1)}
-    disabled={page === 1 || isLoading}
-  >
-    Previous
-  </button>
-
-  <span>Page {page} of {totalPages}</span>
-
-  {/*disabled on last page or no results */}
-  <button
-    onClick={() => setPage(p => p + 1)}
-    disabled={page === totalPages || total === 0 || isLoading}
-  >
-    Next
-  </button>
-
-  {/* Rows per page — reset to page 1 when page size changes, current page may be out of range */}
-  <select
-    value={pageSize}
-    onChange={(e) => {
-      setPageSize(Number(e.target.value));
-      setPage(1);
-    }}
-    disabled={isLoading}
-  >
-    <option value={10}>10 per page</option>
-    <option value={20}>20 per page</option>
-    <option value={50}>50 per page</option>
-  </select>
-
-</div>
-
-      {logs.length === 0 && (
-        <div className="page-empty">
-          No audit logs found.
-        </div>
+    <div className="w-full flex flex-col gap-5 select-none font-sans">
+      {error && (
+        <ErrorMessage message={error} onRetry={() => { setError(null); setRetryCount((c) => c + 1); }} />
       )}
+
+      <PageHeader
+        title="Audit Logs"
+        subtitle="System-wide activity history for compliance and troubleshooting"
+      />
+
+      <FilterBar onClear={clearFilters}>
+        <FilterField label="User ID" htmlFor="user-id-filter">
+          <input
+            id="user-id-filter"
+            type="number"
+            className={filterInputCls}
+            value={userId}
+            disabled={isLoading}
+            onChange={(e) => { setUserId(e.target.value); setPage(1); }}
+            placeholder="User ID"
+          />
+        </FilterField>
+        <FilterField label="Action" htmlFor="action-filter">
+          <input
+            id="action-filter"
+            type="text"
+            className={filterInputCls}
+            value={action}
+            disabled={isLoading}
+            onChange={(e) => { setAction(e.target.value); setPage(1); }}
+            placeholder="e.g. ASSET, TRANSFER"
+          />
+        </FilterField>
+        <FilterField label="Table" htmlFor="table-filter">
+          <select
+            id="table-filter"
+            value={tableAffected}
+            disabled={isLoading}
+            onChange={(e) => { setTableAffected(e.target.value); setPage(1); }}
+            className={filterSelectCls}
+          >
+            <option value="">All Tables</option>
+            <option value="assets">assets</option>
+            <option value="users">users</option>
+            <option value="assignments">assignments</option>
+            <option value="transfers">transfers</option>
+            <option value="maintenance_records">maintenance_records</option>
+            <option value="disposal_records">disposal_records</option>
+            <option value="asset_requests">asset_requests</option>
+            <option value="sessions">sessions</option>
+          </select>
+        </FilterField>
+        <FilterField label="From" htmlFor="from-date">
+          <input
+            id="from-date"
+            type="date"
+            className={filterInputCls}
+            value={fromDate}
+            disabled={isLoading}
+            onChange={(e) => { setFromDate(e.target.value); setPage(1); }}
+          />
+        </FilterField>
+        <FilterField label="To" htmlFor="to-date">
+          <input
+            id="to-date"
+            type="date"
+            className={filterInputCls}
+            value={toDate}
+            disabled={isLoading}
+            onChange={(e) => { setToDate(e.target.value); setPage(1); }}
+          />
+        </FilterField>
+      </FilterBar>
+
+      {dateInvalid && (
+        <p className="text-xs font-semibold text-badge-roseText">From date must be before To date.</p>
+      )}
+
+      <div className="bg-white border border-sky-cardBorder rounded-2xl p-5 sm:p-6 shadow-sm">
+        <div className="flex items-center justify-between border-b border-sky-page/20 pb-4 mb-4">
+          <h3 className="font-bold text-sm text-ink">Activity Log</h3>
+          <span className="text-xs font-semibold text-ink-dim">{total} records</span>
+        </div>
+        <Table
+          data={logs}
+          columns={columns}
+          rowKey={(l) => l.log_id}
+          isLoading={isLoading}
+          emptyMessage="No audit logs found."
+          embedded
+        />
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-white border border-sky-cardBorder rounded-2xl shadow-sm">
+        <Button variant="outline" onClick={() => setPage((p) => p - 1)} disabled={page === 1 || isLoading}>
+          Previous
+        </Button>
+        <span className="text-sm font-semibold text-ink-dim">Page {page} of {totalPages}</span>
+        <Button variant="outline" onClick={() => setPage((p) => p + 1)} disabled={page === totalPages || total === 0 || isLoading}>
+          Next
+        </Button>
+        <select
+          value={pageSize}
+          onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+          disabled={isLoading}
+          className={filterSelectCls}
+        >
+          <option value={10}>10 per page</option>
+          <option value={20}>20 per page</option>
+          <option value={50}>50 per page</option>
+        </select>
+      </div>
     </div>
   );
 }

@@ -2,15 +2,16 @@ import React from "react";
 import { apiFetch, useAuth } from "../AuthContext";
 import { StorageAsset, StorageListResponse, UserRow } from "../types";
 import { ICONS } from "../utils/icons";
-import StatCard from "../components/StatCard";
 import Modal from "../components/Modal";
-import FormInput from "../components/FormInput";
-import LoadingSpinner from "../components/LoadingSpinner";
+import FormInput from "../components/common/FormInput";
 import ErrorMessage from "../components/ErrorMessage";
-import SuccessBanner from "../components/SuccessBanner";
+import SuccessBanner from "../components/common/SuccessBanner";
 import EmptyState from "../components/EmptyState";
 import ConfirmDialog from "../components/ConfirmDialog";
 import PageHeader from "../components/PageHeader";
+import Table, { Column } from "../components/common/Table";
+import Button from "../components/common/Button";
+import FilterBar, { FilterField, filterInputCls, filterSelectCls } from "../components/common/FilterBar";
 
 interface ActiveAssetOption {
   asset_id: string;
@@ -128,10 +129,9 @@ export default function Storage() {
     }
   };
 
-  const handleClearFilters = () => {
-    setDeptFilter("");
-    setTypeFilter("");
-    setSearch("");
+  const handleAssignClick = (asset: StorageAsset) => {
+    setAssignModalAsset(asset);
+    setAssignForm({ assigned_to: "", notes: "" });
   };
 
   const handleAssignSubmit = async (e: React.FormEvent) => {
@@ -144,14 +144,13 @@ export default function Storage() {
         method: "POST",
         body: JSON.stringify({
           assigned_to: parseInt(assignForm.assigned_to, 10),
-          notes: assignForm.notes || null,
+          notes: assignForm.notes,
         }),
       });
-      setSuccess(`Asset ${assignModalAsset.asset_name} assigned from storage.`);
+      setSuccess(`Asset "${assignModalAsset.asset_name}" assigned successfully.`);
       setAssignModalAsset(null);
       setAssignForm({ assigned_to: "", notes: "" });
       fetchStorageData();
-      fetchContextData();
     } catch (err: any) {
       setError(err.message || "Failed to assign asset.");
     } finally {
@@ -159,12 +158,12 @@ export default function Storage() {
     }
   };
 
-  const handleReturnClick = (e: React.FormEvent) => {
+  const handleReturnClick = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!returnForm.asset_id) return;
-    const selected = activeAssets.find(a => a.asset_id === returnForm.asset_id);
-    if (selected) {
-      setReturnConfirmAsset(selected);
+    const asset = activeAssets.find(a => a.asset_id === returnForm.asset_id);
+    if (asset) {
+      setReturnConfirmAsset(asset);
     }
   };
 
@@ -173,12 +172,15 @@ export default function Storage() {
     setIsSubmitting(true);
     setError(null);
     try {
-      await apiFetch(`/storage/${returnConfirmAsset.asset_id}/return`, {
+      await apiFetch(`/storage/return`, {
         method: "POST",
+        body: JSON.stringify({
+          asset_id: returnConfirmAsset.asset_id,
+        }),
       });
-      setSuccess(`Asset ${returnConfirmAsset.asset_name} returned to storage.`);
-      setReturnConfirmAsset(null);
+      setSuccess(`Asset "${returnConfirmAsset.asset_name}" successfully returned to storage.`);
       setShowReturnModal(false);
+      setReturnConfirmAsset(null);
       setReturnForm({ asset_id: "" });
       fetchStorageData();
       fetchContextData();
@@ -189,167 +191,212 @@ export default function Storage() {
     }
   };
 
-  const departments = [
-    "ICT",
-    "Finance & Administration",
-    "Legal",
-    "Registry",
-    "Human Resources",
-    "Operations",
-    "Procurement"
+  const columns: Column<StorageAsset>[] = [
+    {
+      header: "Asset",
+      render: (a) => (
+        <div>
+          <div className="font-bold text-ink text-sm">{a.asset_name}</div>
+          <div className="text-[11px] text-ink-dim mt-0.5">{a.asset_id}</div>
+        </div>
+      ),
+    },
+    {
+      header: "Type",
+      render: (a) => <span className="font-semibold">{a.asset_type}</span>,
+    },
+    {
+      header: "Serial Number",
+      render: (a) => <span className="text-xs text-ink-dim">{a.serial_number}</span>,
+    },
+    {
+      header: "Department",
+      render: (a) => a.department || "—",
+    },
+    {
+      header: "Actions",
+      render: (a) => (
+        <div className="flex select-none">
+          {isAdminOrManager && (
+            <Button variant="outline" onClick={() => handleAssignClick(a)}>
+              Assign Asset
+            </Button>
+          )}
+        </div>
+      ),
+    },
   ];
 
-  const assetTypes = [
-    "ICT Equipment",
-    "Furniture",
-    "Vehicle",
-    "Software",
-    "Other"
-  ];
+  // Helper arrays for filters
+  const departments = ["ICT", "Administration", "Finance", "Legal"];
+  const assetTypes = ["ICT Equipment", "Furniture", "Vehicle", "Software", "Other"];
+
+  // Mapping options for dropdown selects
+  const userOptions = users.filter(u => u.isActive).map(u => ({
+    value: String(u.id),
+    label: `${u.name} (${u.role})`,
+  }));
+
+  const activeAssetOptions = activeAssets.map(a => ({
+    value: a.asset_id,
+    label: `${a.asset_name} (${a.asset_id})`,
+  }));
 
   return (
-    <>
+    <div className="w-full flex flex-col gap-6 select-none font-sans">
       {success && <SuccessBanner message={success} onDismiss={() => setSuccess(null)} />}
       {error && <ErrorMessage message={error} />}
 
-      <PageHeader 
+      <PageHeader
         title="Storage Management"
         subtitle="Manage assets kept in storage and allocate them to staff"
         actions={
           isAdminOrManager && (
-            <button className="btn btn-secondary" onClick={() => setShowReturnModal(true)}>
-              {ICONS.return} Return Asset to Storage
-            </button>
+            <Button onClick={() => setShowReturnModal(true)}>
+              <ICONS.chevronLeft className="w-4 h-4 mr-1.5 stroke-[2.4] rotate-90" />
+              Return Asset to Storage
+            </Button>
           )
         }
       />
 
+      {/* Mini Stats Card Row */}
       {data && (
-        <div className="dash-stats" style={{ marginBottom: "1.5rem" }}>
-          <StatCard label="Total In Storage" value={data.total} icon="🏪" color="#185FA5" />
-          <StatCard label="Departments with Stored Assets" value={Object.keys(data.by_department).length} icon="🏢" color="#0d9488" />
-          <StatCard label="Unique Asset Types Stored" value={Object.keys(data.by_type).length} icon="📦" color="#8b5cf6" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4.5">
+          <div className="bg-white border border-sky-cardBorder rounded-2xl p-4 flex items-center gap-3.5 shadow-sm hover:shadow-md transition-all">
+            <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-stat-blueChip text-stat-blueIcon">
+              <ICONS.clock className="w-5 h-5 stroke-[2.4]" />
+            </span>
+            <div>
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-ink-dim">
+                Total in Storage
+              </span>
+              <span className="block text-xl font-bold text-ink mt-0.5">
+                {data.assets.length}
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-white border border-sky-cardBorder rounded-2xl p-4 flex items-center gap-3.5 shadow-sm hover:shadow-md transition-all">
+            <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-stat-greenChip text-stat-greenIcon">
+              <ICONS.building className="w-5 h-5 stroke-[2.4]" />
+            </span>
+            <div>
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-ink-dim">
+                Departments with Stored Assets
+              </span>
+              <span className="block text-xl font-bold text-ink mt-0.5">
+                {Object.keys(data.by_department).length}
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-white border border-sky-cardBorder rounded-2xl p-4 flex items-center gap-3.5 shadow-sm hover:shadow-md transition-all">
+            <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-stat-amberChip text-stat-amberIcon">
+              <ICONS.assets className="w-5 h-5 stroke-[2.4]" />
+            </span>
+            <div>
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-ink-dim">
+                Unique Asset Types Stored
+              </span>
+              <span className="block text-xl font-bold text-ink mt-0.5">
+                {Object.keys(data.by_type).length}
+              </span>
+            </div>
+          </div>
         </div>
       )}
 
-      <div className="filter-bar">
-        <div className="filter-group">
-          <label htmlFor="dept-filter" className="filter-label">Department</label>
+      {/* Filter Bar with Search growing */}
+      <FilterBar>
+        <FilterField label="Department" htmlFor="dept-filter">
           <select
             id="dept-filter"
             value={deptFilter}
             onChange={(e) => setDeptFilter(e.target.value)}
-            className="filter-select"
+            className={filterSelectCls}
           >
             <option value="">All Departments</option>
-            {departments.map(d => (
+            {departments.map((d) => (
               <option key={d} value={d}>{d}</option>
             ))}
           </select>
-        </div>
-
-        <div className="filter-group">
-          <label htmlFor="type-filter" className="filter-label">Asset Type</label>
+        </FilterField>
+        <FilterField label="Asset Type" htmlFor="type-filter">
           <select
             id="type-filter"
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
-            className="filter-select"
+            className={filterSelectCls}
           >
             <option value="">All Asset Types</option>
-            {assetTypes.map(t => (
+            {assetTypes.map((t) => (
               <option key={t} value={t}>{t}</option>
             ))}
           </select>
-        </div>
-
-        <div className="filter-group">
-          <label htmlFor="storage-search" className="filter-label">Search</label>
+        </FilterField>
+        <FilterField label="Search" htmlFor="storage-search" grow>
           <input
             id="storage-search"
             type="text"
-            className="filter-search"
+            className={filterInputCls}
             placeholder="Search by name or SN..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-        </div>
-
-        <button className="btn btn-secondary btn-sm" onClick={handleClearFilters}>
-          Clear Filters
-        </button>
-      </div>
+        </FilterField>
+        {(deptFilter || typeFilter || search) && (
+          <Button variant="outline" onClick={() => { setDeptFilter(""); setTypeFilter(""); setSearch(""); }}>
+            Clear Filters
+          </Button>
+        )}
+      </FilterBar>
 
       {isLoading ? (
-        <div className="page-loading" style={{ display: "flex", justifyContent: "center", padding: "3rem" }}>
-          <LoadingSpinner size="lg" />
+        <div className="flex justify-center py-16">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ursb" />
         </div>
       ) : !data || data.assets.length === 0 ? (
-        <EmptyState title="No assets in storage" description="There are no assets currently kept in storage." icon="🏪" />
+        <EmptyState
+          title="No assets in storage"
+          description="There are no assets currently kept in storage."
+          icon={<ICONS.storage className="w-6 h-6 text-ink-icon stroke-[2.2]" />}
+        />
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: "1.5rem" }}>
-          <div className="card">
-            <table>
-              <thead>
-                <tr>
-                  <th>Asset</th>
-                  <th>Type</th>
-                  <th>Serial Number</th>
-                  <th>Department</th>
-                  {isAdminOrManager && <th>Actions</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {data.assets.map((a) => (
-                  <tr key={a.asset_id}>
-                    <td>
-                      <div>
-                        <div className="user-name">{a.asset_name}</div>
-                        <div className="text-small text-muted">{a.asset_id}</div>
-                      </div>
-                    </td>
-                    <td>{a.asset_type}</td>
-                    <td>{a.serial_number || "-"}</td>
-                    <td>{a.department || "Unassigned"}</td>
-                    {isAdminOrManager && (
-                      <td>
-                        <button 
-                          className="btn btn-primary btn-sm"
-                          onClick={() => {
-                            setAssignModalAsset(a);
-                            setAssignForm({ assigned_to: "", notes: "" });
-                          }}
-                        >
-                          Assign Asset
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <Table
+              data={data.assets}
+              columns={columns}
+              rowKey={(a) => a.asset_id}
+              emptyMessage="No assets in storage."
+            />
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-            <div className="card" style={{ padding: "1.25rem" }}>
-              <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem", color: "var(--color-primary)" }}>Breakdown by Department</h3>
-              <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          <div className="flex flex-col gap-6">
+            <div className="bg-white border border-sky-cardBorder rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+              <h3 className="font-bold text-sm text-ink mb-4 pb-3 border-b border-sky-page/20">
+                Breakdown by Department
+              </h3>
+              <ul className="flex flex-col gap-2.5">
                 {Object.entries(data.by_department).map(([dept, count]) => (
-                  <li key={dept} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.9rem" }}>
-                    <span className="text-muted">{dept}</span>
-                    <span style={{ fontWeight: 600 }}>{count}</span>
+                  <li key={dept} className="flex justify-between text-xs font-semibold">
+                    <span className="text-ink-dim">{dept}</span>
+                    <span className="font-bold text-ink">{count}</span>
                   </li>
                 ))}
               </ul>
             </div>
 
-            <div className="card" style={{ padding: "1.25rem" }}>
-              <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem", color: "var(--color-primary)" }}>Breakdown by Type</h3>
-              <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            <div className="bg-white border border-sky-cardBorder rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+              <h3 className="font-bold text-sm text-ink mb-4 pb-3 border-b border-sky-page/20">
+                Breakdown by Type
+              </h3>
+              <ul className="flex flex-col gap-2.5">
                 {Object.entries(data.by_type).map(([type, count]) => (
-                  <li key={type} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.9rem" }}>
-                    <span className="text-muted">{type}</span>
-                    <span style={{ fontWeight: 600 }}>{count}</span>
+                  <li key={type} className="flex justify-between text-xs font-semibold">
+                    <span className="text-ink-dim">{type}</span>
+                    <span className="font-bold text-ink">{count}</span>
                   </li>
                 ))}
               </ul>
@@ -360,88 +407,74 @@ export default function Storage() {
 
       {/* Assign from Storage Modal */}
       <Modal open={!!assignModalAsset} onClose={handleCloseAssignModal} title="Assign Asset from Storage">
-        <form onSubmit={handleAssignSubmit}>
+        <form onSubmit={handleAssignSubmit} className="flex flex-col gap-4">
           <FormInput 
             type="text"
+            variant="light"
             label="Asset"
             value={assignModalAsset ? `${assignModalAsset.asset_name} (${assignModalAsset.asset_id})` : ""}
             onChange={() => {}}
             disabled
           />
 
-          <div className="form-group">
-            <label htmlFor="assign-storage-user" className="form-label">Assign To User *</label>
-            <select
-              id="assign-storage-user"
-              className="form-control"
-              value={assignForm.assigned_to}
-              onChange={(e) => setAssignForm({ ...assignForm, assigned_to: e.target.value })}
-              required
-            >
-              <option value="">Select a user...</option>
-              {users.filter(u => u.isActive).map(u => (
-                <option key={u.id} value={u.id}>
-                  {u.name} ({u.role})
-                </option>
-              ))}
-            </select>
-          </div>
+          <FormInput
+            type="select"
+            variant="light"
+            label="Assign To User *"
+            value={assignForm.assigned_to}
+            onChange={(val) => setAssignForm({ ...assignForm, assigned_to: val })}
+            options={[{ value: "", label: "Select a user..." }, ...userOptions]}
+            required
+          />
 
           <FormInput 
             type="textarea"
+            variant="light"
             label="Notes"
             value={assignForm.notes}
             onChange={(val) => setAssignForm({ ...assignForm, notes: val })}
             placeholder="Add assignment details or comments..."
           />
 
-          <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={handleCloseAssignModal}>
+          <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
+            <Button type="button" variant="secondary" onClick={handleCloseAssignModal}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              className="btn btn-primary"
+              isLoading={isSubmitting}
               disabled={isSubmitting || !assignForm.assigned_to}
             >
-              {isSubmitting ? <LoadingSpinner size="sm" /> : "Assign Asset"}
-            </button>
+              Assign Asset
+            </Button>
           </div>
         </form>
       </Modal>
 
       {/* Return to Storage Modal */}
       <Modal open={showReturnModal} onClose={handleCloseReturnModal} title="Return Asset to Storage">
-        <form onSubmit={handleReturnClick}>
-          <div className="form-group">
-            <label htmlFor="return-asset-select" className="form-label">Select Active Assigned Asset *</label>
-            <select
-              id="return-asset-select"
-              className="form-control"
-              value={returnForm.asset_id}
-              onChange={(e) => setReturnForm({ asset_id: e.target.value })}
-              required
-            >
-              <option value="">Select an active asset to return...</option>
-              {activeAssets.map(a => (
-                <option key={a.asset_id} value={a.asset_id}>
-                  {a.asset_name} ({a.asset_id})
-                </option>
-              ))}
-            </select>
-          </div>
+        <form onSubmit={handleReturnClick} className="flex flex-col gap-4">
+          <FormInput
+            type="select"
+            variant="light"
+            label="Select Active Assigned Asset *"
+            value={returnForm.asset_id}
+            onChange={(val) => setReturnForm({ asset_id: val })}
+            options={[{ value: "", label: "Select an active asset to return..." }, ...activeAssetOptions]}
+            required
+          />
 
-          <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={handleCloseReturnModal}>
+          <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
+            <Button type="button" variant="secondary" onClick={handleCloseReturnModal}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              className="btn btn-primary"
+              isLoading={isSubmitting}
               disabled={isSubmitting || !returnForm.asset_id}
             >
               Return Asset
-            </button>
+            </Button>
           </div>
         </form>
       </Modal>
@@ -465,6 +498,6 @@ export default function Storage() {
         onCancel={() => setReturnConfirmAsset(null)}
         onConfirm={handleReturnConfirm}
       />
-    </>
+    </div>
   );
 }

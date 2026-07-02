@@ -2,11 +2,16 @@ import React from "react";
 import { apiFetch, useAuth } from "../AuthContext";
 import { Transfer, TransferListResponse, StorageAsset, UserRow } from "../types";
 import Modal from "../components/Modal";
-import FormInput from "../components/FormInput";
+import FormInput from "../components/common/FormInput";
 import ConfirmDialog from "../components/ConfirmDialog";
-import LoadingSpinner from "../components/LoadingSpinner";
 import ErrorMessage from "../components/ErrorMessage";
-import SuccessBanner from "../components/SuccessBanner";
+import SuccessBanner from "../components/common/SuccessBanner";
+import Table, { Column } from "../components/common/Table";
+import PageHeader from "../components/PageHeader";
+import Button from "../components/common/Button";
+import FilterBar, { FilterField, filterInputCls, filterSelectCls } from "../components/common/FilterBar";
+import StatusBadge from "../components/common/badges/StatusBadge";
+import { ICONS } from "../utils/icons";
 
 export default function Transfers() {
   const { user } = useAuth();
@@ -47,16 +52,6 @@ export default function Transfers() {
     }
   }, []);
 
-  // Handle ?openModal=true in URL
-  React.useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("openModal") === "true") {
-      // When Create Transfer modal is implemented, open it here
-      // For now, this is a placeholder for future functionality
-      console.log("Create Transfer modal would open here");
-    }
-  }, []);
-
   React.useEffect(() => {
     fetchTransfers();
   }, []);
@@ -70,8 +65,6 @@ export default function Transfers() {
             apiFetch<StorageAsset[]>("/assets"),
             apiFetch<UserRow[]>("/admin/users"),
           ]);
-          console.log("Assets API response:", assetsData);
-          console.log("Users API response:", usersData);
           setAssets(assetsData || []);
           setUsers(usersData || []);
         } catch (err: any) {
@@ -92,30 +85,60 @@ export default function Transfers() {
     setError(null);
     try {
       const data = await apiFetch<TransferListResponse | Transfer[]>("/transfers");
-      console.log("API Response:", data);
-      // Handle both array response and object with transfers property
-      const transfersArray = Array.isArray(data) ? data : (data.transfers || []);
-      console.log("Transfers array:", transfersArray);
-      setTransfers(transfersArray);
+      if (Array.isArray(data)) {
+        setTransfers(data);
+      } else if (data && Array.isArray(data.transfers)) {
+        setTransfers(data.transfers);
+      } else {
+        setTransfers([]);
+      }
     } catch (err: any) {
-      console.error("API Error:", err);
-      setError(err.message || "Failed to load");
+      setError(err.message || "Failed to load transfers.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Create Transfer form handlers
-  const handleCreateFieldChange = (field: string, value: string) => {
-    setCreateForm((prev) => ({ ...prev, [field]: value }));
+  const handleCreateFieldChange = (field: string, val: string) => {
+    setCreateForm((prev) => ({ ...prev, [field]: val }));
     setFormDirty(true);
+  };
+
+  const handleCreateModalClose = () => {
+    if (formDirty) {
+      setAcknowledgeDialog({ open: true, transferId: null });
+    } else {
+      setShowCreateModal(false);
+      setCreateError(null);
+    }
+  };
+
+  const handleConfirmCloseWithoutSaving = () => {
+    setShowCreateModal(false);
+    setCreateForm({
+      asset_id: "",
+      to_user_id: "",
+      transfer_date: new Date().toISOString().split("T")[0],
+      reason: "",
+    });
+    setFormDirty(false);
+    setCreateError(null);
+    setAcknowledgeDialog({ open: false, transferId: null });
   };
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setCreateError(null);
-    setIsCreating(true);
+    if (!createForm.asset_id || !createForm.to_user_id) {
+      setCreateError("Please select both an asset and target user.");
+      return;
+    }
+    if (createForm.reason.trim().length < 10) {
+      setCreateError("Reason must be at least 10 characters long.");
+      return;
+    }
 
+    setIsCreating(true);
+    setCreateError(null);
     try {
       await apiFetch("/transfers", {
         method: "POST",
@@ -126,7 +149,7 @@ export default function Transfers() {
           reason: createForm.reason,
         }),
       });
-
+      setSuccessMessage("Transfer record created successfully.");
       setShowCreateModal(false);
       setCreateForm({
         asset_id: "",
@@ -135,257 +158,225 @@ export default function Transfers() {
         reason: "",
       });
       setFormDirty(false);
-      setSuccessMessage("Transfer created. The receiving user can acknowledge it from their transfers view.");
-      setTimeout(() => setSuccessMessage(null), 5000);
       fetchTransfers();
     } catch (err: any) {
-      setCreateError(err.message || "Failed to create transfer");
+      setCreateError(err.message || "Failed to initiate transfer.");
     } finally {
       setIsCreating(false);
     }
   };
 
-  const handleCreateModalClose = () => {
-    if (formDirty) {
-      setAcknowledgeDialog({ open: true, transferId: null });
-    } else {
-      setShowCreateModal(false);
-      setCreateForm({
-        asset_id: "",
-        to_user_id: "",
-        transfer_date: new Date().toISOString().split("T")[0],
-        reason: "",
-      });
-      setFormDirty(false);
-      setCreateError(null);
-    }
-  };
-
-  const handleConfirmCloseWithoutSaving = () => {
-    setAcknowledgeDialog({ open: false, transferId: null });
-    setShowCreateModal(false);
-    setCreateForm({
-      asset_id: "",
-      to_user_id: "",
-      transfer_date: new Date().toISOString().split("T")[0],
-      reason: "",
-    });
-    setFormDirty(false);
-    setCreateError(null);
-  };
-
-  // Acknowledge handlers
   const handleAcknowledgeClick = (transferId: number) => {
     setAcknowledgeDialog({ open: true, transferId });
   };
 
   const handleAcknowledgeConfirm = async () => {
-    if (!acknowledgeDialog.transferId) return;
-
+    if (acknowledgeDialog.transferId === null) return;
+    setError(null);
     try {
       await apiFetch(`/transfers/${acknowledgeDialog.transferId}/acknowledge`, {
         method: "PUT",
       });
-
+      setSuccessMessage("Transfer acknowledged. Custody updated successfully.");
       setAcknowledgeDialog({ open: false, transferId: null });
-      setSuccessMessage("Transfer acknowledged.");
-      setTimeout(() => setSuccessMessage(null), 5000);
       fetchTransfers();
     } catch (err: any) {
-      // Error handling - could show error in dialog
+      setError(err.message || "Failed to acknowledge transfer.");
+      setAcknowledgeDialog({ open: false, transferId: null });
     }
   };
 
-  // Role check for Create Transfer button
-  const canCreateTransfer = user?.role === "Asset Manager" || user?.role === "System Administrator";
-
-  // Filter transfers for display
+  // Filter transfers list
   const displayedTransfers = transfers.filter((t) => {
-    const matchesAssetId = assetIdFilter === "" || t.asset_id.toLowerCase().includes(assetIdFilter.toLowerCase());
-    const matchesStatus = statusFilter === "All" || 
+    const matchesAsset =
+      !assetIdFilter.trim() ||
+      t.asset_id.toLowerCase().includes(assetIdFilter.toLowerCase()) ||
+      t.asset_name.toLowerCase().includes(assetIdFilter.toLowerCase());
+    const matchesStatus =
+      statusFilter === "All" ||
       (statusFilter === "Acknowledged" && t.acknowledged_at !== null) ||
       (statusFilter === "Pending" && t.acknowledged_at === null);
-    return matchesAssetId && matchesStatus;
+    return matchesAsset && matchesStatus;
   });
 
-  if (isLoading) return <div className="page-loading">Loading transfers...</div>;
-  if (error) return <div className="alert-error">Error: {error}</div>;
+  const canCreateTransfer =
+    user?.role === "System Administrator" ||
+    user?.role === "Asset Manager" ||
+    user?.role === "Asset Custodian";
+
+  const columns: Column<Transfer>[] = [
+    {
+      header: "Asset",
+      render: (t) => (
+        <div>
+          <div className="font-bold text-ink text-sm">{t.asset_name}</div>
+          <div className="text-[11px] text-ink-dim mt-0.5">{t.asset_id}</div>
+        </div>
+      ),
+    },
+    { header: "From", render: (t) => t.from_user_name || "—" },
+    { header: "To", render: (t) => t.to_user_name },
+    {
+      header: "Transfer Date",
+      render: (t) => new Date(t.transfer_date).toLocaleDateString(),
+    },
+    { header: "Reason", render: (t) => t.reason },
+    { header: "Authorised By", render: (t) => t.authorised_by_name || "—" },
+    {
+      header: "Acknowledged",
+      render: (t) =>
+        t.acknowledged_at ? (
+          <span className="text-xs text-ink-dim">{new Date(t.acknowledged_at).toLocaleString()}</span>
+        ) : (
+          <StatusBadge status="Pending" />
+        ),
+    },
+    {
+      header: "Actions",
+      render: (t) =>
+        t.acknowledged_at === null &&
+        (t.to_user_id === parseInt(user?.user_id || "0", 10) || user?.role === "System Administrator") ? (
+          <div className="flex select-none">
+            <Button variant="outline" onClick={() => handleAcknowledgeClick(t.transfer_id)}>
+              Acknowledge
+            </Button>
+          </div>
+        ) : null,
+    },
+  ];
+
+  const assetOptions = assets.map((asset) => ({
+    value: asset.asset_id,
+    label: `${asset.asset_name} - ${asset.serial_number} (${asset.asset_type})`,
+  }));
+
+  const userOptions = users.map((u) => ({
+    value: String(u.id),
+    label: `${u.name} (${u.email}) - ${u.role}`,
+  }));
 
   return (
-    <>
+    <div className="w-full flex flex-col gap-6 select-none font-sans">
       {successMessage && <SuccessBanner message={successMessage} onDismiss={() => setSuccessMessage(null)} />}
+      {error && <ErrorMessage message={error} onRetry={fetchTransfers} />}
 
-      {/* Filters */}
-      <div className="filter-bar">
-        <div className="filter-group">
-          <label htmlFor="asset-id-filter" className="filter-label">Asset ID</label>
+      <PageHeader
+        title="Asset Transfers"
+        subtitle="Custody change history between employees"
+        actions={
+          canCreateTransfer && (
+            <Button onClick={() => setShowCreateModal(true)}>
+              <ICONS.plus className="w-4 h-4 mr-1.5 stroke-[2.4]" />
+              Create Transfer
+            </Button>
+          )
+        }
+      />
+
+      <FilterBar
+        count={{ value: displayedTransfers.length, label: "transfers" }}
+        onClear={handleClearFilters}
+      >
+        <FilterField label="Asset ID" htmlFor="asset-id-filter">
           <input
             id="asset-id-filter"
             type="text"
-            className="filter-search"
+            className={filterInputCls}
             placeholder="Filter by Asset ID..."
             value={assetIdFilter}
             onChange={(e) => setAssetIdFilter(e.target.value)}
           />
-        </div>
-        <div className="filter-group">
-          <label htmlFor="status-filter" className="filter-label">Status</label>
+        </FilterField>
+        <FilterField label="Status" htmlFor="status-filter">
           <select
             id="status-filter"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as "All" | "Acknowledged" | "Pending")}
-            className="filter-select"
+            className={filterSelectCls}
           >
             <option value="All">All</option>
             <option value="Acknowledged">Acknowledged</option>
             <option value="Pending">Pending</option>
           </select>
-        </div>
-        <button className="btn btn-secondary btn-sm" onClick={handleClearFilters}>
-          Clear Filters
-        </button>
-        <div className="filter-count">{displayedTransfers.length} transfers</div>
-        {canCreateTransfer && (
-          <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
-            ➕ Create Transfer
-          </button>
-        )}
-      </div>
+        </FilterField>
+      </FilterBar>
 
-      {/* Error state */}
-      {error && <ErrorMessage message={error} onRetry={fetchTransfers} />}
-
-      {/* Table */}
-      {!error && (
-        <div className="card">
-          <div className="card-header">
-            <h2 className="card-title">Asset Transfers</h2>
-            <div className="text-small text-muted">Custody change history</div>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Asset</th>
-                <th>From</th>
-                <th>To</th>
-                <th>Transfer Date</th>
-                <th>Reason</th>
-                <th>Authorised By</th>
-                <th>Acknowledged</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {displayedTransfers.map((t) => (
-                <tr key={t.transfer_id}>
-                  <td>
-                    <div className="user-name">{t.asset_name}</div>
-                    <div className="text-small text-muted">{t.asset_serial}</div>
-                  </td>
-                  <td>{t.from_user_name}</td>
-                  <td>{t.to_user_name}</td>
-                  <td className="text-small">{new Date(t.transfer_date).toLocaleDateString()}</td>
-                  <td className="text-small" title={t.reason}>
-                    {t.reason.length > 60 ? `${t.reason.substring(0, 60)}...` : t.reason}
-                  </td>
-                  <td>{t.authorised_by_name}</td>
-                  <td>
-                    {t.acknowledged_at ? (
-                      <span className="text-small">{new Date(t.acknowledged_at).toLocaleString()}</span>
-                    ) : (
-                      <span className="badge badge-warning">Pending</span>
-                    )}
-                  </td>
-                  <td>
-                    {/* Acknowledge available to the receiving user or a System Administrator per business rules */}
-                    {t.acknowledged_at === null && 
-                     (t.to_user_id === parseInt(user?.user_id || "0", 10) || user?.role === "System Administrator") && (
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => handleAcknowledgeClick(t.transfer_id)}
-                        title="Acknowledge transfer"
-                      >
-                        🤝 Acknowledge
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {displayedTransfers.length === 0 && <div className="page-empty">No transfers found</div>}
+      {isLoading ? (
+        <div className="flex justify-center py-16">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ursb" />
         </div>
+      ) : displayedTransfers.length === 0 ? (
+        <EmptyState
+          title="No transfers found"
+          description="There are no transfer history records found matching your filters."
+          icon={<ICONS.transfers className="w-6 h-6 text-ink-icon stroke-[2.2]" />}
+        />
+      ) : (
+        <Table
+          data={displayedTransfers}
+          columns={columns}
+          rowKey={(t) => t.transfer_id}
+          emptyMessage="No transfers found."
+        />
       )}
 
       {/* Create Transfer Modal */}
       <Modal open={showCreateModal} onClose={handleCreateModalClose} title="Create Transfer">
-        <form onSubmit={handleCreateSubmit}>
+        <form onSubmit={handleCreateSubmit} className="flex flex-col gap-4">
           {createError && <ErrorMessage message={createError} />}
           
-          <div className="form-group">
-            <label htmlFor="asset_id" className="form-label">Asset</label>
-            <select
-              id="asset_id"
-              className="form-control"
-              value={createForm.asset_id}
-              onChange={(e) => handleCreateFieldChange("asset_id", e.target.value)}
-              required
-            >
-              <option value="">Select an asset...</option>
-              {assets.map((asset) => (
-                <option key={asset.asset_id} value={asset.asset_id}>
-                  {asset.asset_name} - {asset.serial_number} ({asset.asset_type})
-                </option>
-              ))}
-            </select>
-            <small className="form-helper">Select the asset to transfer</small>
-          </div>
+          <FormInput
+            type="select"
+            variant="light"
+            label="Asset"
+            value={createForm.asset_id}
+            onChange={(val) => handleCreateFieldChange("asset_id", val)}
+            options={[{ value: "", label: "Select an asset..." }, ...assetOptions]}
+            helper="Select the asset to transfer"
+            required
+          />
 
-          <div className="form-group">
-            <label htmlFor="to_user_id" className="form-label">To User</label>
-            <select
-              id="to_user_id"
-              className="form-control"
-              value={createForm.to_user_id}
-              onChange={(e) => handleCreateFieldChange("to_user_id", e.target.value)}
-              required
-            >
-              <option value="">Select a user...</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name} ({u.email}) - {u.role}
-                </option>
-              ))}
-            </select>
-            <small className="form-helper">Select the user receiving the asset</small>
-          </div>
+          <FormInput
+            type="select"
+            variant="light"
+            label="To User"
+            value={createForm.to_user_id}
+            onChange={(val) => handleCreateFieldChange("to_user_id", val)}
+            options={[{ value: "", label: "Select a user..." }, ...userOptions]}
+            helper="Select the user receiving the asset"
+            required
+          />
 
           <FormInput
             type="date"
+            variant="light"
             label="Transfer Date"
             value={createForm.transfer_date}
-            onChange={(v) => handleCreateFieldChange("transfer_date", v)}
+            onChange={(val) => handleCreateFieldChange("transfer_date", val)}
           />
+
           <FormInput
             type="textarea"
+            variant="light"
             label="Reason"
             value={createForm.reason}
-            onChange={(v) => handleCreateFieldChange("reason", v)}
+            onChange={(val) => handleCreateFieldChange("reason", val)}
             helper="Provide a reason for this transfer"
             required
             characterCount={{ current: createForm.reason.length, min: 10 }}
           />
-          <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={handleCreateModalClose}>
+
+          <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
+            <Button type="button" variant="secondary" onClick={handleCreateModalClose}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              className="btn btn-primary"
+              isLoading={isCreating}
               disabled={isCreating || createForm.reason.trim().length < 10}
             >
-              {isCreating ? <LoadingSpinner size="sm" /> : "Create Transfer"}
-            </button>
+              Create Transfer
+            </Button>
           </div>
         </form>
       </Modal>
@@ -407,6 +398,6 @@ export default function Transfers() {
         onCancel={() => setAcknowledgeDialog({ open: false, transferId: null })}
         onConfirm={handleAcknowledgeConfirm}
       />
-    </>
+    </div>
   );
 }

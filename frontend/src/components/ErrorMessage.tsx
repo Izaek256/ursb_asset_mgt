@@ -1,3 +1,5 @@
+import Button from "./common/Button";
+
 type Props = {
   message: string;
   onRetry?: () => void;
@@ -5,12 +7,12 @@ type Props = {
 
 export default function ErrorMessage({ message, onRetry }: Props) {
   return (
-    <div className="alert-error">
-      <p>{message}</p>
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-badge-roseBg border border-badge-roseText/20 text-badge-roseText text-sm animate-fadeIn motion-reduce:animate-none">
+      <p className="font-semibold">{message}</p>
       {onRetry && (
-        <button className="btn btn-secondary btn-sm" onClick={onRetry}>
+        <Button variant="danger-outline" onClick={onRetry}>
           Retry
-        </button>
+        </Button>
       )}
     </div>
   );
