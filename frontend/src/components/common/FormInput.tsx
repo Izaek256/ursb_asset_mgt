@@ -1,6 +1,7 @@
 import React from "react";
 import { Listbox, Transition } from "@headlessui/react";
 import { ICONS } from "../../utils/icons";
+import Button from "./Button";
 
 type BaseProps = {
   label?: string;
@@ -175,19 +176,21 @@ export default function FormInput(props: Props) {
               aria-describedby={hasError ? errorId : helperId}
               autoComplete={props.autoComplete || "current-password"}
             />
-            <button
+            <Button
               type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className={`absolute right-3.5 top-1/2 -translate-y-1/2 focus:outline-none transition-colors cursor-pointer ${
+              variant="icon"
+              className={`absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 border-none bg-transparent shadow-none hover:shadow-none ${
                 isLight ? "text-ink-dim/50 hover:text-ink" : "text-white/40 hover:text-white/80"
               }`}
+              onClick={() => setShowPassword(!showPassword)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
             >
               {showPassword ? (
-                <ICONS.eyeOff className="w-4.5 h-4.5" />
+                <ICONS.eyeOff className="w-4 h-4 stroke-[2.2]" />
               ) : (
-                <ICONS.eye className="w-4.5 h-4.5" />
+                <ICONS.eye className="w-4 h-4 stroke-[2.2]" />
               )}
-            </button>
+            </Button>
           </div>
         );
 

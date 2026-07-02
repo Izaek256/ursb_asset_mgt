@@ -560,7 +560,7 @@ export default function Requests() {
           />
 
           <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
-            <Button type="button" variant="secondary" onClick={handleCloseSubmitModal}>
+            <Button type="button" variant="ghost" onClick={handleCloseSubmitModal}>
               Cancel
             </Button>
             <Button
@@ -594,7 +594,7 @@ export default function Requests() {
           )}
 
           <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
-            <Button type="button" variant="secondary" onClick={() => setShowApproveModal(false)}>
+            <Button type="button" variant="ghost" onClick={() => setShowApproveModal(false)}>
               Cancel
             </Button>
             <Button
@@ -622,12 +622,12 @@ export default function Requests() {
           />
 
           <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
-            <Button type="button" variant="secondary" onClick={handleCloseRejectModal}>
+            <Button type="button" variant="ghost" onClick={handleCloseRejectModal}>
               Cancel
             </Button>
             <Button
               type="submit"
-              variant="danger"
+              variant="danger-outline"
               isLoading={isSubmitting}
               disabled={isSubmitting || !rejectForm.notes.trim()}
             >
@@ -659,7 +659,7 @@ export default function Requests() {
           />
 
           <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
-            <Button type="button" variant="secondary" onClick={handleCloseAssignModal}>
+            <Button type="button" variant="ghost" onClick={handleCloseAssignModal}>
               Cancel
             </Button>
             <Button

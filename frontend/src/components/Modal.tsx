@@ -1,6 +1,7 @@
 import React, { Fragment } from "react";
 import { Dialog, Transition } from "@headlessui/react";
 import { ICONS } from "../utils/icons";
+import Button from "./common/Button";
 
 type Props = {
   open: boolean;
@@ -38,13 +39,15 @@ export default function Modal({ open, onClose, title, children }: Props) {
             >
               <Dialog.Panel className="relative transform overflow-hidden rounded-2xl bg-white border border-sky-cardBorder text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg p-5 sm:p-6">
                 <div className="absolute right-4 top-4">
-                  <button
+                  <Button
                     type="button"
-                    className="rounded-lg p-1.5 text-ink-dim hover:text-ursb hover:bg-sky-topbar focus:outline-none transition-colors cursor-pointer"
+                    variant="icon"
+                    className="w-8 h-8"
                     onClick={onClose}
+                    aria-label="Close dialog"
                   >
-                    <ICONS.close className="h-4.5 w-4.5 stroke-[2.4]" aria-hidden="true" />
-                  </button>
+                    <ICONS.close className="h-4 w-4 stroke-[2.4]" />
+                  </Button>
                 </div>
                 {title && (
                   <Dialog.Title

@@ -22,7 +22,7 @@ export default function AppLayout({
   const [mobileOpen, setMobileOpen] = React.useState(false);
 
   return (
-    <div className="min-h-screen w-full flex bg-sky-page text-ink select-none overflow-x-hidden">
+    <div className="flex h-screen w-full overflow-hidden bg-sky-page text-ink select-none">
       <Transition
         show={mobileOpen}
         as={React.Fragment}
@@ -52,6 +52,7 @@ export default function AppLayout({
       >
         <div className="fixed md:hidden top-0 left-0 h-screen z-50">
           <Sidebar
+            pinned="overlay"
             collapsed={false}
             onToggleCollapse={() => setCollapsed(!collapsed)}
             activePath={activePath}
@@ -63,8 +64,9 @@ export default function AppLayout({
         </div>
       </Transition>
 
-      <div className="hidden md:block sticky top-0 h-screen z-40">
+      <div className="hidden md:block h-screen flex-shrink-0">
         <Sidebar
+          pinned="inline"
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed(!collapsed)}
           activePath={activePath}
@@ -72,13 +74,13 @@ export default function AppLayout({
         />
       </div>
 
-      <div className="flex-1 min-w-0 flex flex-col min-h-screen">
+      <div className="flex flex-1 flex-col min-w-0 h-screen overflow-hidden bg-sky-page">
         <Header
           pageTitle={pageTitle}
           onLogout={logout}
           onToggleMobileSidebar={() => setMobileOpen(true)}
         />
-        <main className="flex-1 p-5 sm:p-8 overflow-y-auto animate-fadeIn motion-reduce:animate-none">
+        <main className="flex-1 min-h-0 overflow-y-auto p-6 animate-fadeIn motion-reduce:animate-none">
           {children}
         </main>
       </div>

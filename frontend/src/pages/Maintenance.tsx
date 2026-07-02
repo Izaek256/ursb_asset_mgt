@@ -480,7 +480,7 @@ export default function Maintenance() {
           />
 
           <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
-            <Button type="button" variant="secondary" onClick={handleCloseLogModal}>
+            <Button type="button" variant="ghost" onClick={handleCloseLogModal}>
               Cancel
             </Button>
             <Button
@@ -516,7 +516,7 @@ export default function Maintenance() {
           />
 
           <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
-            <Button type="button" variant="secondary" onClick={handleCloseScheduleModal}>
+            <Button type="button" variant="ghost" onClick={handleCloseScheduleModal}>
               Cancel
             </Button>
             <Button

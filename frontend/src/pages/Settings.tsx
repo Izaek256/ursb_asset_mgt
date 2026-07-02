@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Fragment } from "react";
 import { Tab } from "@headlessui/react";
 import { useAuth } from "../AuthContext";
 import { apiFetch } from "../AuthContext";
@@ -226,11 +226,6 @@ export default function Settings() {
   return (
     <div className="w-full flex flex-col gap-5 select-none font-sans">
       {successMessage && <SuccessBanner message={successMessage} onDismiss={() => setSuccessMessage(null)} />}
-      {isLoadingSettings && (
-        <div className="flex justify-center items-center gap-3 py-12 text-ink-dim">
-          <LoadingSpinner /> Loading settings...
-        </div>
-      )}
       {settingsError && <ErrorMessage message={settingsError} />}
 
       <PageHeader
@@ -238,12 +233,20 @@ export default function Settings() {
         subtitle="Configure your account and system preferences"
       />
 
+      {isLoadingSettings && (
+        <div className="flex items-center gap-2 text-sm text-ink-dim">
+          <LoadingSpinner /> Loading settings...
+        </div>
+      )}
+
       <Tab.Group>
         <Tab.List className="flex flex-wrap gap-1.5 p-1.5 bg-white border border-sky-cardBorder rounded-xl w-fit">
           {TABS.map((tab) => (
-            <Tab key={tab} as={React.Fragment}>
-              {({ selected }) => (
+            <Tab key={tab} as={Fragment}>
+              {({ selected, ...tabProps }) => (
                 <Button
+                  {...tabProps}
+                  type="button"
                   variant={selected ? "primary" : "ghost"}
                   className={selected ? "" : "shadow-none border-transparent bg-transparent"}
                 >

@@ -11,6 +11,7 @@ import PageHeader from "../components/PageHeader";
 import Button from "../components/common/Button";
 import FilterBar, { FilterField, filterInputCls, filterSelectCls } from "../components/common/FilterBar";
 import StatusBadge from "../components/common/badges/StatusBadge";
+import EmptyState from "../components/EmptyState";
 import { ICONS } from "../utils/icons";
 
 export default function Transfers() {
@@ -367,7 +368,7 @@ export default function Transfers() {
           />
 
           <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
-            <Button type="button" variant="secondary" onClick={handleCreateModalClose}>
+            <Button type="button" variant="ghost" onClick={handleCreateModalClose}>
               Cancel
             </Button>
             <Button

@@ -37,7 +37,7 @@ export default function Button({
 
   const activeNav =
     variant === "nav" && active
-      ? "bg-white text-ursb-dark shadow-lg shadow-ursb/20 -translate-y-0.5"
+      ? "bg-white text-ursb-dark shadow-xl shadow-ursb/25 -translate-y-0.5 border border-white/80"
       : "";
 
   const widthStyle = fullWidth ? "w-full" : "";

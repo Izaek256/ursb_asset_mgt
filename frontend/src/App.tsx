@@ -1,7 +1,7 @@
 import React from "react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import AppLayout from "./components/AppLayout";
-import AdminUsers from "./pages/AdminUsers";
+import UserManagement from "./pages/UserManagement";
 import AuditLogs from "./pages/AuditLogs";
 import Assets from "./pages/Assets";
 import AssetDetail from "./pages/AssetDetail";
@@ -80,7 +80,7 @@ function AppShell() {
       case "/admin/audit-logs":
         return <AuditLogs />;
       case "/admin/users":
-        return <AdminUsers />;
+        return <UserManagement />;
       case "/settings":
         return <Settings />;
       default:
@@ -89,9 +89,11 @@ function AppShell() {
   };
 
   return (
-    <AppLayout pageTitle={getPageTitle()} activePath={path} onNavigate={navigate}>
-      {renderContent()}
-    </AppLayout>
+    <div className="h-screen overflow-hidden">
+      <AppLayout pageTitle={getPageTitle()} activePath={path} onNavigate={navigate}>
+        {renderContent()}
+      </AppLayout>
+    </div>
   );
 }
 

@@ -80,28 +80,37 @@ const MOCK: DashboardData = {
   maintenance_due: 3,
 };
 
+const CORE_STAT_KEYS = ["total", "active", "maintenance", "disposed"] as const;
+
+const resolveStatCard = (stats: StatCard[], key: (typeof CORE_STAT_KEYS)[number]): StatCard => {
+  const matchers: Record<(typeof CORE_STAT_KEYS)[number], (label: string) => boolean> = {
+    total: (label) => label.toLowerCase().includes("total"),
+    active: (label) => label.toLowerCase().includes("active") || label.toLowerCase().includes("assigned"),
+    maintenance: (label) => label.toLowerCase().includes("maintenance"),
+    disposed: (label) => label.toLowerCase().includes("disposed"),
+  };
+  const defaults: Record<(typeof CORE_STAT_KEYS)[number], StatCard> = {
+    total: { label: "Total Assets", value: 0 },
+    active: { label: "Active / Assigned", value: 0 },
+    maintenance: { label: "In Maintenance", value: 0 },
+    disposed: { label: "Disposed", value: 0 },
+  };
+  return stats.find((s) => matchers[key](s.label)) ?? defaults[key];
+};
+
 const getStatConfig = (label: string) => {
   const l = label.toLowerCase();
   if (l.includes("total")) {
-    return { icon: ICONS.assets, bg: "bg-stat-blueChip", text: "text-stat-blueIcon" };
+    return { icon: ICONS.assets, bg: "bg-stat-amberChip", text: "text-stat-amberIcon" };
   }
   if (l.includes("active") || l.includes("assigned")) {
     return { icon: ICONS.checkCircle, bg: "bg-stat-greenChip", text: "text-stat-greenIcon" };
   }
   if (l.includes("maintenance")) {
-    return { icon: ICONS.maintenance, bg: "bg-stat-amberChip", text: "text-stat-amberIcon" };
+    return { icon: ICONS.maintenance, bg: "bg-stat-blueChip", text: "text-stat-blueIcon" };
   }
   if (l.includes("disposed")) {
     return { icon: ICONS.trashCircle, bg: "bg-stat-roseChip", text: "text-stat-roseIcon" };
-  }
-  if (l.includes("request")) {
-    return { icon: ICONS.requests, bg: "bg-stat-purpleChip", text: "text-stat-purpleIcon" };
-  }
-  if (l.includes("department")) {
-    return { icon: ICONS.building, bg: "bg-stat-indigoChip", text: "text-stat-indigoIcon" };
-  }
-  if (l.includes("user")) {
-    return { icon: ICONS.users, bg: "bg-stat-tealChip", text: "text-stat-tealIcon" };
   }
   return { icon: ICONS.assets, bg: "bg-stat-blueChip", text: "text-stat-blueIcon" };
 };
@@ -135,17 +144,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (path: string) =
     );
   }
 
-  // Stagger stats to 7 KPIs if data/departments available
-  const statsList = [...data.stats];
-  if (!statsList.find((s) => s.label.toLowerCase().includes("pending"))) {
-    statsList.push({ label: "Pending Requests", value: data.maintenance_due });
-  }
-  if (!statsList.find((s) => s.label.toLowerCase().includes("department"))) {
-    statsList.push({ label: "Departments", value: data.departments?.length || 4 });
-  }
-  if (!statsList.find((s) => s.label.toLowerCase().includes("user"))) {
-    statsList.push({ label: "System Users", value: 12 });
-  }
+  const statsList = CORE_STAT_KEYS.map((key) => resolveStatCard(data.stats, key));
 
   const totalDeptAssets = data.departments.reduce((sum, d) => sum + d.assets, 0) || 1;
 
@@ -174,12 +173,12 @@ export default function Dashboard({ onNavigate }: { onNavigate: (path: string) =
       )}
 
       {/* Stat Cards Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4 sm:gap-5">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-5">
         {statsList.map((s, index) => {
           const cfg = getStatConfig(s.label);
           const StatIcon = cfg.icon;
-          const staggerDelays = ["", "anim-delay-75", "anim-delay-150", "anim-delay-200", "anim-delay-300", "anim-delay-500", "anim-delay-700"];
-          const delayClass = staggerDelays[index] ?? "delay-700";
+          const staggerDelays = ["", "anim-delay-75", "anim-delay-150", "anim-delay-200"];
+          const delayClass = staggerDelays[index] ?? "anim-delay-200";
           return (
             <div
               key={s.label}
@@ -194,8 +193,8 @@ export default function Dashboard({ onNavigate }: { onNavigate: (path: string) =
                 <span className="block text-[10px] font-bold uppercase tracking-wider text-ink-dim leading-tight">
                   {s.label}
                 </span>
-                <span className="block text-xl font-bold text-ink mt-0.5 font-sans leading-none">
-                  {s.value !== undefined ? s.value.toLocaleString() : "—"}
+                <span className="block text-2xl sm:text-3xl font-bold text-ink mt-1 font-sans leading-none tabular-nums">
+                  {typeof s.value === "number" ? s.value.toLocaleString() : "—"}
                 </span>
               </div>
             </div>
@@ -250,7 +249,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (path: string) =
                   <Bar
                     dataKey="count"
                     fill="url(#colorAcquisitions)"
-                    radius={[5, 5, 0, 0]}
+                    radius={[8, 8, 0, 0]}
                     maxBarSize={32}
                   />
                 </BarChart>
@@ -333,7 +332,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (path: string) =
                     </span>
                   </div>
                   {/* Gradient progress track */}
-                  <div className="h-1.5 w-full bg-[#eef3f9] rounded-full overflow-hidden">
+                  <div className="h-1.5 w-full bg-badge-greyBg rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full bg-gradient-to-r from-ursb to-emerald-400 transition-all duration-500 motion-reduce:transition-none"
                       style={{ width: `${Math.min(c.pct, 100)}%` }}
@@ -357,7 +356,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (path: string) =
             </div>
             <div className="flex flex-col gap-4">
               {/* Stacked horizontal bar chart */}
-              <div className="h-4 w-full bg-[#eef3f9] rounded-lg overflow-hidden flex shadow-inner">
+              <div className="h-4 w-full bg-badge-greyBg rounded-lg overflow-hidden flex shadow-inner">
                 {data.departments.map((d, idx) => {
                   const pct = (d.assets / totalDeptAssets) * 100;
                   return (

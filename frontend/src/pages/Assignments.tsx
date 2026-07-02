@@ -203,20 +203,13 @@ export default function Assignments() {
     },
     {
       header: "Assignment Date",
-      render: (a) => new Date(a.assignment_date).toLocaleDateString(),
+      render: (a) =>
+        a.assigned_date ? new Date(a.assigned_date).toLocaleDateString() : "—",
     },
     {
       header: "Return Date",
       render: (a) =>
-        a.return_date ? (
-          new Date(a.return_date).toLocaleDateString()
-        ) : a.expected_return_date ? (
-          <span className="text-ink-dim italic">
-            Due: {new Date(a.expected_return_date).toLocaleDateString()}
-          </span>
-        ) : (
-          "—"
-        ),
+        a.return_date ? new Date(a.return_date).toLocaleDateString() : "—",
     },
     {
       header: "Status",
@@ -334,7 +327,7 @@ export default function Assignments() {
           />
 
           <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
-            <Button type="button" variant="secondary" onClick={handleCloseModal}>
+            <Button type="button" variant="ghost" onClick={handleCloseModal}>
               Cancel
             </Button>
             <Button

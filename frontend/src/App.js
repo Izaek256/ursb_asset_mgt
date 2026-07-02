@@ -2,7 +2,7 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import React from "react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import AppLayout from "./components/AppLayout";
-import AdminUsers from "./pages/AdminUsers";
+import UserManagement from "./pages/UserManagement";
 import AuditLogs from "./pages/AuditLogs";
 import Assets from "./pages/Assets";
 import AssetDetail from "./pages/AssetDetail";
@@ -73,14 +73,14 @@ function AppShell() {
             case "/admin/audit-logs":
                 return _jsx(AuditLogs, {});
             case "/admin/users":
-                return _jsx(AdminUsers, {});
+                return _jsx(UserManagement, {});
             case "/settings":
                 return _jsx(Settings, {});
             default:
                 return _jsx(Dashboard, { onNavigate: navigate });
         }
     };
-    return (_jsx(AppLayout, { pageTitle: getPageTitle(), activePath: path, onNavigate: navigate, children: renderContent() }));
+    return (_jsx("div", { className: "h-screen overflow-hidden", children: _jsx(AppLayout, { pageTitle: getPageTitle(), activePath: path, onNavigate: navigate, children: renderContent() }) }));
 }
 function AppRoot() {
     const { user, isInitialLoading } = useAuth();

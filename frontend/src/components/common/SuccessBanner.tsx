@@ -1,4 +1,5 @@
 import { ICONS } from "../../utils/icons";
+import Button from "./Button";
 
 export type Props = {
   message: string;
@@ -13,27 +14,15 @@ export default function SuccessBanner({ message, onDismiss }: Props) {
         <span className="font-medium">{message}</span>
       </div>
       {onDismiss && (
-        <button
+        <Button
           type="button"
+          variant="icon"
+          className="w-8 h-8 border-none bg-transparent shadow-none hover:shadow-none text-emerald-400 hover:text-emerald-200 hover:bg-emerald-500/10"
           onClick={onDismiss}
-          className="text-emerald-400 hover:text-emerald-200 hover:bg-emerald-500/10 p-1.5 rounded-lg transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
           aria-label="Dismiss banner"
         >
-          {/* Simple X close representation */}
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
+          <ICONS.close className="w-4 h-4 stroke-[2.4]" />
+        </Button>
       )}
     </div>
   );

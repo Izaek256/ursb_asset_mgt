@@ -7,6 +7,8 @@ interface SidebarProps {
   onToggleCollapse: () => void;
   activePath: string;
   onNavigate: (path: string) => void;
+  pinned?: "inline" | "overlay";
+  className?: string;
 }
 
 const ALL_ROLES = [
@@ -34,6 +36,8 @@ export default function Sidebar({
   onToggleCollapse,
   activePath,
   onNavigate,
+  pinned = "inline",
+  className = "",
 }: SidebarProps) {
   const { user } = useAuth();
 
@@ -50,14 +54,19 @@ export default function Sidebar({
     n.roles.some((r) => user?.role?.toLowerCase().includes(r.toLowerCase()))
   );
 
+  const pinClasses =
+    pinned === "overlay"
+      ? "fixed top-0 left-0 h-screen"
+      : "sticky top-0 h-screen flex-shrink-0 overflow-hidden";
+
   return (
     <aside
-      className={`fixed md:sticky top-0 left-0 h-screen z-40 flex flex-col bg-gradient-to-b from-sky-sidebarTop to-sky-sidebarBot border-r border-sky-border py-5 px-3 transition-all duration-350 ease-in-out shrink-0 select-none motion-reduce:transition-none ${
+      className={`${pinClasses} z-40 flex flex-col p-4 gap-4 bg-gradient-to-b from-sky-sidebarTop to-sky-sidebarBot border-r border-sky-border transition-all duration-350 ease-in-out select-none motion-reduce:transition-none ${
         collapsed ? "w-20" : "w-[250px]"
-      }`}
+      } ${className}`}
     >
-      <div className="flex items-center gap-2.5 px-2 pb-5 select-none">
-        <div className="w-10 h-10 min-w-10 rounded-xl bg-gradient-to-br from-ursb to-ursb-dark flex items-center justify-center text-white font-bold text-base shadow-lg shadow-ursb/35 pointer-events-none">
+      <div className="flex items-center gap-2.5 select-none">
+        <div className="w-10 h-10 min-w-10 rounded-xl bg-gradient-to-br from-ursb to-ursb-dark flex items-center justify-center text-white font-bold text-base shadow-xl shadow-ursb/40 pointer-events-none">
           U
         </div>
         <div
@@ -71,14 +80,14 @@ export default function Sidebar({
       </div>
 
       <div
-        className={`text-[10px] font-bold tracking-widest text-ink-dim uppercase mx-2.5 my-2 transition-opacity duration-200 select-none ${
-          collapsed ? "opacity-0 h-0 my-0 overflow-hidden" : "opacity-100"
+        className={`text-[10px] font-bold tracking-widest text-ink-dim uppercase transition-opacity duration-200 select-none ${
+          collapsed ? "opacity-0 h-0 overflow-hidden" : "opacity-100"
         }`}
       >
         Main Menu
       </div>
 
-      <nav className="flex-1 flex flex-col gap-0.5 overflow-y-auto px-1 select-none scrollbar-thin scrollbar-thumb-sky-border/30 scrollbar-track-transparent">
+      <nav className="flex-1 min-h-0 flex flex-col gap-1 overflow-y-auto select-none scrollbar-thin scrollbar-thumb-sky-border/30 scrollbar-track-transparent">
         {visibleNav.map((item) => {
           const isActive =
             activePath === item.path ||
@@ -111,8 +120,8 @@ export default function Sidebar({
         })}
       </nav>
 
-      <div className="select-none mt-auto">
-        <div className="h-px bg-white/55 my-3 mx-1" />
+      <div className="flex flex-col gap-4 select-none shrink-0">
+        <hr className="border-sky-200/40 my-2" />
 
         <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/60 shadow-sm">
           <div className="w-9 h-9 min-w-9 rounded-full bg-gradient-to-br from-ursb to-ursb-dark text-white flex items-center justify-center text-xs font-bold pointer-events-none">
@@ -136,7 +145,7 @@ export default function Sidebar({
           variant="ghost"
           fullWidth
           onClick={onToggleCollapse}
-          className="mt-2.5 border-dashed justify-start gap-2 text-xs text-ink-dim"
+          className="border-dashed justify-start gap-2 text-xs text-ink-dim"
         >
           <ICONS.chevronLeft
             className={`w-4 h-4 transition-transform duration-350 shrink-0 motion-reduce:transition-none ${

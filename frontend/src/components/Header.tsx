@@ -76,7 +76,7 @@ export default function Header({ pageTitle, onLogout, onToggleMobileSidebar }: H
   };
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between px-5 sm:px-8 py-5 bg-sky-topbar border-b border-sky-cardBorder select-none">
+    <header className="sticky top-0 z-30 shrink-0 flex items-center justify-between px-5 sm:px-8 py-5 bg-sky-topbar/95 backdrop-blur-sm border-b border-sky-cardBorder select-none">
       <div className="flex items-center select-none min-w-0">
         {onToggleMobileSidebar && (
           <Button
@@ -86,9 +86,7 @@ export default function Header({ pageTitle, onLogout, onToggleMobileSidebar }: H
             title="Open Menu"
             aria-label="Open menu"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
+            <ICONS.menu className="w-5 h-5 stroke-[2.4]" />
           </Button>
         )}
         <div className="flex flex-col min-w-0">

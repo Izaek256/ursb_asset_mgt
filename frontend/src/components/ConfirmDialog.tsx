@@ -1,4 +1,4 @@
-import React, { Fragment } from "react";
+import { Fragment } from "react";
 import { Dialog, Transition } from "@headlessui/react";
 import Button from "./common/Button";
 
@@ -58,12 +58,12 @@ export default function ConfirmDialog({
                   <p className="text-xs sm:text-sm text-ink-dim/95 leading-relaxed">{message}</p>
                 </div>
                 <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4">
-                  <Button type="button" variant="secondary" onClick={onCancel}>
+                  <Button type="button" variant="ghost" onClick={onCancel}>
                     Cancel
                   </Button>
                   <Button
                     type="button"
-                    variant="danger"
+                    variant="danger-outline"
                     onClick={onConfirm}
                     isLoading={isLoading}
                   >
