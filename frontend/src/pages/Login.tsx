@@ -35,6 +35,21 @@ export default function LoginPage() {
   const [success, setSuccess] = React.useState<string | null>(null);
   const [isSigningUp, setIsSigningUp] = React.useState(false);
 
+  const [isDeactivated, setIsDeactivated] = React.useState(false);
+  const [postAuthMessage, setPostAuthMessage] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("deactivated") === "true") {
+      setIsDeactivated(true);
+    }
+    const message = sessionStorage.getItem("post_auth_message");
+    if (message) {
+      setPostAuthMessage(message);
+      sessionStorage.removeItem("post_auth_message"); // Remove after display so it does not reappear on refresh
+    }
+  }, []);
+
   const switchMode = (m: AuthMode) => {
     setMode(m);
     setError(null);
@@ -60,6 +75,7 @@ export default function LoginPage() {
       setError("Please fill in all fields.");
       return;
     }
+
     if (signupPassword.length < 8) {
       setError("Password must be at least 8 characters.");
       return;
@@ -130,6 +146,8 @@ export default function LoginPage() {
           </button>
         </div>
 
+        {isDeactivated && <div className="alert-error">Your account has been deactivated. Contact your administrator.</div>}
+        {postAuthMessage && <div className="alert-info">{postAuthMessage}</div>}
         {error && <div className="alert-error">{error}</div>}
         {success && <div className="alert-success">{success}</div>}
 

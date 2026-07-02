@@ -88,6 +88,11 @@ from app.api.v1.routes_dashboard import router as dashboard_router
 from app.api.v1.routes_admin import router as admin_router
 from app.api.v1.routes_assets import router as assets_router
 from app.api.v1.routes_transfers import router as transfers_router
+from app.api.v1.routes_requests import router as requests_router
+from app.api.v1.routes_assignments import router as assignments_router
+from app.api.v1.routes_storage import router as storage_router
+from app.api.v1.routes_maintenance import router as maintenance_router
+from app.api.v1.routes_settings import router as settings_router
 from app.middleware.auth_middleware import AuthMiddleware
 
 app.include_router(auth_router, prefix="/api/v1")
@@ -95,6 +100,11 @@ app.include_router(dashboard_router)   # prefix: /api/v1/dashboard
 app.include_router(admin_router)       # prefix: /api/v1/admin
 app.include_router(assets_router)      # prefix: /api/v1/assets
 app.include_router(transfers_router)   # prefix: /api/v1/transfers
+app.include_router(requests_router)    # prefix: /api/v1/requests
+app.include_router(assignments_router)
+app.include_router(storage_router)
+app.include_router(maintenance_router)
+app.include_router(settings_router)    # prefix: /api/v1/settings
 app.add_middleware(AuthMiddleware)
 
 

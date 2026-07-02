@@ -1,13 +1,18 @@
+def auth_check(request: Request) -> dict[str, object]:
+def protected_route(request: Request) -> dict[str, str]:
 import os
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.models.session import Session as UserSession
 from app.models.user import User
 from app.schemas import AuthStatusResponse, LoginRequest, LoginResponse, SignupRequest
 from app.services.auth import (
     SESSION_COOKIE_NAME,
-    authenticate_user,
+    create_password_hash,
     create_session,
     create_user,
     delete_session,
@@ -17,10 +22,17 @@ from app.services.auth import (
     is_account_locked,
     register_failed_login_attempt,
     reset_failed_login_attempts,
+    validate_ursb_email,
     verify_password,
 )
 
 router = APIRouter()
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+    confirm_new_password: str
 
 
 def _cookie_settings(request: Request) -> dict:
@@ -34,7 +46,6 @@ def _cookie_settings(request: Request) -> dict:
     }
 
 
-# ── FastAPI Dependencies ─────────────────────────────────────────────────────────
 def get_current_user(
     request: Request,
     db: Session = Depends(get_db),
@@ -46,8 +57,7 @@ def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
         )
-    
-    # Re-query user to avoid detached instance issues and ensure fresh data
+
     db_user = db.query(User).filter(User.user_id == user.user_id).first()
     if db_user is None or not db_user.is_active:
         raise HTTPException(
@@ -66,15 +76,17 @@ def require_roles(*allowed_roles: str):
                 detail=f"Role '{current_user.role.value}' is not authorized for this action",
             )
         return current_user
+
     return _checker
 
 
-# ── Endpoints ────────────────────────────────────────────────────────────────────
 @router.post("/signup", response_model=LoginResponse)
 def signup(
     payload: SignupRequest,
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
+    validate_ursb_email(payload.email)
+
     if payload.password != payload.confirm_password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -183,3 +195,107 @@ def protected_route(request: Request) -> dict[str, str]:
         "message": "Protected route accessed",
         "email": getattr(user, "email", "unknown"),
     }
+
+
+@router.put("/password")
+def change_password(
+    payload: PasswordChangeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    if payload.new_password != payload.confirm_new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New passwords do not match",
+        )
+
+    if not verify_password(
+        payload.current_password,
+        current_user.password_salt,
+        current_user.password_hash,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+
+    salt, password_hash = create_password_hash(payload.new_password)
+    current_user.password_salt = salt
+    current_user.password_hash = password_hash
+
+    db.query(UserSession).filter(UserSession.user_id == current_user.user_id).delete()
+    db.commit()
+
+    return {"message": "Password changed successfully. Please log in with your new password."}
+
+
+@router.put("/password")
+def change_password(
+    body: PasswordChangeRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Change the current user's password. Requires authentication (all roles)."""
+
+    # Validate current password
+    if not verify_password(body.current_password, current_user.password_salt, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect"
+        )
+
+    # Validate new passwords match
+    if body.new_password != body.confirm_new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New passwords do not match"
+        )
+
+    # Validate password complexity: min 8 chars, at least one uppercase, one digit, one special character
+    if len(body.new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password does not meet requirements: minimum 8 characters"
+        )
+    if not re.search(r'[A-Z]', body.new_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password does not meet requirements: at least one uppercase letter"
+        )
+    if not re.search(r'\d', body.new_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password does not meet requirements: at least one digit"
+        )
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>]', body.new_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password does not meet requirements: at least one special character"
+        )
+
+    # Hash new password
+    salt, password_hash = create_password_hash(body.new_password)
+    current_user.password_hash = password_hash
+    current_user.password_salt = salt
+
+    # Invalidate all sessions for this user
+    db.query(Session).filter(Session.user_id == current_user.user_id).delete()
+
+    # Write audit log for password change
+    audit = AuditLog(
+        user_id=current_user.user_id,
+        action="CHANGE_PASSWORD",
+        table_affected="users",
+        record_id=current_user.user_id,
+        details=f"Password changed for user {current_user.email}",
+        timestamp=datetime.utcnow(),
+    )
+    db.add(audit)
+    db.commit()
+
+    # Clear session cookie
+    response.delete_cookie(SESSION_COOKIE_NAME, path="/")
+
+    return {"message": "Password changed successfully. Please log in again."}

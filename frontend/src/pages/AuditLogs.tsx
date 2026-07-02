@@ -1,21 +1,20 @@
 import React from "react";
 import { AuditLog } from "../types";
-import { apiFetch, useAuth } from "../AuthContext";
+import { apiFetch } from "../AuthContext";
 
 export default function AuditLogs() {
-  const { token } = useAuth();
   const [logs, setLogs] = React.useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
 
   React.useEffect(() => {
     let cancelled = false;
     setIsLoading(true);
-    apiFetch<AuditLog[]>("/admin/audit-logs", {}, token)
+    apiFetch<AuditLog[]>("/admin/audit-logs", {})
       .then((data) => { if (!cancelled) setLogs(data); })
       .catch(() => { if (!cancelled) setLogs([]); })
       .finally(() => { if (!cancelled) setIsLoading(false); });
     return () => { cancelled = true; };
-  }, [token]);
+  }, []);
 
   if (isLoading) {
     return (

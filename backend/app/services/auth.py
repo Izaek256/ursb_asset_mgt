@@ -4,6 +4,7 @@ import secrets
 from datetime import datetime, timedelta
 from typing import Optional
 
+from fastapi import HTTPException
 from sqlalchemy.orm import Session as DbSession
 
 from app.models import User, Session as SessionModel, UserRole
@@ -13,6 +14,19 @@ SESSION_DURATION = timedelta(days=1)
 HASH_ITERATIONS = 200_000
 SALT_SIZE = 32
 HASH_ALGORITHM = "sha256"
+
+
+def validate_ursb_email(email: str) -> None:
+    """
+    Validate that the email address ends with @ursb.go.ug.
+    This enforces the institutional email restriction for URSB employees.
+    Raises HTTPException if the domain does not match.
+    """
+    if not email.lower().endswith("@ursb.go.ug"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only @ursb.go.ug email addresses are permitted"
+        )
 
 
 def hash_password(password: str, salt: str) -> str:

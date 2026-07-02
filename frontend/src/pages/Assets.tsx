@@ -110,6 +110,7 @@ export default function Assets() {
               <th>Cost (UGX)</th>
               <th>Department</th>
               <th>Acquired</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -131,6 +132,22 @@ export default function Assets() {
                 <td>{a.cost.toLocaleString()}</td>
                 <td>{a.department ?? "—"}</td>
                 <td className="text-small">{a.acquisition_date}</td>
+                <td>
+                  <button
+                    className="btn btn-sm btn-secondary"
+                    onClick={() => {
+                      window.history.pushState({}, "", `/assets/${a.asset_id}`);
+                      window.dispatchEvent(new PopStateEvent('popstate'));
+                    }}
+                    style={{
+                      border: "2px solid #ef4444",
+                      color: "#ef4444",
+                      background: "white",
+                    }}
+                  >
+                    View
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
