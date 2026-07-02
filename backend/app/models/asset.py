@@ -67,6 +67,9 @@ class Asset(Base):
         nullable=False,
         default=AssetStatus.ACTIVE,
     )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
+    )
     source_type: Mapped[SourceType] = mapped_column(
         Enum(SourceType, native_enum=False, length=50), nullable=False
     )
