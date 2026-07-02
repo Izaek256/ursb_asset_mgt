@@ -32,7 +32,6 @@ export default function Transfers() {
   // Dropdown data state
   const [assets, setAssets] = React.useState<StorageAsset[]>([]);
   const [users, setUsers] = React.useState<UserRow[]>([]);
-  const [isLoadingDropdowns, setIsLoadingDropdowns] = React.useState(false);
 
   // Acknowledge dialog state
   const [acknowledgeDialog, setAcknowledgeDialog] = React.useState<{ open: boolean; transferId: number | null }>({
@@ -66,7 +65,6 @@ export default function Transfers() {
   React.useEffect(() => {
     if (showCreateModal && assets.length === 0) {
       const loadDropdownData = async () => {
-        setIsLoadingDropdowns(true);
         try {
           const [assetsData, usersData] = await Promise.all([
             apiFetch<StorageAsset[]>("/assets"),
@@ -78,8 +76,6 @@ export default function Transfers() {
           setUsers(usersData || []);
         } catch (err: any) {
           console.error("Failed to load dropdown data:", err);
-        } finally {
-          setIsLoadingDropdowns(false);
         }
       };
       loadDropdownData();

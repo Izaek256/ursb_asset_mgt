@@ -1,5 +1,5 @@
 import React from "react";
-import { apiFetch, useAuth } from "../AuthContext";
+import { apiFetch } from "../AuthContext";
 
 interface AssetRow {
   asset_id: string;
@@ -26,7 +26,6 @@ const STATUS_CLASS: Record<string, string> = {
 };
 
 export default function Assets() {
-  const { token } = useAuth();
   const [assets, setAssets] = React.useState<AssetRow[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [statusFilter, setStatusFilter] = React.useState("All");
@@ -42,13 +41,13 @@ export default function Assets() {
     if (typeFilter !== "All") params.set("asset_type", typeFilter);
     if (search) params.set("search", search);
 
-    apiFetch<AssetRow[]>(`/assets?${params.toString()}`, {}, token)
+    apiFetch<AssetRow[]>(`/assets?${params.toString()}`, {})
       .then((data) => { if (!cancelled) setAssets(data); })
       .catch(() => { if (!cancelled) setAssets([]); })
       .finally(() => { if (!cancelled) setIsLoading(false); });
 
     return () => { cancelled = true; };
-  }, [token, statusFilter, typeFilter, search]);
+  }, [statusFilter, typeFilter, search]);
 
   if (isLoading) {
     return <div className="page-loading">Loading assets...</div>;

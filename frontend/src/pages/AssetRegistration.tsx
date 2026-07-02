@@ -1,5 +1,5 @@
 import React from "react";
-import { apiFetch, useAuth } from "../AuthContext";
+import { apiFetch } from "../AuthContext";
 
 const ASSET_TYPES = ["ICT Equipment", "Furniture", "Vehicle", "Software", "Other"];
 const CONDITIONS = ["New", "Good", "Refurbished", "Damaged"];
@@ -35,7 +35,6 @@ const INITIAL: FormState = {
 };
 
 export default function AssetRegistration() {
-  const { token } = useAuth();
   const [form, setForm] = React.useState<FormState>(INITIAL);
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
@@ -72,7 +71,7 @@ export default function AssetRegistration() {
           supplier: form.supplier.trim(),
           source_type: form.source_type,
         }),
-      }, token);
+      });
 
       // Success — navigate back to assets list
       window.history.pushState({}, "", "/assets");

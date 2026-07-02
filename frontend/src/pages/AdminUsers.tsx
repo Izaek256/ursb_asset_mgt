@@ -11,7 +11,7 @@ const DEPARTMENTS = ["ICT", "Finance & Administration", "Legal", "Registry", "Hu
 type ModalMode = null | "create" | "edit";
 
 export default function AdminUsers() {
-  const { token, user: currentUser } = useAuth();
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = React.useState<UserRow[]>([]);
   const [filter, setFilter] = React.useState<Role | "All">("All");
   const [search, setSearch] = React.useState("");
@@ -45,11 +45,11 @@ export default function AdminUsers() {
   const fetchUsers = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await apiFetch<UserRow[]>("/admin/users", {}, token);
+      const data = await apiFetch<UserRow[]>("/admin/users", {});
       setUsers(data);
     } catch { setUsers([]); }
     finally { setIsLoading(false); }
-  }, [token]);
+  }, []);
 
   React.useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
@@ -59,7 +59,7 @@ export default function AdminUsers() {
   const applyRoleChange = async () => {
     if (!editing || !pendingNewRole) return;
     try {
-      const res = await apiFetch<{ message: string }>(`/admin/users/${editing.id}/role`, { method: "PUT", body: JSON.stringify({ role: pendingNewRole }) }, token);
+      const res = await apiFetch<{ message: string }>(`/admin/users/${editing.id}/role`, { method: "PUT", body: JSON.stringify({ role: pendingNewRole }) });
       flash(res.message);
       await fetchUsers();
     } catch (err: any) { flashErr(err.message || "Failed to update role"); }
@@ -88,7 +88,7 @@ export default function AdminUsers() {
         await apiFetch<UserRow>("/admin/users", {
           method: "POST",
           body: JSON.stringify({ full_name: formName, email: formEmail, password: formPassword, role: formRole, department: formDept }),
-        }, token);
+        });
         flash(`User '${formName}' created successfully.`);
       } else if (modalMode === "edit" && editing) {
         const payload: Record<string, string> = {};
@@ -100,7 +100,7 @@ export default function AdminUsers() {
         await apiFetch<UserRow>(`/admin/users/${editing.id}`, {
           method: "PUT",
           body: JSON.stringify(payload),
-        }, token);
+        });
         flash(`User '${formName}' updated successfully.`);
       }
       closeForm();
@@ -114,7 +114,7 @@ export default function AdminUsers() {
     if (!statusAction) return;
     try {
       const endpoint = statusAction.action === "deactivate" ? "deactivate" : "reactivate";
-      await apiFetch<UserRow>(`/admin/users/${statusAction.user.id}/${endpoint}`, { method: "PUT" }, token);
+      await apiFetch<UserRow>(`/admin/users/${statusAction.user.id}/${endpoint}`, { method: "PUT" });
       flash(`User '${statusAction.user.name}' ${statusAction.action === "deactivate" ? "deactivated" : "reactivated"} successfully.`);
       await fetchUsers();
     } catch (err: any) { flashErr(err.message || "Operation failed."); }
