@@ -103,6 +103,8 @@ def create_user(
         password_hash=password_hash,
         password_salt=salt,
     )
+    if full_name is not None:
+        user.full_name = full_name
     db.add(user)
     db.commit()
     db.refresh(user)
