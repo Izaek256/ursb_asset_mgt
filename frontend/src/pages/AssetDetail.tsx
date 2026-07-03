@@ -1,4 +1,5 @@
 import React from "react";
+import Button from "../components/common/Button";
 import { apiFetch, useAuth } from "../AuthContext";
 import type { AssetDetail } from "../types";
 import ConfirmDialog from "../components/ConfirmDialog";
@@ -269,69 +270,33 @@ export default function AssetDetail() {
           {canEdit && (
             <>
               {asset.is_active ? (
-                <button
+                <Button
+                  variant="danger-outline"
                   onClick={() => setShowDeactivateDialog(true)}
-                  style={{
-                    padding: "10px 16px",
-                    borderRadius: "8px",
-                    border: "1px solid #e2e8f0",
-                    background: "white",
-                    color: "#475569",
-                    cursor: "pointer",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                  }}
                 >
                   Deactivate
-                </button>
+                </Button>
               ) : (
-                <button
+                <Button
+                  variant="success"
                   onClick={handleReactivate}
-                  style={{
-                    padding: "10px 16px",
-                    borderRadius: "8px",
-                    border: "1px solid #e2e8f0",
-                    background: "white",
-                    color: "#475569",
-                    cursor: "pointer",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                  }}
                 >
                   Reactivate
-                </button>
+                </Button>
               )}
-              <button
+              <Button
+                variant={isEditing ? "danger-outline" : "primary"}
                 onClick={() => setIsEditing(!isEditing)}
-                style={{
-                  padding: "10px 16px",
-                  borderRadius: "8px",
-                  border: "none",
-                  background: "#3b82f6",
-                  color: "white",
-                  cursor: "pointer",
-                  fontSize: "14px",
-                  fontWeight: "500",
-                }}
               >
                 {isEditing ? "Cancel" : "Edit Asset"}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="danger-outline"
                 onClick={() => setShowDisposeDialog(true)}
                 disabled={asset.status === "Disposed"}
-                style={{
-                  padding: "10px 16px",
-                  borderRadius: "8px",
-                  border: "none",
-                  background: asset.status === "Disposed" ? "#cbd5e1" : "#ef4444",
-                  color: "white",
-                  cursor: asset.status === "Disposed" ? "not-allowed" : "pointer",
-                  fontSize: "14px",
-                  fontWeight: "500",
-                }}
               >
                 Dispose Asset
-              </button>
+              </Button>
             </>
           )}
         </div>

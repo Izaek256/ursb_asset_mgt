@@ -1,6 +1,7 @@
 import { useAuth } from "../AuthContext";
 import { ICONS } from "../utils/icons";
 import Button from "./common/Button";
+import logoImg from "../assets/logo 1.jpeg";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -66,8 +67,8 @@ export default function Sidebar({
       } ${className}`}
     >
       <div className="flex items-center gap-2.5 select-none">
-        <div className="w-10 h-10 min-w-10 rounded-xl bg-gradient-to-br from-ursb to-ursb-dark flex items-center justify-center text-white font-bold text-base shadow-xl shadow-ursb/40 pointer-events-none">
-          U
+        <div className="w-10 h-10 min-w-[40px] rounded-xl bg-white flex items-center justify-center shadow-lg pointer-events-none p-1">
+          <img src={logoImg} alt="URSB Logo" className="w-full h-full object-contain" />
         </div>
         <div
           className={`flex flex-col overflow-hidden whitespace-nowrap transition-all duration-200 motion-reduce:transition-none ${
@@ -145,7 +146,7 @@ export default function Sidebar({
           variant="ghost"
           fullWidth
           onClick={onToggleCollapse}
-          className="border-dashed justify-start gap-2 text-xs text-ink-dim"
+          className="border-dashed justify-start gap-2 text-xs text-ink-dim focus:outline-none focus:ring-0 focus:ring-offset-0"
         >
           <ICONS.chevronLeft
             className={`w-4 h-4 transition-transform duration-350 shrink-0 motion-reduce:transition-none ${

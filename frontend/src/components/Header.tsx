@@ -100,19 +100,15 @@ export default function Header({ pageTitle, onLogout, onToggleMobileSidebar }: H
       </div>
 
       <div className="flex items-center gap-2.5 shrink-0">
-        <Button variant="icon" title="Search" aria-label="Search">
-          <ICONS.search className="w-4 h-4 stroke-[2.4]" />
-        </Button>
+
 
         <Popover className="relative">
           {() => (
             <>
               <Popover.Button
-                as={Button}
-                variant="icon"
+                className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-white text-ink-dim border-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-ursb/30"
                 title="Notifications"
                 aria-label="Notifications"
-                className="relative"
               >
                 <ICONS.bell className="w-4 h-4 stroke-[2.4]" />
                 {unreadCount > 0 && (
@@ -175,7 +171,7 @@ export default function Header({ pageTitle, onLogout, onToggleMobileSidebar }: H
           )}
         </Popover>
 
-        <Button variant="ghost" onClick={onLogout}>
+        <Button variant="danger-inverse" onClick={onLogout}>
           Sign out
         </Button>
       </div>

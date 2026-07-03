@@ -560,7 +560,7 @@ export default function Requests() {
           />
 
           <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
-            <Button type="button" variant="ghost" onClick={handleCloseSubmitModal}>
+            <Button type="button" variant="danger-outline" onClick={handleCloseSubmitModal}>
               Cancel
             </Button>
             <Button
@@ -622,7 +622,7 @@ export default function Requests() {
           />
 
           <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
-            <Button type="button" variant="ghost" onClick={handleCloseRejectModal}>
+            <Button type="button" variant="danger-outline" onClick={handleCloseRejectModal}>
               Cancel
             </Button>
             <Button
@@ -659,7 +659,7 @@ export default function Requests() {
           />
 
           <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
-            <Button type="button" variant="ghost" onClick={handleCloseAssignModal}>
+            <Button type="button" variant="danger-outline" onClick={handleCloseAssignModal}>
               Cancel
             </Button>
             <Button
@@ -695,3 +695,4 @@ export default function Requests() {
     </div>
   );
 }
+

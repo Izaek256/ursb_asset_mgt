@@ -1,7 +1,7 @@
 import React from "react";
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "outline" | "danger-outline" | "ghost" | "icon" | "nav";
+  variant?: "primary" | "auth" | "outline" | "danger-outline" | "danger-inverse" | "success" | "ghost" | "icon" | "nav";
   fullWidth?: boolean;
   isLoading?: boolean;
   active?: boolean;
@@ -18,26 +18,32 @@ export default function Button({
   ...props
 }: ButtonProps) {
   const baseStyle =
-    "inline-flex items-center justify-center font-bold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-95 motion-reduce:transform-none motion-reduce:transition-none cursor-pointer select-none";
+    "flex items-center justify-center font-bold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-95 motion-reduce:transform-none motion-reduce:transition-none cursor-pointer select-none whitespace-nowrap";
 
   const variants = {
-    primary:
+    auth:
       "rounded-xl py-3 px-5 text-sm bg-gradient-to-br from-ursb to-ursb-dark text-white border-none shadow-lg shadow-ursb/30 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-ursb/40 focus:ring-ursb/50",
+    primary:
+      "rounded-xl py-2 px-4 text-sm bg-[#6a94d4] text-white border-none transition-colors duration-150 hover:bg-[#f9f8f6] hover:text-[#6a94d4] focus:ring-[#6a94d4]/50",
     outline:
-      "rounded-lg py-2 px-4 text-xs bg-gradient-to-br from-ursb to-ursb-dark text-white border border-ursb shadow-md shadow-ursb/25 hover:bg-white hover:text-ursb-dark hover:border-ursb hover:-translate-y-0.5 hover:shadow-lg hover:shadow-ursb/30 focus:ring-ursb/50",
+      "rounded-xl py-2 px-4 text-sm bg-white text-[#6a94d4] border-2 border-[#6a94d4] transition-colors duration-150 hover:bg-[#6a94d4] hover:text-white focus:ring-[#6a94d4]/50",
     "danger-outline":
-      "rounded-lg py-2 px-4 text-xs bg-white text-badge-roseText border border-badge-roseText/30 hover:bg-badge-roseBg hover:border-badge-roseText hover:-translate-y-0.5 hover:shadow-md focus:ring-badge-roseText/40",
+      "rounded-xl py-2 px-4 text-sm bg-red-500 text-white border-none transition-colors duration-150 hover:bg-white hover:text-red-500 focus:ring-red-500/50",
+    "danger-inverse":
+      "rounded-xl py-2 px-4 text-sm bg-white text-red-500 border-none transition-colors duration-150 hover:bg-red-500 hover:text-white focus:ring-red-500/50",
+    success:
+      "rounded-xl py-2 px-4 text-sm bg-white text-emerald-500 border-none transition-colors duration-150 hover:bg-emerald-500 hover:text-white focus:ring-emerald-500/50",
     ghost:
-      "rounded-xl py-2.5 px-4 text-sm bg-sky-topbar text-ink border border-sky-cardBorder hover:bg-white hover:text-ursb hover:-translate-y-0.5 hover:shadow-md hover:shadow-ursb/15 focus:ring-ursb/30",
+      "rounded-xl py-2 px-4 text-sm bg-[#6a94d4] text-white border-none transition-colors duration-150 hover:bg-[#f9f8f6] hover:text-[#6a94d4] focus:ring-[#6a94d4]/50",
     icon:
-      "w-10 h-10 rounded-xl bg-sky-topbar text-ink-dim border border-sky-cardBorder hover:bg-white hover:text-ursb hover:-translate-y-0.5 hover:shadow-md hover:shadow-ursb/15 focus:ring-ursb/30 p-0",
+      "w-10 h-10 rounded-xl bg-[#6a94d4] text-white border-none transition-colors duration-150 hover:bg-[#f9f8f6] hover:text-[#6a94d4] focus:ring-[#6a94d4]/50 p-0",
     nav:
-      "w-full rounded-xl py-2.5 px-3 text-sm text-left gap-3 text-ink bg-transparent border-none shadow-none hover:bg-white hover:text-ursb-dark hover:shadow-lg hover:shadow-ursb/20 hover:-translate-y-0.5 focus:ring-ursb/30",
+      "w-full rounded-xl py-2.5 px-3 text-sm gap-3 text-ink bg-transparent border-none shadow-none hover:bg-white hover:text-ursb-dark focus:outline-none focus:ring-0 focus:ring-offset-0 !justify-start",
   };
 
   const activeNav =
     variant === "nav" && active
-      ? "bg-white text-ursb-dark shadow-xl shadow-ursb/25 -translate-y-0.5 border border-white/80"
+      ? "bg-white text-ursb-dark shadow-sm border-none"
       : "";
 
   const widthStyle = fullWidth ? "w-full" : "";

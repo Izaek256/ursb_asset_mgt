@@ -58,12 +58,15 @@ export default function ConfirmDialog({
                   <p className="text-xs sm:text-sm text-ink-dim/95 leading-relaxed">{message}</p>
                 </div>
                 <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4">
-                  <Button type="button" variant="ghost" onClick={onCancel}>
+                  <Button
+                    variant="danger-outline"
+                    onClick={onCancel}
+                    disabled={isLoading}
+                  >
                     Cancel
                   </Button>
                   <Button
-                    type="button"
-                    variant="danger-outline"
+                    variant="success"
                     onClick={onConfirm}
                     isLoading={isLoading}
                   >

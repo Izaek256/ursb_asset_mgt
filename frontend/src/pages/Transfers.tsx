@@ -368,7 +368,7 @@ export default function Transfers() {
           />
 
           <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
-            <Button type="button" variant="ghost" onClick={handleCreateModalClose}>
+            <Button type="button" variant="danger-outline" onClick={handleCreateModalClose}>
               Cancel
             </Button>
             <Button
@@ -402,3 +402,4 @@ export default function Transfers() {
     </div>
   );
 }
+

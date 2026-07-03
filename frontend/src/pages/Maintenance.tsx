@@ -323,11 +323,7 @@ export default function Maintenance() {
     },
     {
       header: "Description",
-      render: (r) => <span className="block max-w-xs truncate" title={r.description}>{r.description}</span>,
-    },
-    {
-      header: "Cost",
-      render: (r) => (r.cost ? `UGX ${r.cost.toLocaleString()}` : "—"),
+      render: (r) => <span className="block whitespace-normal break-words min-w-[200px] text-xs leading-relaxed" title={r.description}>{r.description}</span>,
     },
     {
       header: "Next Service",
@@ -480,7 +476,7 @@ export default function Maintenance() {
           />
 
           <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
-            <Button type="button" variant="ghost" onClick={handleCloseLogModal}>
+            <Button type="button" variant="danger-outline" onClick={handleCloseLogModal}>
               Cancel
             </Button>
             <Button
@@ -516,7 +512,7 @@ export default function Maintenance() {
           />
 
           <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
-            <Button type="button" variant="ghost" onClick={handleCloseScheduleModal}>
+            <Button type="button" variant="danger-outline" onClick={handleCloseScheduleModal}>
               Cancel
             </Button>
             <Button
@@ -552,3 +548,4 @@ export default function Maintenance() {
     </div>
   );
 }
+

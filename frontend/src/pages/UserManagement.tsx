@@ -292,7 +292,7 @@ export default function UserManagement() {
                 </select>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <Button variant="ghost" type="button" onClick={closeForm}>Cancel</Button>
+                <Button variant="danger-outline" type="button" onClick={closeForm}>Cancel</Button>
                 <Button type="submit" isLoading={formSubmitting}>
                   {modalMode === "create" ? "Create User" : "Save Changes"}
                 </Button>

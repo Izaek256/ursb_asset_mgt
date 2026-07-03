@@ -29,3 +29,6 @@ frontend/public/ursb-logo.svg
 frontend/src/assets/ursb-logo.svg
 *.db
 backend/ursb_asset.db
+skills-lock.json
+.agents/skills/frontend-design/LICENSE.txt
+.agents/skills/frontend-design/SKILL.md
