@@ -102,7 +102,6 @@ def create_user(
         role=role,
         password_hash=password_hash,
         password_salt=salt,
-        full_name=full_name,
     )
     db.add(user)
     db.commit()
