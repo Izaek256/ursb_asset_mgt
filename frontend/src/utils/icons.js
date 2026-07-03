@@ -1,4 +1,4 @@
-import { LayoutDashboard, ClipboardList, Package, Key, Archive, Repeat, Wrench, Users, History, Settings, Bell, Search, ChevronLeft, ChevronRight, ChevronDown, CheckCircle2, Trash2, Clock, Building2, Eye, EyeOff, Loader2, AlertCircle, AlertTriangle, X, Plus, Undo2, Menu, } from "lucide-react";
+import { LayoutDashboard, ClipboardList, Package, Key, Archive, Repeat, Wrench, Users, History, Settings, Bell, Search, ChevronLeft, ChevronRight, ChevronDown, CheckCircle2, Trash2, Clock, Building2, Eye, EyeOff, Loader2, AlertCircle, AlertTriangle, X, Plus, Undo2, Menu, FileText, FileSpreadsheet, } from "lucide-react";
 export const ICONS = {
     // Navigation / Pages
     dashboard: LayoutDashboard,
@@ -31,6 +31,8 @@ export const ICONS = {
     add: Plus,
     return: Undo2,
     menu: Menu,
+    fileText: FileText,
+    fileSpreadsheet: FileSpreadsheet,
     // Keep string mappings of emojis just in case any unmigrated files access them, 
     // though we will migrate all dashboard pages in this pass.
     dashboardEmoji: "📊",

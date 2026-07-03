@@ -27,6 +27,8 @@ import {
   Plus,
   Undo2,
   Menu,
+  FileText,
+  FileSpreadsheet,
 } from "lucide-react";
 
 export const ICONS = {
@@ -62,6 +64,8 @@ export const ICONS = {
   add: Plus,
   return: Undo2,
   menu: Menu,
+  fileText: FileText,
+  fileSpreadsheet: FileSpreadsheet,
 
   // Keep string mappings of emojis just in case any unmigrated files access them, 
   // though we will migrate all dashboard pages in this pass.
