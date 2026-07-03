@@ -12,6 +12,8 @@ import Button from "../components/common/Button";
 import PageHeader from "../components/PageHeader";
 import { ICONS } from "../utils/icons";
 import { CHART } from "../theme/chartColors";
+import excelIcon from "../assets/icons8-export-excel-50.png";
+import pdfIcon from "../assets/icons8-export-pdf-50.png";
 
 interface AssetRow {
   asset_id: string;
@@ -267,11 +269,11 @@ export default function Assets() {
                             fullWidth
                             disabled={isExporting}
                             onClick={() => void handleExport("pdf")}
-                            className={`justify-start gap-2 rounded-lg border-0 px-3.5 py-2.5 text-sm text-ink shadow-none hover:bg-sky-page/60 hover:shadow-none ${
+                            className={`justify-start gap-2 rounded-lg border-0 px-3.5 py-2.5 text-sm !text-ink shadow-none hover:bg-sky-page/60 hover:shadow-none ${
                               focus ? "bg-sky-page/60" : "bg-transparent"
                             }`}
                           >
-                            <ICONS.fileText className="w-4 h-4 text-ursb stroke-[2.2] shrink-0" />
+                            <img src={pdfIcon} alt="PDF" className="w-5 h-5 object-contain shrink-0" />
                             Export as PDF
                           </Button>
                         )}
@@ -283,11 +285,11 @@ export default function Assets() {
                             fullWidth
                             disabled={isExporting}
                             onClick={() => void handleExport("excel")}
-                            className={`justify-start gap-2 rounded-lg border-0 px-3.5 py-2.5 text-sm text-ink shadow-none hover:bg-sky-page/60 hover:shadow-none ${
+                            className={`justify-start gap-2 rounded-lg border-0 px-3.5 py-2.5 text-sm !text-ink shadow-none hover:bg-sky-page/60 hover:shadow-none ${
                               focus ? "bg-sky-page/60" : "bg-transparent"
                             }`}
                           >
-                            <ICONS.fileSpreadsheet className="w-4 h-4 text-ursb stroke-[2.2] shrink-0" />
+                            <img src={excelIcon} alt="Excel" className="w-5 h-5 object-contain shrink-0" />
                             Export as Excel
                           </Button>
                         )}

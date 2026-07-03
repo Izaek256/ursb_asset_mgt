@@ -18,27 +18,27 @@ export default function Button({
   ...props
 }: ButtonProps) {
   const baseStyle =
-    "flex items-center justify-center font-bold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-95 motion-reduce:transform-none motion-reduce:transition-none cursor-pointer select-none whitespace-nowrap";
+    "flex items-center justify-center font-bold transition-all duration-200 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-95 motion-reduce:transform-none motion-reduce:transition-none cursor-pointer select-none whitespace-nowrap";
 
   const variants = {
     auth:
-      "rounded-xl py-3 px-5 text-sm bg-gradient-to-br from-ursb to-ursb-dark text-white border-none shadow-lg shadow-ursb/30 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-ursb/40 focus:ring-ursb/50",
+      "rounded-xl py-3 px-5 text-sm bg-gradient-to-br from-ursb to-ursb-dark text-white border-none shadow-lg shadow-ursb/30 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-ursb/40 focus:ring-2 focus:ring-offset-2 focus:ring-ursb/50",
     primary:
-      "rounded-xl py-2 px-4 text-sm bg-[#6a94d4] text-white border-none transition-colors duration-150 hover:bg-[#f9f8f6] hover:text-[#6a94d4] focus:ring-[#6a94d4]/50",
+      "rounded-xl py-2 px-4 text-sm bg-[#6a94d4] text-[#f9f8f6] border-none transition-colors duration-150 hover:bg-[#f9f8f6] hover:text-[#6a94d4] focus:ring-2 focus:ring-offset-2 focus:ring-[#6a94d4]/50",
     outline:
-      "rounded-xl py-2 px-4 text-sm bg-white text-[#6a94d4] border-2 border-[#6a94d4] transition-colors duration-150 hover:bg-[#6a94d4] hover:text-white focus:ring-[#6a94d4]/50",
+      "rounded-xl py-2 px-4 text-sm bg-[#6a94d4] text-[#f9f8f6] border-none transition-colors duration-150 hover:bg-[#f9f8f6] hover:text-[#6a94d4] focus:ring-2 focus:ring-offset-2 focus:ring-[#6a94d4]/50",
     "danger-outline":
-      "rounded-xl py-2 px-4 text-sm bg-red-500 text-white border-none transition-colors duration-150 hover:bg-white hover:text-red-500 focus:ring-red-500/50",
+      "rounded-xl py-2 px-4 text-sm bg-red-500 text-white border-2 border-transparent transition-colors duration-150 hover:bg-white hover:text-red-500 hover:border-red-500 focus:ring-2 focus:ring-offset-2 focus:ring-red-500/50",
     "danger-inverse":
-      "rounded-xl py-2 px-4 text-sm bg-white text-red-500 border-none transition-colors duration-150 hover:bg-red-500 hover:text-white focus:ring-red-500/50",
+      "rounded-xl py-2 px-4 text-sm bg-white text-red-500 border-2 border-transparent transition-colors duration-150 hover:bg-red-500 hover:text-white hover:border-red-500 focus:ring-2 focus:ring-offset-2 focus:ring-red-500/50",
     success:
-      "rounded-xl py-2 px-4 text-sm bg-white text-emerald-500 border-none transition-colors duration-150 hover:bg-emerald-500 hover:text-white focus:ring-emerald-500/50",
+      "rounded-xl py-2 px-4 text-sm bg-white text-emerald-500 border-2 border-transparent transition-colors duration-150 hover:bg-emerald-500 hover:text-white hover:border-emerald-500 focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500/50",
     ghost:
-      "rounded-xl py-2 px-4 text-sm bg-[#6a94d4] text-white border-none transition-colors duration-150 hover:bg-[#f9f8f6] hover:text-[#6a94d4] focus:ring-[#6a94d4]/50",
+      "rounded-xl py-2 px-4 text-sm bg-transparent text-ink border-none transition-colors duration-150 hover:bg-sky-page/60 focus:ring-2 focus:ring-offset-2 focus:ring-[#6a94d4]/50",
     icon:
-      "w-10 h-10 rounded-xl bg-[#6a94d4] text-white border-none transition-colors duration-150 hover:bg-[#f9f8f6] hover:text-[#6a94d4] focus:ring-[#6a94d4]/50 p-0",
+      "w-10 h-10 rounded-xl bg-transparent text-ink border-none transition-colors duration-150 hover:bg-sky-page/60 focus:ring-2 focus:ring-offset-2 focus:ring-[#6a94d4]/50 p-0",
     nav:
-      "w-full rounded-xl py-2.5 px-3 text-sm gap-3 text-ink bg-transparent border-none shadow-none hover:bg-white hover:text-ursb-dark focus:outline-none focus:ring-0 focus:ring-offset-0 !justify-start",
+      "w-full rounded-xl py-2.5 px-3 text-sm gap-3 text-ink bg-transparent border-none shadow-none hover:bg-white hover:text-ursb-dark focus:outline-none !justify-start",
   };
 
   const activeNav =

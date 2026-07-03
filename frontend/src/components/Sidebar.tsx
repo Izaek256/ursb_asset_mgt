@@ -101,6 +101,7 @@ export default function Sidebar({
               active={isActive}
               onClick={() => onNavigate(item.path)}
               className={collapsed ? "justify-center px-2.5" : ""}
+              style={{ outline: "none", boxShadow: "none", WebkitTapHighlightColor: "transparent" }}
             >
               <span
                 className={`w-5 h-5 flex items-center justify-center shrink-0 ${
@@ -146,7 +147,7 @@ export default function Sidebar({
           variant="ghost"
           fullWidth
           onClick={onToggleCollapse}
-          className="border-dashed justify-start gap-2 text-xs text-ink-dim focus:outline-none focus:ring-0 focus:ring-offset-0"
+          className="border-dashed justify-start gap-2 text-xs text-ink-dim"
         >
           <ICONS.chevronLeft
             className={`w-4 h-4 transition-transform duration-350 shrink-0 motion-reduce:transition-none ${

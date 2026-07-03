@@ -248,7 +248,8 @@ export default function Settings() {
                   {...tabProps}
                   type="button"
                   variant={selected ? "primary" : "ghost"}
-                  className={selected ? "" : "shadow-none border-transparent bg-transparent !text-[#6a94d4] hover:bg-[#f9f8f6]"}
+                  className={selected ? "outline-none" : "shadow-none border-transparent bg-transparent !text-[#6a94d4] hover:bg-[#f9f8f6] outline-none"}
+                  style={{ outline: "none", boxShadow: "none", WebkitTapHighlightColor: "transparent" }}
                 >
                   {tab}
                 </Button>
