@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.models.user import User
 from app.schemas import AuthStatusResponse, LoginRequest, LoginResponse, SignupRequest
 from app.services.auth import (
     SESSION_COOKIE_NAME,
@@ -33,6 +34,42 @@ def _cookie_settings(request: Request) -> dict:
     }
 
 
+# ── FastAPI Dependencies ─────────────────────────────────────────────────────────
+def get_current_user(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> User:
+    """Extract and validate the current user from request state (set by AuthMiddleware)."""
+    user = getattr(request.state, "user", None)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+    
+    # Re-query user to avoid detached instance issues and ensure fresh data
+    db_user = db.query(User).filter(User.user_id == user.user_id).first()
+    if db_user is None or not db_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or inactive",
+        )
+    return db_user
+
+
+def require_roles(*allowed_roles: str):
+    """Return a dependency that checks if the current user has one of the allowed roles."""
+    def _checker(current_user: User = Depends(get_current_user)) -> User:
+        if current_user.role.value not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Role '{current_user.role.value}' is not authorized for this action",
+            )
+        return current_user
+    return _checker
+
+
+# ── Endpoints ────────────────────────────────────────────────────────────────────
 @router.post("/signup", response_model=LoginResponse)
 def signup(
     payload: SignupRequest,
@@ -133,6 +170,9 @@ def auth_check(request: Request) -> dict[str, object]:
         "username": user.username,
         "phone_number": user.phone_number,
         "department": user.department,
+        "user_id": str(user.user_id) if user.user_id is not None else None,
+        "role": user.role.value if hasattr(user.role, "value") else user.role,
+        "full_name": user.full_name or f"{user.first_name or ''} {user.last_name or ''}".strip(),
     }
 
 
