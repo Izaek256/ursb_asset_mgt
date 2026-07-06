@@ -89,7 +89,6 @@ def create_user(
     department: str | None = None,
     username: str | None = None,
     role: UserRole | None = UserRole.EMPLOYEE,
-    full_name: str | None = None,
 ) -> User:
     salt, password_hash = create_password_hash(password)
     user = User(
@@ -102,7 +101,6 @@ def create_user(
         role=role,
         password_hash=password_hash,
         password_salt=salt,
-        full_name=full_name,
     )
     db.add(user)
     db.commit()

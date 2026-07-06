@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models.user import User
+from app.models.audit_log import AuditLog
 from app.schemas import AuthStatusResponse, LoginRequest, LoginResponse, SignupRequest
 from app.services.auth import (
     SESSION_COOKIE_NAME,
@@ -93,7 +94,7 @@ def signup(
             detail="Username is already taken",
         )
 
-    create_user(
+    new_user = create_user(
         db,
         email=payload.email,
         password=payload.password,
@@ -103,6 +104,17 @@ def signup(
         department=payload.department,
         username=payload.username,
     )
+    
+    audit = AuditLog(
+        user_id=new_user.user_id,
+        action="USER_SIGNUP",
+        table_affected="users",
+        record_id=new_user.user_id,
+        details=f"User signed up: '{new_user.email}'.",
+    )
+    db.add(audit)
+    db.commit()
+
     return {"message": "Account created successfully. Please sign in."}
 
 
