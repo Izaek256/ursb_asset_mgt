@@ -300,6 +300,7 @@ def update_user_role(
             f"for {_full_name(target)} by {_full_name(current_user)}."
         ),
     )
+    db.add(audit_entry)
     db.commit()
 
     return RoleChangeResponse(
