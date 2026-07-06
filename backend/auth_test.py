@@ -20,14 +20,24 @@ client = TestClient(app)
 print('Testing /api/v1/login and /api/v1/signup')
 
 signup_payload = {
-    'full_name': 'Test User',
+    'first_name': 'Test',
+    'last_name': 'User',
+    'username': 'testuser1',
     'email': 'testuser@example.com',
+    'phone_number': '1234567890',
     'department': 'it',
     'password': 'Password123!',
     'confirm_password': 'Password123!'
 }
 res = client.post('/api/v1/signup', json=signup_payload)
 print('signup status', res.status_code, res.json())
+assert res.status_code in (200, 201), f"Signup failed: {res.json()}"
+
+with SessionLocal() as db:
+    created_user = db.query(User).filter(User.email == 'testuser@example.com').first()
+    assert created_user is not None
+    assert created_user.first_name == 'Test', f"Expected first_name 'Test', got {created_user.first_name}"
+    assert created_user.last_name == 'User', f"Expected last_name 'User', got {created_user.last_name}"
 
 login_payload = {'email': 'testuser@example.com', 'password': 'Password123!'}
 res = client.post('/api/v1/login', json=login_payload)
