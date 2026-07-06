@@ -18,6 +18,7 @@ interface AuthContextValue {
   isLoading: boolean;
   isInitialLoading: boolean;
   refreshUser: () => Promise<void>;
+  token?: string;
 }
 
 const AuthContext = createContext<AuthContextValue>(null!);
@@ -27,7 +28,8 @@ const API_BASE = "/api/v1";
 
 export async function apiFetch<T>(
   path: string,
-  opts: RequestInit = {}
+  opts: RequestInit = {},
+  _token?: string
 ): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",

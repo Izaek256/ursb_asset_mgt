@@ -2,14 +2,15 @@ import React from "react";
 import { apiFetch, useAuth } from "../AuthContext";
 import { ICONS } from "../utils/icons";
 import Modal from "../components/Modal";
-import FormInput from "../components/FormInput";
-import StatusBadge from "../components/StatusBadge";
-import LoadingSpinner from "../components/LoadingSpinner";
+import FormInput from "../components/common/FormInput";
+import StatusBadge from "../components/common/badges/StatusBadge";
 import ErrorMessage from "../components/ErrorMessage";
-import SuccessBanner from "../components/SuccessBanner";
+import SuccessBanner from "../components/common/SuccessBanner";
 import EmptyState from "../components/EmptyState";
 import ConfirmDialog from "../components/ConfirmDialog";
 import PageHeader from "../components/PageHeader";
+import Table, { Column } from "../components/common/Table";
+import Button from "../components/common/Button";
 
 interface MaintenanceRecordResponse {
   maintenance_id: number;
@@ -103,7 +104,7 @@ export default function Maintenance() {
     logForm.cost || 
     logForm.next_service_date;
 
-  const isScheduleFormDirty = scheduleForm.next_service_date;
+  const isScheduleFormDirty = !!scheduleForm.next_service_date;
 
   const handleCloseLogModal = () => {
     if (isLogFormDirty) {
@@ -145,87 +146,82 @@ export default function Maintenance() {
     }
   };
 
-  // Form input change handlers
-  const handleLogFieldChange = (field: string, value: string) => {
-    const nextForm = { ...logForm, [field]: value };
-    setLogForm(nextForm);
-
-    const nextErrors = { ...logErrors, general: "" };
-
-    // Validation
-    const today = new Date().toISOString().substring(0, 10);
-    
-    if (field === "service_date") {
-      if (value > today) {
-        nextErrors.service_date = "Service date cannot be in the future";
-      } else {
-        nextErrors.service_date = "";
-      }
+  const handleLogFieldChange = (field: string, val: string) => {
+    setLogForm((prev) => {
+      const next = { ...prev, [field]: val };
       
-      // Re-validate next_service_date relative to service_date
-      if (nextForm.next_service_date && value && nextForm.next_service_date <= value) {
-        nextErrors.next_service_date = "Next service date must be after service date";
-      } else if (nextForm.next_service_date && nextForm.next_service_date <= today) {
-        nextErrors.next_service_date = "Next service date must be in the future";
-      } else {
-        nextErrors.next_service_date = "";
-      }
-    }
-
-    if (field === "cost") {
-      const parsedCost = parseFloat(value);
-      if (value && (isNaN(parsedCost) || parsedCost <= 0)) {
-        nextErrors.cost = "Cost must be a positive value";
-      } else {
-        nextErrors.cost = "";
-      }
-    }
-
-    if (field === "next_service_date") {
-      if (value) {
-        if (value <= today) {
-          nextErrors.next_service_date = "Next service date must be in the future";
-        } else if (nextForm.service_date && value <= nextForm.service_date) {
-          nextErrors.next_service_date = "Next service date must be after service date";
-        } else {
-          nextErrors.next_service_date = "";
+      // Validation Logic
+      const errors = { ...logErrors, general: "" };
+      
+      if (field === "service_date") {
+        if (val) {
+          const service = new Date(val);
+          const today = new Date();
+          if (service > today) {
+            errors.service_date = "Service date cannot be in the future.";
+          } else {
+            errors.service_date = "";
+          }
         }
-      } else {
-        nextErrors.next_service_date = "";
       }
-    }
 
-    setLogErrors(nextErrors);
+      if (field === "cost") {
+        if (val) {
+          const costVal = parseFloat(val);
+          if (isNaN(costVal) || costVal < 0) {
+            errors.cost = "Cost must be a positive number.";
+          } else {
+            errors.cost = "";
+          }
+        } else {
+          errors.cost = "";
+        }
+      }
+
+      if (field === "next_service_date" || field === "service_date") {
+        if (next.service_date && next.next_service_date) {
+          const service = new Date(next.service_date);
+          const nextSrv = new Date(next.next_service_date);
+          if (nextSrv <= service) {
+            errors.next_service_date = "Next service date must be after the service date.";
+          } else {
+            errors.next_service_date = "";
+          }
+        } else {
+          errors.next_service_date = "";
+        }
+      }
+
+      setLogErrors(errors);
+      return next;
+    });
   };
 
-  const handleScheduleFieldChange = (value: string) => {
-    setScheduleForm({ next_service_date: value });
-
-    const today = new Date().toISOString().substring(0, 10);
-    if (value && value <= today) {
-      setScheduleError("Next service date must be in the future");
+  const handleScheduleFieldChange = (val: string) => {
+    setScheduleForm({ next_service_date: val });
+    if (val && selectedRecord) {
+      const service = new Date(selectedRecord.service_date);
+      const nextSrv = new Date(val);
+      if (nextSrv <= service) {
+        setScheduleError("Next service date must be after the last service date.");
+      } else {
+        setScheduleError("");
+      }
     } else {
       setScheduleError("");
     }
   };
 
-  // Submission Handlers
   const handleLogSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (
-      logErrors.service_date || 
-      logErrors.cost || 
-      logErrors.next_service_date ||
-      !logForm.asset_id ||
-      !logForm.service_date ||
-      !logForm.service_provider ||
-      !logForm.description
-    ) {
+    if (!logForm.asset_id || !logForm.service_provider || !logForm.description) {
+      setLogErrors((prev) => ({ ...prev, general: "Please fill in all required fields." }));
       return;
     }
+    if (logErrors.service_date || logErrors.cost || logErrors.next_service_date) return;
 
     setIsSubmitting(true);
-    setLogErrors(prev => ({ ...prev, general: "" }));
+    setLogErrors((prev) => ({ ...prev, general: "" }));
     try {
       await apiFetch("/maintenance", {
         method: "POST",
@@ -239,8 +235,7 @@ export default function Maintenance() {
           next_service_date: logForm.next_service_date || null,
         }),
       });
-
-      setSuccess("Maintenance record logged. Asset status set to Under Maintenance.");
+      setSuccess("Maintenance record logged successfully.");
       setShowLogModal(false);
       setLogForm({
         asset_id: "",
@@ -253,31 +248,37 @@ export default function Maintenance() {
       });
       fetchMaintenanceData();
     } catch (err: any) {
-      setLogErrors(prev => ({ ...prev, general: err.message || "Failed to log maintenance." }));
+      setLogErrors((prev) => ({ ...prev, general: err.message || "Failed to log maintenance record." }));
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleScheduleClick = (rec: MaintenanceRecordResponse) => {
+    setSelectedRecord(rec);
+    setScheduleForm({ next_service_date: rec.next_service_date || "" });
+    setShowScheduleModal(true);
+  };
+
   const handleScheduleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedRecord || scheduleError || !scheduleForm.next_service_date) return;
-    
+    if (!selectedRecord || !scheduleForm.next_service_date || scheduleError) return;
+
     setIsSubmitting(true);
-    setError(null);
+    setScheduleError("");
     try {
       await apiFetch(`/maintenance/${selectedRecord.maintenance_id}/schedule`, {
-        method: "PATCH",
-        body: JSON.stringify({ next_service_date: scheduleForm.next_service_date }),
+        method: "PUT",
+        body: JSON.stringify({
+          next_service_date: scheduleForm.next_service_date,
+        }),
       });
-
-      setSuccess("Next maintenance scheduled.");
+      setSuccess(`Next service date updated for asset "${selectedRecord.asset_id}".`);
       setShowScheduleModal(false);
       setSelectedRecord(null);
-      setScheduleForm({ next_service_date: "" });
       fetchMaintenanceData();
     } catch (err: any) {
-      setError(err.message || "Failed to schedule next maintenance.");
+      setScheduleError(err.message || "Failed to schedule next maintenance.");
     } finally {
       setIsSubmitting(false);
     }
@@ -288,150 +289,127 @@ export default function Maintenance() {
     setError(null);
     try {
       await apiFetch(`/maintenance/${completeConfirm.maintenance_id}/complete`, {
-        method: "PATCH",
+        method: "PUT",
       });
-
-      setSuccess(`Maintenance complete. Asset ${completeConfirm.asset_name || completeConfirm.asset_id} is now Active.`);
+      setSuccess(`Maintenance completed. Asset "${completeConfirm.asset_id}" is now Active.`);
       setCompleteConfirm(null);
       fetchMaintenanceData();
     } catch (err: any) {
-      setError(err.message || "Failed to complete maintenance.");
+      setError(err.message || "Failed to mark maintenance as complete.");
     }
   };
 
-  const isNextServiceWarning = (nextDateStr: string | null) => {
-    if (!nextDateStr) return false;
-    const nextDate = new Date(nextDateStr);
-    const today = new Date();
-    const diffTime = nextDate.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays >= 0 && diffDays <= 30;
-  };
+  const columns: Column<MaintenanceRecordResponse>[] = [
+    {
+      header: "Asset",
+      render: (r) => (
+        <div>
+          <div className="font-bold text-ink text-sm">{r.asset_name || "Asset"}</div>
+          <div className="text-[11px] text-ink-dim mt-0.5">{r.asset_id}</div>
+        </div>
+      ),
+    },
+    {
+      header: "Service Date",
+      render: (r) => new Date(r.service_date).toLocaleDateString(),
+    },
+    {
+      header: "Provider",
+      render: (r) => <span className="font-semibold">{r.service_provider}</span>,
+    },
+    {
+      header: "Type",
+      render: (r) => r.maintenance_type || "—",
+    },
+    {
+      header: "Description",
+      render: (r) => <span className="block whitespace-normal break-words min-w-[200px] text-xs leading-relaxed" title={r.description}>{r.description}</span>,
+    },
+    {
+      header: "Next Service",
+      render: (r) => (r.next_service_date ? new Date(r.next_service_date).toLocaleDateString() : "—"),
+    },
+    {
+      header: "Status",
+      render: (r) => <StatusBadge status={r.asset_status || "—"} />,
+    },
+    {
+      header: "Actions",
+      render: (r) => (
+        <div className="flex flex-wrap gap-1.5 select-none">
+          {isAdminOrManager && r.asset_status === "Under Maintenance" && (
+            <Button variant="outline" onClick={() => setCompleteConfirm(r)}>
+              Mark Complete
+            </Button>
+          )}
+          {isAdminOrManager && (
+            <Button variant="outline" onClick={() => handleScheduleClick(r)}>
+              Schedule Next
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <>
+    <div className="w-full flex flex-col gap-6 select-none font-sans">
       {success && <SuccessBanner message={success} onDismiss={() => setSuccess(null)} />}
       {error && <ErrorMessage message={error} />}
 
-      {/* Upcoming Alert Banner */}
+      {/* Upcoming maintenance alert */}
       {showUpcomingBanner && upcoming.length > 0 && (
-        <div className="alert-warning" style={{ marginBottom: "1.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <p style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: 600 }}>
-            {ICONS.alert} {upcoming.length} asset(s) due for maintenance within 30 days
+        <div className="bg-badge-amberBg border border-badge-amberText/16 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+          <p className="flex items-center gap-2.5 font-bold text-ink text-sm">
+            <ICONS.alertCircle className="w-5 h-5 text-badge-amberText stroke-[2.2]" />
+            {upcoming.length} asset(s) due for scheduled maintenance within 30 days
           </p>
-          <button className="btn btn-secondary btn-sm" onClick={() => setShowUpcomingBanner(false)}>
+          <Button variant="outline" onClick={() => setShowUpcomingBanner(false)}>
             Dismiss
-          </button>
+          </Button>
         </div>
       )}
 
-      <PageHeader 
+      <PageHeader
         title="Asset Maintenance"
         subtitle="Track maintenance history, schedule service runs, and log repairs"
         actions={
           isAdminOrManager && (
-            <button className="btn btn-primary" onClick={() => setShowLogModal(true)}>
-              {ICONS.add} Log Maintenance
-            </button>
+            <Button onClick={() => setShowLogModal(true)}>
+              <ICONS.plus className="w-4 h-4 mr-1.5 stroke-[2.4]" />
+              Log Maintenance
+            </Button>
           )
         }
       />
 
       {isLoading ? (
-        <div className="page-loading" style={{ display: "flex", justifyContent: "center", padding: "3rem" }}>
-          <LoadingSpinner size="lg" />
+        <div className="flex justify-center py-16">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ursb" />
         </div>
       ) : records.length === 0 ? (
-        <EmptyState title="No maintenance history" description="There are no maintenance recordslogged in the system." icon="🔧" />
+        <EmptyState
+          title="No maintenance history"
+          description="There are no maintenance records logged in the system."
+          icon={<ICONS.maintenance className="w-6 h-6 text-ink-icon stroke-[2.2]" />}
+        />
       ) : (
-        <div className="card">
-          <table>
-            <thead>
-              <tr>
-                <th>Asset</th>
-                <th>Service Date</th>
-                <th>Service Provider</th>
-                <th>Maintenance Type</th>
-                <th>Description</th>
-                <th>Cost</th>
-                <th>Next Service Date</th>
-                <th>Recorded By</th>
-                <th>Asset Status</th>
-                {isAdminOrManager && <th>Actions</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {records.map((r) => {
-                const isUpcoming = isNextServiceWarning(r.next_service_date);
-                return (
-                  <tr key={r.maintenance_id}>
-                    <td>
-                      <div>
-                        <div className="user-name">{r.asset_name || "Asset"}</div>
-                        <div className="text-small text-muted">{r.asset_id}</div>
-                      </div>
-                    </td>
-                    <td>{new Date(r.service_date).toLocaleDateString()}</td>
-                    <td>{r.service_provider}</td>
-                    <td>{r.maintenance_type || "Preventive"}</td>
-                    <td className="text-small" title={r.description} style={{ maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {r.description}
-                    </td>
-                    <td>{r.cost ? `UGX ${r.cost.toLocaleString()}` : "-"}</td>
-                    <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                        {r.next_service_date ? new Date(r.next_service_date).toLocaleDateString() : "-"}
-                        {isUpcoming && (
-                          // Highlight upcoming service dates to help managers prioritise
-                          <span title="Due within 30 days" style={{ color: "var(--color-orange)", fontSize: "1.1rem" }}>⚠️</span>
-                        )}
-                      </div>
-                    </td>
-                    <td>{r.recorded_by_name}</td>
-                    <td>
-                      <StatusBadge status={r.asset_status || "Active"} />
-                    </td>
-                    {isAdminOrManager && (
-                      <td>
-                        <div style={{ display: "flex", gap: "0.25rem" }}>
-                          {r.asset_status === "Under Maintenance" && (
-                            <button
-                              className="btn btn-secondary btn-sm"
-                              onClick={() => setCompleteConfirm(r)}
-                            >
-                              Mark Complete
-                            </button>
-                          )}
-                          {(!r.next_service_date || new Date(r.next_service_date) <= new Date()) && (
-                            <button
-                              className="btn btn-secondary btn-sm"
-                              onClick={() => {
-                                setSelectedRecord(r);
-                                setScheduleForm({ next_service_date: "" });
-                                setShowScheduleModal(true);
-                              }}
-                            >
-                              Schedule Next
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <Table
+          data={records}
+          columns={columns}
+          rowKey={(r) => r.maintenance_id}
+          emptyMessage="No maintenance records found."
+        />
       )}
 
       {/* Log Maintenance Modal */}
       <Modal open={showLogModal} onClose={handleCloseLogModal} title="Log Maintenance Record">
-        <form onSubmit={handleLogSubmit}>
+        <form onSubmit={handleLogSubmit} className="flex flex-col gap-4">
           {logErrors.general && <ErrorMessage message={logErrors.general} />}
 
           <FormInput 
             type="text"
+            variant="light"
             label="Asset ID *"
             value={logForm.asset_id}
             onChange={(val) => handleLogFieldChange("asset_id", val)}
@@ -441,6 +419,7 @@ export default function Maintenance() {
 
           <FormInput 
             type="date"
+            variant="light"
             label="Service Date *"
             value={logForm.service_date}
             onChange={(val) => handleLogFieldChange("service_date", val)}
@@ -450,6 +429,7 @@ export default function Maintenance() {
 
           <FormInput 
             type="text"
+            variant="light"
             label="Service Provider *"
             value={logForm.service_provider}
             onChange={(val) => handleLogFieldChange("service_provider", val)}
@@ -459,6 +439,7 @@ export default function Maintenance() {
 
           <FormInput 
             type="text"
+            variant="light"
             label="Maintenance Type"
             value={logForm.maintenance_type}
             onChange={(val) => handleLogFieldChange("maintenance_type", val)}
@@ -467,6 +448,7 @@ export default function Maintenance() {
 
           <FormInput 
             type="textarea"
+            variant="light"
             label="Description *"
             value={logForm.description}
             onChange={(val) => handleLogFieldChange("description", val)}
@@ -476,6 +458,7 @@ export default function Maintenance() {
 
           <FormInput 
             type="number"
+            variant="light"
             label="Cost (UGX, Optional)"
             value={logForm.cost}
             onChange={(val) => handleLogFieldChange("cost", val)}
@@ -485,40 +468,42 @@ export default function Maintenance() {
 
           <FormInput 
             type="date"
+            variant="light"
             label="Next Service Date (Optional)"
             value={logForm.next_service_date}
             onChange={(val) => handleLogFieldChange("next_service_date", val)}
             error={logErrors.next_service_date}
           />
 
-          <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={handleCloseLogModal}>
+          <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
+            <Button type="button" variant="danger-outline" onClick={handleCloseLogModal}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              className="btn btn-primary"
+              isLoading={isSubmitting}
               disabled={
-                isSubmitting || 
-                !!logErrors.service_date || 
-                !!logErrors.cost || 
+                isSubmitting ||
+                !!logErrors.service_date ||
+                !!logErrors.cost ||
                 !!logErrors.next_service_date ||
                 !logForm.asset_id ||
                 !logForm.service_provider ||
                 !logForm.description
               }
             >
-              {isSubmitting ? <LoadingSpinner size="sm" /> : "Log Record"}
-            </button>
+              Log Record
+            </Button>
           </div>
         </form>
       </Modal>
 
       {/* Schedule Next Maintenance Modal */}
       <Modal open={showScheduleModal} onClose={handleCloseScheduleModal} title="Schedule Next Maintenance">
-        <form onSubmit={handleScheduleSubmit}>
+        <form onSubmit={handleScheduleSubmit} className="flex flex-col gap-4">
           <FormInput 
             type="date"
+            variant="light"
             label="Next Service Date *"
             value={scheduleForm.next_service_date}
             onChange={handleScheduleFieldChange}
@@ -526,17 +511,17 @@ export default function Maintenance() {
             error={scheduleError}
           />
 
-          <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={handleCloseScheduleModal}>
+          <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
+            <Button type="button" variant="danger-outline" onClick={handleCloseScheduleModal}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              className="btn btn-primary"
+              isLoading={isSubmitting}
               disabled={isSubmitting || !!scheduleError || !scheduleForm.next_service_date}
             >
-              {isSubmitting ? <LoadingSpinner size="sm" /> : "Schedule Maintenance"}
-            </button>
+              Schedule Maintenance
+            </Button>
           </div>
         </form>
       </Modal>
@@ -560,6 +545,7 @@ export default function Maintenance() {
         onCancel={() => setCompleteConfirm(null)}
         onConfirm={handleCompleteConfirm}
       />
-    </>
+    </div>
   );
 }
+

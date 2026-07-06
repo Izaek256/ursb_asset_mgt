@@ -3,14 +3,15 @@ import { apiFetch, useAuth } from "../AuthContext";
 import { Assignment, UserRow } from "../types";
 import { ICONS } from "../utils/icons";
 import Modal from "../components/Modal";
-import FormInput from "../components/FormInput";
-import StatusBadge from "../components/StatusBadge";
-import LoadingSpinner from "../components/LoadingSpinner";
+import FormInput from "../components/common/FormInput";
+import StatusBadge from "../components/common/badges/StatusBadge";
 import ErrorMessage from "../components/ErrorMessage";
-import SuccessBanner from "../components/SuccessBanner";
+import SuccessBanner from "../components/common/SuccessBanner";
 import EmptyState from "../components/EmptyState";
 import ConfirmDialog from "../components/ConfirmDialog";
 import PageHeader from "../components/PageHeader";
+import Table, { Column } from "../components/common/Table";
+import Button from "../components/common/Button";
 
 interface AssetOption {
   asset_id: string;
@@ -108,31 +109,35 @@ export default function Assignments() {
     }
   };
 
-  const handleFieldChange = (field: string, value: string) => {
-    const nextForm = { ...form, [field]: value };
-    setForm(nextForm);
-
-    // Validate return date must be after assignment date
-    if (field === "return_date" || field === "assignment_date") {
-      if (nextForm.return_date && nextForm.assignment_date) {
-        const assignD = new Date(nextForm.assignment_date);
-        const returnD = new Date(nextForm.return_date);
-        if (returnD <= assignD) {
-          setFormErrors({ ...formErrors, return_date: "Return date must be after assignment date" });
+  const handleFieldChange = (field: string, val: string) => {
+    setForm((prev) => {
+      const next = { ...prev, [field]: val };
+      // Validate expected return date is after assignment date
+      if (field === "assignment_date" || field === "return_date") {
+        if (next.assignment_date && next.return_date) {
+          const assign = new Date(next.assignment_date);
+          const ret = new Date(next.return_date);
+          if (ret < assign) {
+            setFormErrors({ return_date: "Expected return date cannot be before assignment date." });
+          } else {
+            setFormErrors({ return_date: "" });
+          }
         } else {
-          setFormErrors({ ...formErrors, return_date: "" });
+          setFormErrors({ return_date: "" });
         }
-      } else {
-        setFormErrors({ ...formErrors, return_date: "" });
       }
-    }
+      return next;
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (formErrors.return_date || !form.asset_id || !form.assigned_to) {
+    if (!form.asset_id || !form.assigned_to) {
+      setError("Please fill in all required fields.");
       return;
     }
+    if (formErrors.return_date) return;
+
     setIsSubmitting(true);
     setError(null);
     try {
@@ -142,11 +147,11 @@ export default function Assignments() {
           asset_id: form.asset_id,
           assigned_to: parseInt(form.assigned_to, 10),
           assignment_date: form.assignment_date,
-          return_date: form.return_date || null,
-          notes: form.notes || null,
+          expected_return_date: form.return_date || null,
+          notes: form.notes,
         }),
       });
-      setSuccess("Asset assigned successfully.");
+      setSuccess("Asset successfully assigned.");
       setShowAssignModal(false);
       setForm({
         asset_id: "",
@@ -157,7 +162,7 @@ export default function Assignments() {
       });
       fetchAssignments();
     } catch (err: any) {
-      setError(err.message || "Failed to assign asset.");
+      setError(err.message || "Failed to create assignment.");
     } finally {
       setIsSubmitting(false);
     }
@@ -168,9 +173,9 @@ export default function Assignments() {
     setError(null);
     try {
       await apiFetch(`/assignments/${returnConfirm.assignment_id}/return`, {
-        method: "POST",
+        method: "PUT",
       });
-      setSuccess(`Asset ${returnConfirm.asset_name} returned successfully.`);
+      setSuccess(`Asset "${returnConfirm.asset_name}" returned successfully.`);
       setReturnConfirm(null);
       fetchAssignments();
     } catch (err: any) {
@@ -178,119 +183,125 @@ export default function Assignments() {
     }
   };
 
+  const columns: Column<Assignment>[] = [
+    {
+      header: "Asset",
+      render: (a) => (
+        <div>
+          <div className="font-bold text-ink text-sm">{a.asset_name}</div>
+          <div className="text-[11px] text-ink-dim mt-0.5">{a.asset_id}</div>
+        </div>
+      ),
+    },
+    {
+      header: "Assigned To",
+      render: (a) => <span className="font-semibold">{a.assigned_to_name}</span>,
+    },
+    {
+      header: "Assigned By",
+      render: (a) => a.assigned_by_name || "—",
+    },
+    {
+      header: "Assignment Date",
+      render: (a) =>
+        a.assigned_date ? new Date(a.assigned_date).toLocaleDateString() : "—",
+    },
+    {
+      header: "Return Date",
+      render: (a) =>
+        a.return_date ? new Date(a.return_date).toLocaleDateString() : "—",
+    },
+    {
+      header: "Status",
+      render: (a) => <StatusBadge status={a.status} />,
+    },
+    {
+      header: "Actions",
+      render: (a) => (
+        <div className="flex select-none">
+          {isAdminOrManager && a.status !== "Returned" && (
+            <Button variant="outline" onClick={() => setReturnConfirm(a)}>
+              Return Asset
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  const assetOptions = assets.filter(a => a.status === "Active").map(a => ({
+    value: a.asset_id,
+    label: `${a.asset_name} (${a.asset_id})`,
+  }));
+
+  const userOptions = users.filter(u => u.isActive).map(u => ({
+    value: String(u.id),
+    label: `${u.name} (${u.role})`,
+  }));
+
   return (
-    <>
+    <div className="w-full flex flex-col gap-6 select-none font-sans">
       {success && <SuccessBanner message={success} onDismiss={() => setSuccess(null)} />}
       {error && <ErrorMessage message={error} />}
 
-      <PageHeader 
+      <PageHeader
         title="Asset Assignments"
         subtitle="Track custody of assets allocated to employees"
         actions={
           isAdminOrManager && (
-            <button className="btn btn-primary" onClick={() => setShowAssignModal(true)}>
-              {ICONS.add} Assign Asset
-            </button>
+            <Button onClick={() => setShowAssignModal(true)}>
+              <ICONS.plus className="w-4 h-4 mr-1.5 stroke-[2.4]" />
+              Assign Asset
+            </Button>
           )
         }
       />
 
       {isLoading ? (
-        <div className="page-loading" style={{ display: "flex", justifyContent: "center", padding: "3rem" }}>
-          <LoadingSpinner size="lg" />
+        <div className="flex justify-center py-16">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ursb" />
         </div>
       ) : assignments.length === 0 ? (
-        <EmptyState title="No assignments found" description="There are no custody assignments recorded." icon="🔑" />
+        <EmptyState
+          title="No assignments found"
+          description="There are no custody assignments recorded."
+          icon={<ICONS.assignments className="w-6 h-6 text-ink-icon stroke-[2.2]" />}
+        />
       ) : (
-        <div className="card">
-          <table>
-            <thead>
-              <tr>
-                <th>Asset</th>
-                <th>Assigned To</th>
-                <th>Assigned By</th>
-                <th>Assignment Date</th>
-                <th>Return Date</th>
-                <th>Status</th>
-                {isAdminOrManager && <th>Actions</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {assignments.map((a) => (
-                <tr key={a.assignment_id}>
-                  <td>
-                    <div>
-                      <div className="user-name">{a.asset_name || "Asset"}</div>
-                      <div className="text-small text-muted">{a.asset_id}</div>
-                    </div>
-                  </td>
-                  <td>{a.assigned_to_name || `User ID: ${a.assigned_to}`}</td>
-                  <td>{a.assigned_by_name || `User ID: ${a.assigned_by}`}</td>
-                  <td>{new Date(a.assigned_date).toLocaleDateString()}</td>
-                  <td>{a.return_date ? new Date(a.return_date).toLocaleDateString() : "-"}</td>
-                  <td>
-                    <StatusBadge status={a.status} />
-                  </td>
-                  {isAdminOrManager && (
-                    <td>
-                      {a.status === "Active" && (
-                        <button 
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => setReturnConfirm(a)}
-                        >
-                          🤝 Return Asset
-                        </button>
-                      )}
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table
+          data={assignments}
+          columns={columns}
+          rowKey={(a) => a.assignment_id}
+          emptyMessage="No assignments found."
+        />
       )}
 
       {/* Assign Asset Modal */}
       <Modal open={showAssignModal} onClose={handleCloseModal} title="Assign Asset">
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label htmlFor="assign-asset-id" className="form-label">Asset *</label>
-            <select
-              id="assign-asset-id"
-              className="form-control"
-              value={form.asset_id}
-              onChange={(e) => handleFieldChange("asset_id", e.target.value)}
-              required
-            >
-              <option value="">Select an asset...</option>
-              {assets.filter(a => a.status === "Active").map(a => (
-                <option key={a.asset_id} value={a.asset_id}>
-                  {a.asset_name} ({a.asset_id})
-                </option>
-              ))}
-            </select>
-          </div>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <FormInput
+            type="select"
+            variant="light"
+            label="Asset *"
+            value={form.asset_id}
+            onChange={(val) => handleFieldChange("asset_id", val)}
+            options={[{ value: "", label: "Select an asset..." }, ...assetOptions]}
+            required
+          />
 
-          <div className="form-group">
-            <label htmlFor="assign-user" className="form-label">Assign To User *</label>
-            <select
-              id="assign-user"
-              className="form-control"
-              value={form.assigned_to}
-              onChange={(e) => handleFieldChange("assigned_to", e.target.value)}
-              required
-            >
-              <option value="">Select a user...</option>
-              {users.filter(u => u.isActive).map(u => (
-                <option key={u.id} value={u.id}>
-                  {u.name} ({u.role})
-                </option>
-              ))}
-            </select>
-          </div>
+          <FormInput
+            type="select"
+            variant="light"
+            label="Assign To User *"
+            value={form.assigned_to}
+            onChange={(val) => handleFieldChange("assigned_to", val)}
+            options={[{ value: "", label: "Select a user..." }, ...userOptions]}
+            required
+          />
 
           <FormInput 
             type="date"
+            variant="light"
             label="Assignment Date *"
             value={form.assignment_date}
             onChange={(val) => handleFieldChange("assignment_date", val)}
@@ -299,6 +310,7 @@ export default function Assignments() {
 
           <FormInput 
             type="date"
+            variant="light"
             label="Expected Return Date (Optional)"
             value={form.return_date}
             onChange={(val) => handleFieldChange("return_date", val)}
@@ -307,23 +319,24 @@ export default function Assignments() {
 
           <FormInput 
             type="textarea"
+            variant="light"
             label="Notes"
             value={form.notes}
             onChange={(val) => handleFieldChange("notes", val)}
             placeholder="Add assignment details or comments..."
           />
 
-          <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={handleCloseModal}>
+          <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
+            <Button type="button" variant="danger-outline" onClick={handleCloseModal}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              className="btn btn-primary"
+              isLoading={isSubmitting}
               disabled={isSubmitting || !!formErrors.return_date || !form.asset_id || !form.assigned_to}
             >
-              {isSubmitting ? <LoadingSpinner size="sm" /> : "Assign Asset"}
-            </button>
+              Assign Asset
+            </Button>
           </div>
         </form>
       </Modal>
@@ -347,6 +360,7 @@ export default function Assignments() {
         onCancel={() => setReturnConfirm(null)}
         onConfirm={handleReturnConfirm}
       />
-    </>
+    </div>
   );
 }
+

@@ -1,4 +1,5 @@
 import { useAuth } from "../AuthContext";
+import Button from "./common/Button";
 
 interface Props {
   open: boolean;
@@ -70,9 +71,9 @@ export default function ProfileModal({ open, onClose }: Props) {
         </div>
 
         <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose}>
+          <Button type="button" variant="ghost" onClick={onClose}>
             Close
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import React from "react";
 import { Role, UserRow } from "../types";
+import Button from "./common/Button";
 
 type Props = {
   user: UserRow | null;
@@ -63,16 +64,16 @@ export default function EditRoleModal({ user, open, onClose, onRequestConfirm }:
         </div>
 
         <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose}>
+          <Button type="button" variant="ghost" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            className="btn btn-primary"
+          </Button>
+          <Button
+            type="button"
             onClick={() => selected && onRequestConfirm(selected)}
             disabled={selected === user.role || !selected}
           >
             Save Changes
-          </button>
+          </Button>
         </div>
       </div>
     </div>

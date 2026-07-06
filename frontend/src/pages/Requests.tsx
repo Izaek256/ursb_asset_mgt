@@ -3,14 +3,16 @@ import { apiFetch, useAuth } from "../AuthContext";
 import { AssetRequest, UserRow } from "../types";
 import { ICONS } from "../utils/icons";
 import Modal from "../components/Modal";
-import FormInput from "../components/FormInput";
-import StatusBadge from "../components/StatusBadge";
-import LoadingSpinner from "../components/LoadingSpinner";
+import FormInput from "../components/common/FormInput";
+import StatusBadge from "../components/common/badges/StatusBadge";
 import ErrorMessage from "../components/ErrorMessage";
-import SuccessBanner from "../components/SuccessBanner";
+import SuccessBanner from "../components/common/SuccessBanner";
 import EmptyState from "../components/EmptyState";
 import ConfirmDialog from "../components/ConfirmDialog";
 import PageHeader from "../components/PageHeader";
+import Table, { Column } from "../components/common/Table";
+import Button from "../components/common/Button";
+import FilterBar, { FilterField, filterInputCls, filterSelectCls } from "../components/common/FilterBar";
 
 interface AssetOption {
   asset_id: string;
@@ -336,40 +338,135 @@ export default function Requests() {
     return matchesStatus && matchesRequestedBy;
   });
 
-  const priorityBadgeColor = (priority: string) => {
-    switch (priority) {
-      case "Urgent": return "badge-rejected"; // Red
-      case "High": return "badge-warning"; // Orange
-      case "Normal": return "badge-info"; // Blue
-      case "Low": return "badge-inactive"; // Gray
-      default: return "";
-    }
-  };
+  const renderActions = (r: AssetRequest) => (
+    <div className="flex flex-wrap gap-1.5 select-none">
+      {user?.role === "Employee" && r.status === "Pending" && (
+        <Button variant="danger-outline" onClick={() => handleCancelClick(r)}>Cancel</Button>
+      )}
+      {user?.role === "Employee" && r.status === "Assigned" && (
+        <Button variant="outline" onClick={() => handlePickupClick(r)}>Confirm Pickup</Button>
+      )}
+      {isAdminOrManager && r.status === "Pending" && (
+        <>
+          <Button onClick={() => handleApproveClick(r)}>Approve</Button>
+          <Button variant="danger-outline" onClick={() => handleRejectClick(r)}>Reject</Button>
+        </>
+      )}
+      {isAdminOrManager && r.status === "Approved" && (
+        <Button variant="outline" onClick={() => handleAssignClick(r)}>Assign</Button>
+      )}
+      {isAdminOrManager && r.status === "PickedUp" && (
+        <Button onClick={() => setCompleteConfirm(r)}>Complete</Button>
+      )}
+    </div>
+  );
+
+  const columns: Column<AssetRequest>[] = [
+    {
+      header: "Request ID",
+      render: (r) => <span className="font-bold text-ursb">#{r.request_id}</span>,
+    },
+    {
+      header: "Asset / Type",
+      render: (r) =>
+        r.asset_id ? (
+          <div>
+            <div className="font-bold text-ink text-sm">{r.asset_name || "Asset"}</div>
+            <div className="text-[11px] text-ink-dim mt-0.5">{r.asset_id}</div>
+          </div>
+        ) : (
+          <span className="text-ink font-semibold">{r.asset_type}</span>
+        ),
+    },
+    {
+      header: "Requested By",
+      render: (r) => <span className="font-semibold">{r.requested_by_name || `User ID: ${r.requested_by}`}</span>,
+    },
+    {
+      header: "Priority",
+      render: (r) => <StatusBadge status={r.priority} />,
+    },
+    {
+      header: "Status",
+      render: (r) => <StatusBadge status={r.status} />,
+    },
+    {
+      header: "Required By",
+      render: (r) => (r.required_by_date ? new Date(r.required_by_date).toLocaleDateString() : "—"),
+    },
+    {
+      header: "Requested Date",
+      render: (r) => new Date(r.requested_date).toLocaleDateString(),
+    },
+    {
+      header: "Actions",
+      render: (r) => renderActions(r),
+    },
+  ];
+
+  const assetOptions = assets.filter(a => a.status === "Active").map(a => ({
+    value: a.asset_id,
+    label: `${a.asset_name} (${a.asset_id})`,
+  }));
+
+  const assetTypeOptions = [
+    { value: "ICT Equipment", label: "ICT Equipment" },
+    { value: "Furniture", label: "Furniture" },
+    { value: "Vehicle", label: "Vehicle" },
+    { value: "Software", label: "Software" },
+    { value: "Other", label: "Other" },
+  ];
+
+  const priorityOptions = [
+    { value: "Low", label: "Low" },
+    { value: "Normal", label: "Normal" },
+    { value: "High", label: "High" },
+    { value: "Urgent", label: "Urgent" },
+  ];
+
+  const approveAssetOptions = assets
+    .filter(a => a.asset_type === selectedRequest?.asset_type && a.status === "Active")
+    .map(a => ({
+      value: a.asset_id,
+      label: `${a.asset_name} (${a.asset_id}) - SN: ${a.serial_number}`,
+    }));
+
+  const custodianOptions = users.filter(u => u.isActive).map(u => ({
+    value: String(u.id),
+    label: `${u.name} (${u.role})`,
+  }));
 
   return (
-    <>
+    <div className="w-full flex flex-col gap-6 select-none font-sans">
       {success && <SuccessBanner message={success} onDismiss={() => setSuccess(null)} />}
       {error && <ErrorMessage message={error} />}
 
-      <PageHeader 
+      <PageHeader
         title={isAdminOrManager ? "Asset Requests" : "My Asset Requests"}
-        subtitle={isAdminOrManager ? "Review and manage employee asset requests" : "Submit and track your asset requests"}
+        subtitle={
+          isAdminOrManager
+            ? "Review and manage employee asset requests"
+            : "Submit and track your asset requests"
+        }
         actions={
-          <button className="btn btn-primary" onClick={() => setShowSubmitModal(true)}>
-            {ICONS.add} Submit Request
-          </button>
+          <Button onClick={() => setShowSubmitModal(true)}>
+            <ICONS.plus className="w-4 h-4 mr-1.5 stroke-[2.4]" />
+            Submit Request
+          </Button>
         }
       />
 
       {isAdminOrManager && (
-        <div className="filter-bar">
-          <div className="filter-group">
-            <label htmlFor="status-filter" className="filter-label">Status</label>
+        <FilterBar
+          count={{ value: filteredRequests.length, label: "requests" }}
+          onClear={handleClearFilters}
+        >
+          <FilterField label="Status" htmlFor="status-filter">
             <select
               id="status-filter"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="filter-select"
+              className={filterSelectCls}
             >
               <option value="All">All Statuses</option>
               <option value="Pending">Pending</option>
@@ -380,154 +477,63 @@ export default function Requests() {
               <option value="Completed">Completed</option>
               <option value="Cancelled">Cancelled</option>
             </select>
-          </div>
-          <div className="filter-group">
-            <label htmlFor="requested-by-filter" className="filter-label">Requested By</label>
+          </FilterField>
+          <FilterField label="Requested By" htmlFor="requested-by-filter">
             <input
               id="requested-by-filter"
               type="text"
-              className="filter-search"
+              className={filterInputCls}
               placeholder="Search by requester..."
               value={requestedBySearch}
               onChange={(e) => setRequestedBySearch(e.target.value)}
             />
-          </div>
-          <button className="btn btn-secondary btn-sm" onClick={handleClearFilters}>
-            Clear Filters
-          </button>
-          <div className="filter-count">{filteredRequests.length} requests</div>
-        </div>
+          </FilterField>
+        </FilterBar>
       )}
 
       {isLoading ? (
-        <div className="page-loading" style={{ display: "flex", justifyContent: "center", padding: "3rem" }}>
-          <LoadingSpinner size="lg" />
+        <div className="flex justify-center py-16">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ursb" />
         </div>
       ) : filteredRequests.length === 0 ? (
-        <EmptyState title="No requests found" description="There are no requests matching your criteria." icon="📋" />
+        <EmptyState
+          title="No requests found"
+          description="There are no requests matching your criteria."
+          icon={<ICONS.requests className="w-6 h-6 text-ink-icon stroke-[2.2]" />}
+        />
       ) : (
-        <div className="card">
-          <table>
-            <thead>
-              <tr>
-                <th>Request ID</th>
-                <th>Asset / Type</th>
-                <th>Requested By</th>
-                <th>Priority</th>
-                <th>Status</th>
-                <th>Required By</th>
-                <th>Requested Date</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRequests.map((r) => (
-                <tr key={r.request_id}>
-                  <td>#{r.request_id}</td>
-                  <td>
-                    {r.asset_id ? (
-                      <div>
-                        <div className="user-name">{r.asset_name || "Asset"}</div>
-                        <div className="text-small text-muted">{r.asset_id}</div>
-                      </div>
-                    ) : (
-                      <span className="text-muted">{r.asset_type}</span>
-                    )}
-                  </td>
-                  <td>{r.requested_by_name || `User ID: ${r.requested_by}`}</td>
-                  <td>
-                    <span className={`badge ${priorityBadgeColor(r.priority)}`}>
-                      {r.priority}
-                    </span>
-                  </td>
-                  <td>
-                    <StatusBadge status={r.status} />
-                  </td>
-                  <td>{r.required_by_date ? new Date(r.required_by_date).toLocaleDateString() : "-"}</td>
-                  <td>{new Date(r.requested_date).toLocaleDateString()}</td>
-                  <td>
-                    <div style={{ display: "flex", gap: "0.25rem" }}>
-                      {/* Employee Actions */}
-                      {user?.role === "Employee" && r.status === "Pending" && (
-                        <button className="btn btn-danger btn-sm" onClick={() => handleCancelClick(r)}>
-                          Cancel
-                        </button>
-                      )}
-                      {user?.role === "Employee" && r.status === "Assigned" && (
-                        <button className="btn btn-secondary btn-sm" onClick={() => handlePickupClick(r)}>
-                          🤝 Confirm Pickup
-                        </button>
-                      )}
-
-                      {/* Admin/Manager Actions */}
-                      {isAdminOrManager && r.status === "Pending" && (
-                        <>
-                          <button className="btn btn-primary btn-sm" onClick={() => handleApproveClick(r)}>
-                            Approve
-                          </button>
-                          <button className="btn btn-danger btn-sm" onClick={() => handleRejectClick(r)}>
-                            Reject
-                          </button>
-                        </>
-                      )}
-                      {isAdminOrManager && r.status === "Approved" && (
-                        <button className="btn btn-secondary btn-sm" onClick={() => handleAssignClick(r)}>
-                          Assign
-                        </button>
-                      )}
-                      {isAdminOrManager && r.status === "PickedUp" && (
-                        <button className="btn btn-primary btn-sm" onClick={() => setCompleteConfirm(r)}>
-                          Complete
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table
+          data={filteredRequests}
+          columns={columns}
+          rowKey={(r) => r.request_id}
+          emptyMessage="No requests found."
+        />
       )}
 
       {/* Submit Request Modal */}
       <Modal open={showSubmitModal} onClose={handleCloseSubmitModal} title="Submit Asset Request">
-        <form onSubmit={handleSubmitRequest}>
-          <div className="form-group">
-            <label htmlFor="submit-asset-id" className="form-label">Specific Asset (Optional)</label>
-            <select
-              id="submit-asset-id"
-              className="form-control"
-              value={submitForm.asset_id}
-              onChange={(e) => setSubmitForm({ ...submitForm, asset_id: e.target.value })}
-            >
-              <option value="">Select an asset (if requesting a specific one)...</option>
-              {assets.filter(a => a.status === "Active").map(a => (
-                <option key={a.asset_id} value={a.asset_id}>
-                  {a.asset_name} ({a.asset_id})
-                </option>
-              ))}
-            </select>
-          </div>
+        <form onSubmit={handleSubmitRequest} className="flex flex-col gap-4">
+          <FormInput
+            type="select"
+            variant="light"
+            label="Specific Asset (Optional)"
+            value={submitForm.asset_id}
+            onChange={(val) => setSubmitForm({ ...submitForm, asset_id: val })}
+            options={[{ value: "", label: "Select an asset (optional)..." }, ...assetOptions]}
+          />
 
-          <div className="form-group">
-            <label htmlFor="submit-asset-type" className="form-label">Asset Type (Required if no asset chosen)</label>
-            <select
-              id="submit-asset-type"
-              className="form-control"
-              value={submitForm.asset_type}
-              onChange={(e) => setSubmitForm({ ...submitForm, asset_type: e.target.value })}
-            >
-              <option value="">Select an asset type...</option>
-              <option value="ICT Equipment">ICT Equipment</option>
-              <option value="Furniture">Furniture</option>
-              <option value="Vehicle">Vehicle</option>
-              <option value="Software">Software</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
+          <FormInput
+            type="select"
+            variant="light"
+            label="Asset Type (Required if no asset chosen)"
+            value={submitForm.asset_type}
+            onChange={(val) => setSubmitForm({ ...submitForm, asset_type: val })}
+            options={[{ value: "", label: "Select an asset type..." }, ...assetTypeOptions]}
+          />
 
           <FormInput 
             type="textarea"
+            variant="light"
             label="Reason for Request"
             value={submitForm.reason}
             onChange={(val) => setSubmitForm({ ...submitForm, reason: val })}
@@ -536,92 +542,78 @@ export default function Requests() {
             characterCount={{ current: submitForm.reason.length, min: 10 }}
           />
 
-          <div className="form-group">
-            <label htmlFor="submit-priority" className="form-label">Priority</label>
-            <select
-              id="submit-priority"
-              className="form-control"
-              value={submitForm.priority}
-              onChange={(e) => setSubmitForm({ ...submitForm, priority: e.target.value })}
-            >
-              <option value="Low">Low</option>
-              <option value="Normal">Normal</option>
-              <option value="High">High</option>
-              <option value="Urgent">Urgent</option>
-            </select>
-          </div>
+          <FormInput
+            type="select"
+            variant="light"
+            label="Priority"
+            value={submitForm.priority}
+            onChange={(val) => setSubmitForm({ ...submitForm, priority: val })}
+            options={priorityOptions}
+          />
 
           <FormInput 
             type="date"
+            variant="light"
             label="Required By Date (Optional)"
             value={submitForm.required_by_date}
             onChange={(val) => setSubmitForm({ ...submitForm, required_by_date: val })}
           />
 
-          <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={handleCloseSubmitModal}>
+          <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
+            <Button type="button" variant="danger-outline" onClick={handleCloseSubmitModal}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              className="btn btn-primary"
+              isLoading={isSubmitting}
               disabled={isSubmitting || submitForm.reason.length < 10 || (!submitForm.asset_id && !submitForm.asset_type)}
             >
-              {isSubmitting ? <LoadingSpinner size="sm" /> : "Submit Request"}
-            </button>
+              Submit Request
+            </Button>
           </div>
         </form>
       </Modal>
 
       {/* Approve Modal */}
       <Modal open={showApproveModal} onClose={() => setShowApproveModal(false)} title="Approve Request">
-        <form onSubmit={handleApproveSubmit}>
-          <p className="text-small text-muted" style={{ marginBottom: "1rem" }}>
-            Confirm approval for request #{selectedRequest?.request_id} submitted by {selectedRequest?.requested_by_name}.
+        <form onSubmit={handleApproveSubmit} className="flex flex-col gap-4">
+          <p className="text-xs text-ink-dim/80 mb-2 leading-relaxed">
+            Confirm approval for request <b className="text-ursb">#{selectedRequest?.request_id}</b> submitted by <b className="text-ink">{selectedRequest?.requested_by_name}</b>.
           </p>
 
           {!selectedRequest?.asset_id && (
-            <div className="form-group">
-              <label htmlFor="approve-asset-id" className="form-label">Select Asset to Assign</label>
-              <select
-                id="approve-asset-id"
-                className="form-control"
-                value={approveForm.assigned_asset_id}
-                onChange={(e) => setApproveForm({ assigned_asset_id: e.target.value })}
-                required
-              >
-                <option value="">Select an asset to fulfill this request...</option>
-                {assets
-                  .filter(a => a.asset_type === selectedRequest?.asset_type && a.status === "Active")
-                  .map(a => (
-                    <option key={a.asset_id} value={a.asset_id}>
-                      {a.asset_name} ({a.asset_id}) - SN: {a.serial_number}
-                    </option>
-                  ))}
-              </select>
-            </div>
+            <FormInput
+              type="select"
+              variant="light"
+              label="Select Asset to Assign"
+              value={approveForm.assigned_asset_id}
+              onChange={(val) => setApproveForm({ assigned_asset_id: val })}
+              options={[{ value: "", label: "Select an asset to fulfill this request..." }, ...approveAssetOptions]}
+              required
+            />
           )}
 
-          <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={() => setShowApproveModal(false)}>
+          <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
+            <Button type="button" variant="ghost" onClick={() => setShowApproveModal(false)}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              className="btn btn-primary"
+              isLoading={isSubmitting}
               disabled={isSubmitting || (!selectedRequest?.asset_id && !approveForm.assigned_asset_id)}
             >
-              {isSubmitting ? <LoadingSpinner size="sm" /> : "Approve Request"}
-            </button>
+              Approve Request
+            </Button>
           </div>
         </form>
       </Modal>
 
       {/* Reject Modal */}
       <Modal open={showRejectModal} onClose={handleCloseRejectModal} title="Reject Request">
-        <form onSubmit={handleRejectSubmit}>
+        <form onSubmit={handleRejectSubmit} className="flex flex-col gap-4">
           <FormInput 
             type="textarea"
+            variant="light"
             label="Rejection Reason / Notes"
             value={rejectForm.notes}
             onChange={(val) => setRejectForm({ notes: val })}
@@ -629,60 +621,54 @@ export default function Requests() {
             placeholder="Please provide details for the rejection..."
           />
 
-          <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={handleCloseRejectModal}>
+          <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
+            <Button type="button" variant="danger-outline" onClick={handleCloseRejectModal}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              className="btn btn-danger"
+              variant="danger-outline"
+              isLoading={isSubmitting}
               disabled={isSubmitting || !rejectForm.notes.trim()}
             >
-              {isSubmitting ? <LoadingSpinner size="sm" /> : "Reject Request"}
-            </button>
+              Reject Request
+            </Button>
           </div>
         </form>
       </Modal>
 
       {/* Assign Modal */}
       <Modal open={showAssignModal} onClose={handleCloseAssignModal} title="Assign Asset Custody">
-        <form onSubmit={handleAssignSubmit}>
+        <form onSubmit={handleAssignSubmit} className="flex flex-col gap-4">
           <FormInput 
             type="text"
+            variant="light"
             label="Asset ID"
             value={assignForm.asset_id}
-            onChange={(val) => setAssignForm({ ...assignForm, asset_id: val })}
+            onChange={() => {}}
             disabled
           />
 
-          <div className="form-group">
-            <label htmlFor="assign-custodian" className="form-label">Assign Custodian (Defaults to you)</label>
-            <select
-              id="assign-custodian"
-              className="form-control"
-              value={assignForm.custodian_id}
-              onChange={(e) => setAssignForm({ ...assignForm, custodian_id: e.target.value })}
-            >
-              <option value="">Select custodian user...</option>
-              {users.filter(u => u.isActive).map(u => (
-                <option key={u.id} value={u.id}>
-                  {u.name} ({u.role})
-                </option>
-              ))}
-            </select>
-          </div>
+          <FormInput
+            type="select"
+            variant="light"
+            label="Assign Custodian (Defaults to you)"
+            value={assignForm.custodian_id}
+            onChange={(val) => setAssignForm({ ...assignForm, custodian_id: val })}
+            options={[{ value: "", label: "Select custodian user..." }, ...custodianOptions]}
+          />
 
-          <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={handleCloseAssignModal}>
+          <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
+            <Button type="button" variant="danger-outline" onClick={handleCloseAssignModal}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              className="btn btn-primary"
+              isLoading={isSubmitting}
               disabled={isSubmitting || !assignForm.asset_id}
             >
-              {isSubmitting ? <LoadingSpinner size="sm" /> : "Confirm Assignment"}
-            </button>
+              Confirm Assignment
+            </Button>
           </div>
         </form>
       </Modal>
@@ -706,6 +692,7 @@ export default function Requests() {
         onCancel={() => setCompleteConfirm(null)}
         onConfirm={handleCompleteConfirm}
       />
-    </>
+    </div>
   );
 }
+
