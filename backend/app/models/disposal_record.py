@@ -1,5 +1,6 @@
 import enum
 from datetime import date
+from typing import Optional
 
 from sqlalchemy import Date, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -34,6 +35,16 @@ class DisposalRecord(Base):
         String(36),
         ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="Approved"
+    )
+    recommended_by: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    recommendation_reason: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
     )
 
     # Relationships
