@@ -34,6 +34,7 @@ class User(Base):
     role = Column(Enum(UserRole, native_enum=False, length=50), nullable=True)
     
     # Authentication fields
+    # Plain-text passwords are never stored - they are generated, returned once to the admin, and discarded
     password_hash = Column(String(length=128), nullable=False)
     password_salt = Column(String(length=128), nullable=False)
     

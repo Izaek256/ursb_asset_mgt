@@ -79,44 +79,6 @@ def require_roles(*allowed_roles: str):
     return _checker
 
 
-@router.post("/signup", response_model=LoginResponse)
-def signup(
-    payload: SignupRequest,
-    db: Session = Depends(get_db),
-) -> dict[str, str]:
-    validate_ursb_email(payload.email)
-
-    if payload.password != payload.confirm_password:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Passwords do not match",
-        )
-
-    if get_user_by_email(db, payload.email):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email is already registered",
-        )
-
-    if payload.username and get_user_by_username(db, payload.username):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username is already taken",
-        )
-
-    create_user(
-        db,
-        email=payload.email,
-        password=payload.password,
-        first_name=payload.first_name,
-        last_name=payload.last_name,
-        phone_number=payload.phone_number,
-        department=payload.department,
-        username=payload.username,
-    )
-    return {"message": "Account created successfully. Please sign in."}
-
-
 @router.post("/login", response_model=LoginResponse)
 def login(
     payload: LoginRequest,
@@ -124,7 +86,12 @@ def login(
     request: Request,
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
+    print(f"DEBUG: Login attempt for email: {payload.email}")
     user = get_user_by_email(db, payload.email)
+    print(f"DEBUG: User found: {user is not None}")
+    if user:
+        print(f"DEBUG: User ID: {user.user_id}, Email: {user.email}, Is active: {user.is_active}")
+        print(f"DEBUG: Password salt: {user.password_salt[:20]}... Hash: {user.password_hash[:20]}...")
     if user and is_account_locked(user):
         raise HTTPException(
             status_code=status.HTTP_423_LOCKED,
@@ -135,6 +102,7 @@ def login(
         )
 
     if not user or not verify_password(payload.password, user.password_salt, user.password_hash):
+        print(f"DEBUG: Password verification failed. User exists: {user is not None}")
         if user:
             register_failed_login_attempt(db, user)
         raise HTTPException(
@@ -142,6 +110,7 @@ def login(
             detail="Invalid email or password",
         )
 
+    print(f"DEBUG: Password verification successful")
     reset_failed_login_attempts(db, user)
     session = create_session(db, user)
     response.set_cookie(
@@ -269,3 +238,56 @@ def change_password(
     response.delete_cookie(SESSION_COOKIE_NAME, path="/")
 
     return {"message": "Password changed successfully. Please log in again."}
+
+
+@router.post("/change-password")
+def change_password_no_session_invalidate(
+    payload: PasswordChangeRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Change the current user's password without invalidating sessions. Requires authentication (all roles)."""
+
+    # Validate current password
+    if not verify_password(payload.current_password, current_user.password_salt, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect"
+        )
+
+    # Validate new password differs from current
+    if payload.new_password == payload.current_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different from the current password"
+        )
+
+    # Validate password complexity: min 8 chars
+    if len(payload.new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password does not meet requirements: minimum 8 characters"
+        )
+
+    # Hash new password
+    salt, password_hash = create_password_hash(payload.new_password)
+    current_user.password_hash = password_hash
+    current_user.password_salt = salt
+
+    # Write audit log for password change
+    from app.models.audit_log import AuditLog
+    from datetime import datetime
+    audit = AuditLog(
+        user_id=current_user.user_id,
+        action="PASSWORD_CHANGED",
+        table_affected="users",
+        record_id=current_user.user_id,
+        details=f"Password changed for user {current_user.email}",
+        timestamp=datetime.utcnow(),
+    )
+    db.add(audit)
+    db.commit()
+
+    return {"message": "Password changed successfully"}
+

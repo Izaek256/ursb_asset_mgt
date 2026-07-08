@@ -14,6 +14,7 @@ import Requests from "./pages/Requests";
 import Settings from "./pages/Settings";
 import Storage from "./pages/Storage";
 import Transfers from "./pages/Transfers";
+import CredentialsPage from "./pages/CredentialsPage";
 
 const NAV_LABELS: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -27,6 +28,7 @@ const NAV_LABELS: Record<string, string> = {
   "/admin/users": "User Management",
   "/admin/audit-logs": "Audit Logs",
   "/settings": "Settings",
+  "/credentials": "Credentials",
 };
 
 function AppShell() {
@@ -83,6 +85,8 @@ function AppShell() {
         return <UserManagement />;
       case "/settings":
         return <Settings />;
+      case "/credentials":
+        return <CredentialsPage />;
       default:
         return <Dashboard onNavigate={navigate} />;
     }

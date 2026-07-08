@@ -1,5 +1,7 @@
 """Admin routes: user management and audit logs."""
 
+import secrets
+import string
 from datetime import datetime, date, timedelta
 from typing import List, Optional
 
@@ -11,10 +13,49 @@ from app.db import get_db
 from app.models.user import User, UserRole
 from app.models.audit_log import AuditLog
 from app.models.session import Session
+from app.models.temporary_password import TemporaryPassword
 from app.api.v1.auth import get_current_user, require_roles
 from app.services.auth import create_password_hash, validate_ursb_email
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
+
+
+def generate_secure_password() -> str:
+    """
+    Generate a cryptographically random secure password.
+
+    Requirements:
+    - Minimum 12 characters
+    - At least one uppercase letter (A-Z)
+    - At least one lowercase letter (a-z)
+    - At least one digit (0-9)
+    - At least one special character from !@#$%^&*
+
+    Uses Python's secrets module for cryptographic randomness.
+    The generated value is returned once and never stored.
+    """
+    uppercase = string.ascii_uppercase
+    lowercase = string.ascii_lowercase
+    digits = string.digits
+    special = "!@#$%^&*"
+
+    # Ensure at least one character from each required set
+    password = [
+        secrets.choice(uppercase),
+        secrets.choice(lowercase),
+        secrets.choice(digits),
+        secrets.choice(special),
+    ]
+
+    # Fill the rest with random characters from all sets
+    all_chars = uppercase + lowercase + digits + special
+    for _ in range(8):  # 8 more characters to reach minimum 12
+        password.append(secrets.choice(all_chars))
+
+    # Shuffle to avoid predictable pattern
+    secrets.SystemRandom().shuffle(password)
+
+    return ''.join(password)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────────
@@ -83,7 +124,14 @@ class RoleUpdateRequest(BaseModel):
 class CreateUserRequest(BaseModel):
     full_name: str
     email: str
-    password: str
+    role: str
+    department: str
+
+
+class UserCreateAutoRequest(BaseModel):
+    """Request schema for user creation with auto-generated password."""
+    full_name: str
+    email: str
     role: str
     department: str
 
@@ -184,13 +232,13 @@ def list_users(
     return [_user_to_out(u) for u in users]
 
 
-@router.post("/users", response_model=UserOut)
+@router.post("/users")
 def create_user(
-    body: CreateUserRequest,
+    body: UserCreateAutoRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("System Administrator")),
 ):
-    """Create a new user account. Admin only."""
+    """Create a new user account with auto-generated password. Admin only."""
     # Validate email domain - only @ursb.go.ug addresses are permitted
     validate_ursb_email(body.email)
 
@@ -198,19 +246,20 @@ def create_user(
     if existing:
         raise HTTPException(status_code=409, detail="A user with this email already exists.")
 
-    if len(body.password) < 8:
-        raise HTTPException(status_code=422, detail="Password must be at least 8 characters.")
-
     try:
         role = UserRole(body.role)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid role: {body.role}")
 
-    salt, p_hash = create_password_hash(body.password)
+    # Auto-generate secure password
+    generated_password = generate_secure_password()
+    print(f"DEBUG: Generated password for {body.email}: {generated_password}")
+    salt, p_hash = create_password_hash(generated_password)
+    print(f"DEBUG: Salt: {salt[:20]}... Hash: {p_hash[:20]}...")
 
     new_user = User(
         full_name=body.full_name,
-        email=body.email,
+        email=body.email.strip().lower(),
         password_hash=p_hash,
         password_salt=salt,
         role=role,
@@ -219,19 +268,34 @@ def create_user(
     )
     db.add(new_user)
     db.flush()  # Get the auto-generated user_id before commit
+    print(f"DEBUG: User created with ID: {new_user.user_id}, email: {new_user.email}")
 
     audit = AuditLog(
         user_id=current_user.user_id,
-        action="CREATE_USER",
+        action="USER_CREATED",
         table_affected="users",
         record_id=new_user.user_id,
         details=f"User {new_user.email} created by admin {current_user.email}",
         timestamp=datetime.utcnow(),
     )
     db.add(audit)
+
+    # Store temporary password for admin viewing (expires in 7 days)
+    temp_password = TemporaryPassword(
+        user_id=new_user.user_id,
+        password=generated_password,
+        created_at=datetime.utcnow(),
+        expires_at=datetime.utcnow() + timedelta(days=7),
+    )
+    db.add(temp_password)
+    print(f"DEBUG: Saving TemporaryPassword for user_id={new_user.user_id}")
     db.commit()
     db.refresh(new_user)
-    return _user_to_out(new_user)
+
+    return {
+        **_user_to_out(new_user).model_dump(),
+        "generated_password": generated_password
+    }
 
 
 @router.put("/users/{user_id}", response_model=UserOut)
