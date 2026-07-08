@@ -126,6 +126,16 @@ def create_assignment(
     db.add(assignment)
     asset.status = AssetStatus.AVAILABLE
     _log(db, actor=current_user, action="ASSIGN_ASSET", record_id=asset.asset_id, details="Assigned asset (pending acceptance)")
+    # S3-08: Notify employee of assignment
+    from app.services.notification_service import create_notification
+    create_notification(
+        db=db,
+        user_id=str(assignment.assigned_to),
+        title="New Asset Custody Assignment",
+        message=f"You have been assigned the asset '{asset.asset_name}'. Please accept or decline custody of this asset.",
+        notification_type="ASSIGNMENT_SENT",
+        related_asset_id=asset.asset_id,
+    )
     db.commit()
     db.refresh(assignment)
     return _serialize_assignment(assignment, db)

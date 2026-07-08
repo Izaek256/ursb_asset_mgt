@@ -156,6 +156,16 @@ def create_request(
     db.add(request)
     db.flush()
     _log(db, actor=current_user, action="SUBMIT_REQUEST", record_id=str(request.request_id), details="Submitted asset request")
+    # S3-08: Notify Asset Managers of New Request
+    from app.services.notification_service import create_notification
+    create_notification(
+        db=db,
+        user_id="Asset Manager",
+        title="New Asset Request Submitted",
+        message=f"A new asset request has been submitted by user {current_user.email} (Request ID: {request.request_id}).",
+        notification_type="REQUEST_SUBMITTED",
+        related_asset_id=request.asset_id,
+    )
     db.commit()
     db.refresh(request)
     return _serialize_request(request)
@@ -242,6 +252,16 @@ def approve_request(
     request.reviewed_by = current_user.id
     request.reviewed_at = datetime.utcnow()
     _log(db, actor=current_user, action="APPROVE_REQUEST", record_id=str(request.request_id), details="Approved asset request")
+    # S3-08: Notify Employee of Request Approval
+    from app.services.notification_service import create_notification
+    create_notification(
+        db=db,
+        user_id=str(request.requested_by),
+        title="Asset Request Approved",
+        message=f"Your request for asset/type '{request.asset_type or request.asset_id}' has been approved.",
+        notification_type="REQUEST_APPROVED",
+        related_asset_id=request.asset_id,
+    )
     db.commit()
     db.refresh(request)
     return _serialize_request(request)

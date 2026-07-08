@@ -84,7 +84,6 @@ def signup(
     payload: SignupRequest,
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
-    print(f"[DEBUG SIGNUP] payload: {payload}")
     validate_ursb_email(payload.email)
 
     if payload.password != payload.confirm_password:
@@ -125,7 +124,6 @@ def login(
     request: Request,
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
-    print(f"[DEBUG LOGIN] email: {payload.email}, password: {payload.password}")
     user = get_user_by_email(db, payload.email)
     if user and is_account_locked(user):
         raise HTTPException(
