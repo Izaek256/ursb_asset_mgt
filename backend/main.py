@@ -55,11 +55,11 @@ async def lifespan(app: FastAPI):
             if column_name not in existing_asset_columns:
                 connection.execute(text(f"ALTER TABLE assets ADD COLUMN {definition}"))
 
-    default_email = os.getenv("AUTH_DEFAULT_EMAIL", "admin@ursb.local").strip().lower()
-    default_password = os.getenv("AUTH_DEFAULT_PASSWORD", "Admin123!")
+    default_email = os.getenv("AUTH_DEFAULT_EMAIL", "admin@ursb.go.ug").strip().lower()
+    default_password = os.getenv("AUTH_DEFAULT_PASSWORD", "Admin@1234")
 
     with SessionLocal() as db:
-        if db.query(User).count() == 0:
+        if not db.query(User).filter(User.email == default_email).first():
             salt, password_hash = create_password_hash(default_password)
             db.add(
                 User(

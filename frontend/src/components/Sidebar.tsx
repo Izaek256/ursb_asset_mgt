@@ -23,7 +23,7 @@ const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: ICONS.dashboard, path: "/dashboard", roles: ALL_ROLES },
   { id: "requests", label: "Requests", icon: ICONS.requests, path: "/requests", roles: ALL_ROLES },
   { id: "assets", label: "Assets", icon: ICONS.assets, path: "/assets", roles: ["System Administrator", "Asset Manager", "Asset Custodian"] },
-  { id: "assignments", label: "Assignments", icon: ICONS.assignments, path: "/assignments", roles: ["System Administrator", "Asset Manager"] },
+  { id: "assignments", label: "Assignments", icon: ICONS.assignments, path: "/assignments", roles: ALL_ROLES },
   { id: "storage", label: "Storage", icon: ICONS.storage, path: "/storage", roles: ["System Administrator", "Asset Manager"] },
   { id: "transfers", label: "Transfers", icon: ICONS.transfers, path: "/transfers", roles: ["System Administrator", "Asset Manager"] },
   { id: "maintenance", label: "Maintenance", icon: ICONS.maintenance, path: "/maintenance", roles: ["System Administrator", "Asset Manager"] },
