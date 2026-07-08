@@ -30,6 +30,8 @@ import {
   FileText,
   FileSpreadsheet,
 } from "lucide-react";
+import exportCsvIcon from "../assets/icons8-export-excel-50.png";
+import exportPdfIcon from "../assets/icons8-export-pdf-50.png";
 
 export const ICONS = {
   // Navigation / Pages
@@ -94,4 +96,8 @@ export const ICONS = {
   returnEmoji: "↩️",
   calendarEmoji: "📅",
   clockEmoji: "⏰",
+
+  // Export Icons
+  exportCsvIcon: exportCsvIcon, // Used by the CSV export button on the Assets page
+  exportPdfIcon: exportPdfIcon, // Used by the PDF export button on the Assets page
 };
