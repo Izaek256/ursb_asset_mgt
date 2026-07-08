@@ -1,4 +1,5 @@
 import React from "react";
+import * as XLSX from "xlsx";
 import { useAuth } from "../AuthContext";
 import { apiFetch } from "../AuthContext";
 import { ICONS } from "../utils/icons";
@@ -8,6 +9,7 @@ import ErrorMessage from "../components/ErrorMessage";
 import SuccessBanner from "../components/common/SuccessBanner";
 import { filterInputCls, filterSelectCls } from "../components/common/FilterBar";
 import Table, { Column } from "../components/common/Table";
+import Modal from "../components/Modal";
 
 interface RecentAccount {
   user_id: string;
@@ -60,9 +62,14 @@ export default function CredentialsPage() {
   // Bulk import state
   const [file, setFile] = React.useState<File | null>(null);
   const [isImporting, setIsImporting] = React.useState(false);
+  const [importProgress, setImportProgress] = React.useState(0);
+  const [importProcessed, setImportProcessed] = React.useState(0);
+  const [importTotal, setImportTotal] = React.useState(0);
   const [importError, setImportError] = React.useState<string | null>(null);
   const [importResults, setImportResults] = React.useState<BulkImportResponse | null>(null);
   const [showResults, setShowResults] = React.useState(false);
+  const [showErrorsModal, setShowErrorsModal] = React.useState(false);
+  const wsRef = React.useRef<WebSocket | null>(null);
 
   // Single user creation state
   const [singleFullName, setSingleFullName] = React.useState("");
@@ -138,28 +145,101 @@ export default function CredentialsPage() {
     }
   };
 
-  const handleImport = async () => {
+  const handleImport = () => {
     if (!file) return;
     setImportError(null);
+    setImportProgress(0);
+    setImportProcessed(0);
+    setImportTotal(0);
     setIsImporting(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const data = await apiFetch<BulkImportResponse>("/users/bulk-import", {
-        method: "POST",
-        body: formData,
-      });
-      setImportResults(data);
-      setShowResults(true);
-      setFile(null);
-      // Reset file input
-      const fileInput = document.getElementById("import-file") as HTMLInputElement;
-      if (fileInput) fileInput.value = "";
-    } catch (err: any) {
-      setImportError(err.message || "Import failed");
-    } finally {
-      setIsImporting(false);
+
+    // ── Parse file client-side with xlsx ─────────────────────────────────────
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      let rows: Record<string, string>[] = [];
+      try {
+        const data = e.target?.result;
+        const wb = XLSX.read(data, { type: "binary" });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: "" });
+      } catch {
+        setImportError("Failed to parse file. Ensure it is a valid CSV or XLSX.");
+        setIsImporting(false);
+        return;
+      }
+
+      if (rows.length === 0) {
+        setImportError("The file contains no data rows.");
+        setIsImporting(false);
+        return;
+      }
+
+      // ── Open WebSocket ────────────────────────────────────────────────────
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const ws = new WebSocket(`${protocol}//${window.location.host}/api/v1/users/bulk-import-ws`);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify(rows));
+      };
+
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        if (msg.type === "progress") {
+          setImportProgress(msg.progress);
+          setImportProcessed(msg.processed);
+          setImportTotal(msg.total);
+        } else if (msg.type === "complete") {
+          setImportProgress(100);
+          setIsImporting(false);
+          wsRef.current = null;
+
+          const result: BulkImportResponse = msg;
+          setImportResults(result);
+          setShowResults(result.accounts && result.accounts.length > 0);
+          setFile(null);
+          const fileInput = document.getElementById("import-file") as HTMLInputElement;
+          if (fileInput) fileInput.value = "";
+
+          if (result.errors && result.errors.length > 0) {
+            setShowErrorsModal(true);
+          }
+        } else if (msg.type === "error") {
+          setImportError(msg.message || "Import failed on server.");
+          setIsImporting(false);
+          wsRef.current = null;
+        }
+      };
+
+      ws.onerror = () => {
+        setImportError("Connection error. Please try again.");
+        setIsImporting(false);
+        wsRef.current = null;
+      };
+
+      ws.onclose = (event) => {
+        // Abnormal close (cancelled by user closes with code 1000 intentionally)
+        if (isImporting && event.code !== 1000) {
+          setImportError("Import was interrupted.");
+          setIsImporting(false);
+          wsRef.current = null;
+        }
+      };
+    };
+
+    reader.readAsBinaryString(file);
+  };
+
+  const handleCancelImport = () => {
+    if (wsRef.current) {
+      wsRef.current.close(1000, "User cancelled");
+      wsRef.current = null;
     }
+    setIsImporting(false);
+    setImportProgress(0);
+    setImportProcessed(0);
+    setImportTotal(0);
+    setImportError("Import cancelled. All changes have been rolled back.");
   };
 
   const copyToClipboard = (text: string) => {
@@ -286,6 +366,126 @@ export default function CredentialsPage() {
 
   return (
     <div className="w-full flex flex-col gap-6 select-none font-sans">
+      {/* Import Progress Modal */}
+      <Modal open={isImporting} onClose={() => {}} title="">
+        <div className="flex flex-col items-center px-4 pb-6 pt-2 select-none font-sans min-w-[320px]">
+          {/* Large animated ring with big percentage number */}
+          <div className="relative flex items-center justify-center mb-6 mt-2">
+            <svg className="w-40 h-40 -rotate-90" viewBox="0 0 120 120">
+              {/* Track circle */}
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#e8eef8" strokeWidth="8" />
+              {/* Progress arc */}
+              <circle
+                cx="60" cy="60" r="52"
+                fill="none"
+                stroke="url(#progressGrad)"
+                strokeWidth="8"
+                strokeLinecap="round"
+                strokeDasharray={`${2 * Math.PI * 52}`}
+                strokeDashoffset={`${2 * Math.PI * 52 * (1 - importProgress / 100)}`}
+                style={{ transition: "stroke-dashoffset 0.4s cubic-bezier(0.4,0,0.2,1)" }}
+              />
+              <defs>
+                <linearGradient id="progressGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#6a94d4" />
+                  <stop offset="100%" stopColor="#3b6abf" />
+                </linearGradient>
+              </defs>
+            </svg>
+            {/* Centered percentage text */}
+            <div className="absolute flex flex-col items-center justify-center">
+              <span
+                className="font-black text-5xl leading-none text-[#3b6abf] tabular-nums"
+                style={{ transition: "all 0.3s ease" }}
+              >
+                {importProgress}
+              </span>
+              <span className="text-base font-bold text-[#6a94d4] -mt-1">%</span>
+            </div>
+          </div>
+
+          {/* Status line */}
+          <p className="text-base font-bold text-ink mb-1 tracking-tight">
+            {importProgress < 100 ? "Creating accounts…" : "Finalising import…"}
+          </p>
+          {importTotal > 0 && (
+            <p className="text-xs text-ink-dim mb-5">
+              {importProcessed} of {importTotal} accounts processed
+            </p>
+          )}
+
+          {/* Progress bar */}
+          <div className="w-full bg-sky-page/50 rounded-full h-2 mb-6 overflow-hidden border border-sky-cardBorder">
+            <div
+              className="bg-gradient-to-r from-[#6a94d4] to-[#3b6abf] h-full rounded-full"
+              style={{ width: `${importProgress}%`, transition: "width 0.4s cubic-bezier(0.4,0,0.2,1)" }}
+            />
+          </div>
+
+          {/* Cancel button */}
+          <Button
+            variant="danger-outline"
+            onClick={handleCancelImport}
+            className="w-full justify-center"
+          >
+            Cancel Import
+          </Button>
+          <p className="text-[10px] text-ink-dim mt-3 text-center leading-relaxed">
+            Cancelling will roll back all changes made so far.
+          </p>
+        </div>
+      </Modal>
+
+      {/* Import Errors Modal */}
+      <Modal 
+        open={showErrorsModal} 
+        onClose={() => setShowErrorsModal(false)} 
+        title="Import Errors / Duplicates Found"
+      >
+        <div className="flex flex-col gap-4 font-sans select-none p-2">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 items-start">
+            <ICONS.alert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-bold text-amber-800 text-sm">Duplicate or Invalid Records Skipped</h4>
+              <p className="text-amber-700 text-xs mt-1 leading-relaxed">
+                The system successfully skipped the duplicate accounts listed below. All other new, valid accounts were successfully imported.
+              </p>
+            </div>
+          </div>
+
+          <div className="max-h-60 overflow-y-auto border border-sky-cardBorder rounded-xl overflow-hidden">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-sky-page/50 border-b border-sky-cardBorder">
+                <tr>
+                  <th className="py-2.5 px-3 font-bold text-ink">Row</th>
+                  <th className="py-2.5 px-3 font-bold text-ink">Email</th>
+                  <th className="py-2.5 px-3 font-bold text-ink">Reason / Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-sky-page/30 bg-white">
+                {importResults?.errors.map((err, idx) => (
+                  <tr key={idx} className="hover:bg-sky-page/20 transition-colors">
+                    <td className="py-2.5 px-3 font-bold text-ink-dim">Row {err.row}</td>
+                    <td className="py-2.5 px-3 font-medium text-ink font-mono">{err.email || "—"}</td>
+                    <td className="py-2.5 px-3">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-100">
+                        {err.reason === "Email already exists" ? "Duplicate Account" : err.reason}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <Button variant="primary" onClick={() => setShowErrorsModal(false)}>
+              Understood
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       {showResults && importResults && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
           <div className="flex justify-between items-start mb-3">

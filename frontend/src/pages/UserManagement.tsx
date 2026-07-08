@@ -25,6 +25,9 @@ export default function UserManagement() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [successMsg, setSuccessMsg] = React.useState<string | null>(null);
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
+  const [page, setPage] = React.useState(1);
+  const pageSize = 50;
+
 
   // Role change (existing)
   const [editing, setEditing] = React.useState<UserRow | null>(null);
@@ -155,14 +158,20 @@ export default function UserManagement() {
             className={filterInputCls}
             placeholder="Search users..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
           />
         </FilterField>
         <FilterField label="Role" htmlFor="role-filter">
           <select
             id="role-filter"
             value={filter}
-            onChange={(e) => setFilter(e.target.value as Role | "All")}
+            onChange={(e) => {
+              setFilter(e.target.value as Role | "All");
+              setPage(1);
+            }}
             className={filterSelectCls}
           >
             {ROLE_FILTERS.map((r) => (
@@ -172,12 +181,45 @@ export default function UserManagement() {
         </FilterField>
       </FilterBar>
 
-      <Table
-        data={visible}
-        columns={columns}
-        rowKey={(u) => u.id}
-        emptyMessage="No users found."
-      />
+      {(() => {
+        const totalPages = Math.ceil(visible.length / pageSize);
+        const paginatedUsers = visible.slice((page - 1) * pageSize, page * pageSize);
+        return (
+          <>
+            <Table
+              data={paginatedUsers}
+              columns={columns}
+              rowKey={(u) => u.id}
+              emptyMessage="No users found."
+            />
+            {totalPages > 1 && (
+              <div className="flex justify-between items-center mt-4 pt-4 border-t border-sky-page/30">
+                <div className="text-sm text-ink-dim font-sans">
+                  Page {page} of {totalPages} ({visible.length} total users)
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       {/* Role Change Modal */}
       <EditRoleModal user={editing} open={isEditOpen} onClose={() => setEditOpen(false)} onRequestConfirm={handleRequestConfirm} />
