@@ -122,10 +122,12 @@ export interface Assignment {
   assigned_to_name: string;
   assigned_by: number;
   assigned_by_name: string;
-  assigned_date: string;
+  assigned_date?: string;
+  assignment_date?: string;
   return_date: string | null;
   status: string;
   notes: string | null;
+  acknowledged_at?: string | null;
 }
 
 export interface AssignmentListResponse {
@@ -408,10 +410,12 @@ export interface Assignment {
   assigned_to_name: string;
   assigned_by: number;
   assigned_by_name: string;
-  assigned_date: string;
+  assigned_date?: string;
+  assignment_date?: string;
   return_date: string | null;
   status: string;
   notes: string | null;
+  acknowledged_at?: string | null;
 }
 
 export interface AssignmentListResponse {

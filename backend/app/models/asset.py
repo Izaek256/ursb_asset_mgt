@@ -37,6 +37,9 @@ class AssetStatus(str, enum.Enum):
     IN_STORAGE = "In Storage"
     UNDER_MAINTENANCE = "Under Maintenance"
     DISPOSED = "Disposed"
+    PENDING_PICKUP = "Pending Pickup"
+    AVAILABLE = "Available"
+    ASSIGNED = "Assigned"
 
 
 class SourceType(str, enum.Enum):

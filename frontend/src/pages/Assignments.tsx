@@ -51,19 +51,22 @@ export default function Assignments() {
   const [dirtyConfirm, setDirtyConfirm] = React.useState<{ open: boolean; onConfirm: () => void } | null>(null);
 
   const isAdminOrManager = user?.role === "System Administrator" || user?.role === "Asset Manager";
+  const isCustodian = user?.role === "Asset Custodian";
+  const isEmployee = user?.role === "Employee";
 
   const fetchAssignments = React.useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await apiFetch<{ assignments: Assignment[]; total: number }>("/assignments", {});
+      const endpoint = isEmployee ? `/assignments?user_id=${user?.user_id}` : "/assignments";
+      const data = await apiFetch<{ assignments: Assignment[]; total: number }>(endpoint, {});
       setAssignments(data.assignments);
     } catch (err: any) {
       setError(err.message || "Failed to load assignments.");
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [isEmployee, user]);
 
   const fetchAssetsAndUsers = React.useCallback(async () => {
     try {
@@ -76,6 +79,42 @@ export default function Assignments() {
       console.error("Failed to load options.", err);
     }
   }, []);
+
+  const handleAccept = async (id: number) => {
+    setError(null);
+    setSuccess(null);
+    try {
+      await apiFetch(`/assignments/${id}/accept`, { method: "POST" });
+      setSuccess("Assignment accepted successfully.");
+      fetchAssignments();
+    } catch (err: any) {
+      setError(err.message || "Failed to accept assignment.");
+    }
+  };
+
+  const handleDecline = async (id: number) => {
+    setError(null);
+    setSuccess(null);
+    try {
+      await apiFetch(`/assignments/${id}/decline`, { method: "POST" });
+      setSuccess("Assignment declined successfully.");
+      fetchAssignments();
+    } catch (err: any) {
+      setError(err.message || "Failed to decline assignment.");
+    }
+  };
+
+  const handleConfirmHandover = async (id: number) => {
+    setError(null);
+    setSuccess(null);
+    try {
+      await apiFetch(`/assignments/${id}/confirm-handover`, { method: "POST" });
+      setSuccess("Handover confirmed successfully. Asset is now assigned.");
+      fetchAssignments();
+    } catch (err: any) {
+      setError(err.message || "Failed to confirm handover.");
+    }
+  };
 
   React.useEffect(() => {
     fetchAssignments();
@@ -147,6 +186,7 @@ export default function Assignments() {
           asset_id: form.asset_id,
           assigned_to: parseInt(form.assigned_to, 10),
           assignment_date: form.assignment_date,
+          return_date: form.return_date || null,
           expected_return_date: form.return_date || null,
           notes: form.notes,
         }),
@@ -203,8 +243,10 @@ export default function Assignments() {
     },
     {
       header: "Assignment Date",
-      render: (a) =>
-        a.assigned_date ? new Date(a.assigned_date).toLocaleDateString() : "—",
+      render: (a) => {
+        const d = a.assignment_date || a.assigned_date;
+        return d ? new Date(d).toLocaleDateString() : "—";
+      },
     },
     {
       header: "Return Date",
@@ -218,9 +260,24 @@ export default function Assignments() {
     {
       header: "Actions",
       render: (a) => (
-        <div className="flex select-none">
-          {isAdminOrManager && a.status !== "Returned" && (
-            <Button variant="outline" onClick={() => setReturnConfirm(a)}>
+        <div className="flex gap-2 select-none">
+          {isEmployee && a.status === "Pending Acceptance" && (
+            <>
+              <Button variant="success" className="!py-1.5 !px-3 text-xs" onClick={() => handleAccept(a.assignment_id)}>
+                Accept
+              </Button>
+              <Button variant="danger-outline" className="!py-1.5 !px-3 text-xs" onClick={() => handleDecline(a.assignment_id)}>
+                Decline
+              </Button>
+            </>
+          )}
+          {isCustodian && a.status === "Accepted" && (
+            <Button variant="primary" className="!py-1.5 !px-3 text-xs" onClick={() => handleConfirmHandover(a.assignment_id)}>
+              Confirm Handover
+            </Button>
+          )}
+          {isAdminOrManager && a.status === "Active" && (
+            <Button variant="outline" className="!py-1.5 !px-3 text-xs" onClick={() => setReturnConfirm(a)}>
               Return Asset
             </Button>
           )}
