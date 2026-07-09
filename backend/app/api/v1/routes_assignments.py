@@ -1,7 +1,7 @@
 """Assignment workflow endpoints."""
 
-from datetime import date
 from typing import List, Optional
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -9,13 +9,15 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.api.v1.auth import get_current_user, require_roles
-from app.models.asset import Asset, AssetStatus
 from app.models.assignment import Assignment, AssignmentStatus
-from app.models.audit_log import AuditLog
+from app.models.asset import Asset
 from app.models.user import User
+from app.services import assignment_service
 
 router = APIRouter(prefix="/api/v1/assignments", tags=["assignments"])
 
+
+# ── Schemas ──────────────────────────────────────────────────────────────────────────
 
 class AssignmentCreateRequest(BaseModel):
     asset_id: str
@@ -47,6 +49,8 @@ class AssignmentListResponse(BaseModel):
     total: int
 
 
+# ── Helpers ──────────────────────────────────────────────────────────────────────────
+
 def _serialize_assignment(assignment: Assignment, db: Session) -> AssignmentResponse:
     asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
     assigned_to_user = db.query(User).filter(User.id == int(assignment.assigned_to)).first() if assignment.assigned_to else None
@@ -66,17 +70,7 @@ def _serialize_assignment(assignment: Assignment, db: Session) -> AssignmentResp
     )
 
 
-def _log(db: Session, *, actor: User, action: str, record_id: str, details: str) -> None:
-    db.add(
-        AuditLog(
-            user_id=actor.user_id,
-            action=action,
-            table_affected="assignments",
-            record_id=record_id,
-            details=details,
-        )
-    )
-
+# ── Endpoints ────────────────────────────────────────────────────────────────────────
 
 @router.post("", response_model=AssignmentResponse, status_code=status.HTTP_201_CREATED)
 def create_assignment(
@@ -84,43 +78,8 @@ def create_assignment(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("System Administrator", "Asset Manager")),
 ):
-    asset = db.query(Asset).filter(Asset.asset_id == body.asset_id).first()
-    if not asset:
-        raise HTTPException(404, detail="Asset not found")
-    if asset.status != AssetStatus.ACTIVE:
-        raise HTTPException(400, detail=f"Only Active assets can be assigned. Current: {asset.status.value}")
-    if not getattr(asset, "is_active", True):
-        raise HTTPException(400, detail="Asset is inactive")
-
-    existing = (
-        db.query(Assignment)
-        .filter(Assignment.asset_id == asset.asset_id, Assignment.status == AssignmentStatus.ACTIVE)
-        .first()
-    )
-    if existing:
-        raise HTTPException(400, detail="Asset already assigned. Return first.")
-
-    target_user = db.query(User).filter(User.id == body.assigned_to).first()
-    if not target_user:
-        raise HTTPException(404, detail="User not found")
-    if not target_user.is_active:
-        raise HTTPException(400, detail="Assigned user is inactive")
-
-    assignment = Assignment(
-        asset_id=asset.asset_id,
-        assigned_to=str(body.assigned_to),
-        assigned_by=str(current_user.id),
-        assignment_date=body.assignment_date or date.today(),
-        return_date=body.return_date,
-        status=AssignmentStatus.ACTIVE,
-        notes=body.notes,
-    )
-    db.add(assignment)
-    asset.current_custodian_id = str(body.assigned_to)
-    asset.status = AssetStatus.ACTIVE
-    _log(db, actor=current_user, action="ASSIGN_ASSET", record_id=asset.asset_id, details="Assigned asset")
-    db.commit()
-    db.refresh(assignment)
+    """Assign an asset to a custodian. Asset Manager and System Administrator only. SRS AM-A01."""
+    assignment = assignment_service.assign_asset(db, body.asset_id, body, current_user.user_id)
     return _serialize_assignment(assignment, db)
 
 
@@ -130,6 +89,7 @@ def return_assignment(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("System Administrator", "Asset Manager")),
 ):
+    """Return an assigned asset. Asset Manager and System Administrator only. SRS AM-A07."""
     assignment = db.query(Assignment).filter(Assignment.assignment_id == assignment_id).first()
     if not assignment:
         raise HTTPException(404, detail="Assignment not found")
@@ -138,10 +98,19 @@ def return_assignment(
 
     assignment.status = AssignmentStatus.RETURNED
     assignment.return_date = assignment.return_date or date.today()
+
     asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
     if asset:
         asset.current_custodian_id = None
-    _log(db, actor=current_user, action="RETURN_ASSET", record_id=str(assignment.assignment_id), details="Returned asset")
+
+    from app.models.audit_log import AuditLog
+    db.add(AuditLog(
+        user_id=current_user.user_id,
+        action="RETURN_ASSET",
+        table_affected="assignments",
+        record_id=str(assignment_id),
+        details=f"Assignment {assignment_id} returned",
+    ))
     db.commit()
     db.refresh(assignment)
     return _serialize_assignment(assignment, db)
@@ -155,18 +124,24 @@ def list_assignments(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = db.query(Assignment)
+    """List assignments with optional filters. All authenticated roles. SRS AM-A04."""
     if asset_id:
-        query = query.filter(Assignment.asset_id == asset_id)
-    if user_id is not None:
-        query = query.filter(Assignment.assigned_to == str(user_id))
-    if status:
-        try:
-            query = query.filter(Assignment.status == AssignmentStatus(status))
-        except ValueError:
-            raise HTTPException(400, detail="Invalid status")
-    assignments = query.order_by(Assignment.assignment_date.desc()).all()
-    return AssignmentListResponse(assignments=[_serialize_assignment(a, db) for a in assignments], total=len(assignments))
+        assignments = assignment_service.get_assignment_history(db, asset_id)
+    elif user_id is not None:
+        assignments = assignment_service.get_user_assignments(db, user_id)
+    else:
+        query = db.query(Assignment)
+        if status:
+            try:
+                query = query.filter(Assignment.status == AssignmentStatus(status))
+            except ValueError:
+                raise HTTPException(400, detail="Invalid status")
+        assignments = query.order_by(Assignment.assignment_date.desc()).all()
+
+    return AssignmentListResponse(
+        assignments=[_serialize_assignment(a, db) for a in assignments],
+        total=len(assignments),
+    )
 
 
 @router.get("/{assignment_id}", response_model=AssignmentResponse)
@@ -175,6 +150,7 @@ def get_assignment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """Get a single assignment by ID. All authenticated roles. SRS AM-A04."""
     assignment = db.query(Assignment).filter(Assignment.assignment_id == assignment_id).first()
     if not assignment:
         raise HTTPException(404, detail="Assignment not found")
