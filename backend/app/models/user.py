@@ -45,6 +45,9 @@ class User(Base):
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    # Stamped whenever a user successfully changes their own password.
+    # Used by the credentials page to detect if the generated/temp password is still active.
+    password_changed_at = Column(DateTime, nullable=True)
 
     # Authentication relationship
     sessions = relationship(

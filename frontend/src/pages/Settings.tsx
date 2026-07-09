@@ -22,7 +22,7 @@ function splitName(fullName: string) {
 }
 
 export default function Settings() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [isLoadingSettings, setIsLoadingSettings] = React.useState(true);
   const [settingsError, setSettingsError] = React.useState<string | null>(null);
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null);

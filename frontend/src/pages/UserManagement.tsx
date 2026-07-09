@@ -14,7 +14,7 @@ import ErrorMessage from "../components/ErrorMessage";
 
 const ROLES: Role[] = ["System Administrator", "Asset Manager", "Asset Custodian", "Employee"];
 const ROLE_FILTERS: (Role | "All")[] = ["All", ...ROLES];
-const DEPARTMENTS = ["ICT", "Finance & Administration", "Legal", "Registry", "Human Resources", "Operations", "Procurement"];
+
 
 
 export default function UserManagement() {

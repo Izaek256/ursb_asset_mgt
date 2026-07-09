@@ -87,6 +87,7 @@ def login(
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
     print(f"DEBUG: Login attempt for email: {payload.email}")
+    print(f"DEBUG: Received password: '{payload.password}'")
     user = get_user_by_email(db, payload.email)
     print(f"DEBUG: User found: {user is not None}")
     if user:
@@ -215,10 +216,17 @@ def change_password(
     salt, password_hash = create_password_hash(payload.new_password)
     current_user.password_hash = password_hash
     current_user.password_salt = salt
+    # Stamp when user last changed their own password (used by credentials page)
+    from datetime import datetime as _dt
+    current_user.password_changed_at = _dt.utcnow()
 
     # Invalidate all sessions for this user
     from app.models.session import Session
     db.query(Session).filter(Session.user_id == current_user.user_id).delete()
+
+    # Clear any stored temporary passwords so they no longer show on credentials page
+    from app.models.temporary_password import TemporaryPassword
+    db.query(TemporaryPassword).filter(TemporaryPassword.user_id == current_user.user_id).delete()
 
     # Write audit log for password change
     from app.models.audit_log import AuditLog
@@ -274,6 +282,13 @@ def change_password_no_session_invalidate(
     salt, password_hash = create_password_hash(payload.new_password)
     current_user.password_hash = password_hash
     current_user.password_salt = salt
+    # Stamp when user last changed their own password (used by credentials page)
+    from datetime import datetime as _dt
+    current_user.password_changed_at = _dt.utcnow()
+
+    # Clear any stored temporary passwords so they no longer show on credentials page
+    from app.models.temporary_password import TemporaryPassword
+    db.query(TemporaryPassword).filter(TemporaryPassword.user_id == current_user.user_id).delete()
 
     # Write audit log for password change
     from app.models.audit_log import AuditLog

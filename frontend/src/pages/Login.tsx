@@ -1,5 +1,5 @@
 import React from "react";
-import { apiFetch, useAuth } from "../AuthContext";
+import { useAuth } from "../AuthContext";
 import { ICONS } from "../utils/icons";
 import Button from "../components/common/Button";
 import FormInput from "../components/common/FormInput";

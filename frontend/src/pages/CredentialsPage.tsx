@@ -6,7 +6,6 @@ import { ICONS } from "../utils/icons";
 import Button from "../components/common/Button";
 import PageHeader from "../components/PageHeader";
 import ErrorMessage from "../components/ErrorMessage";
-import SuccessBanner from "../components/common/SuccessBanner";
 import { filterInputCls, filterSelectCls } from "../components/common/FilterBar";
 import Table, { Column } from "../components/common/Table";
 import Modal from "../components/Modal";
@@ -19,6 +18,7 @@ interface RecentAccount {
   department: string | null;
   created_at: string;
   password: string | null;
+  password_revoked: boolean;
 }
 
 interface RecentAccountsResponse {
@@ -43,8 +43,16 @@ interface BulkImportResponse {
   accounts: BulkImportAccount[];
 }
 
+interface RegenResult {
+  user_id: string;
+  full_name: string;
+  email: string;
+  generated_password: string;
+  expires_at: string;
+}
+
 export default function CredentialsPage() {
-  const { user } = useAuth();
+  const { } = useAuth();
   const [adminPassword, setAdminPassword] = React.useState("");
   const [isAuthenticated, setIsAuthenticated] = React.useState(false);
   const [authError, setAuthError] = React.useState<string | null>(null);
@@ -80,6 +88,26 @@ export default function CredentialsPage() {
   const [createError, setCreateError] = React.useState<string | null>(null);
   const [singleUserResult, setSingleUserResult] = React.useState<{ full_name: string; email: string; role: string; generated_password: string } | null>(null);
   const [showSingleResult, setShowSingleResult] = React.useState(false);
+
+  // Kebab menu & regenerate password state
+  const [kebabOpenId, setKebabOpenId] = React.useState<string | null>(null);
+  const [isRegenerating, setIsRegenerating] = React.useState(false);
+  const [regenResult, setRegenResult] = React.useState<RegenResult | null>(null);
+  const [showRegenModal, setShowRegenModal] = React.useState(false);
+  const [regenError, setRegenError] = React.useState<string | null>(null);
+  const kebabRef = React.useRef<HTMLDivElement | null>(null);
+
+  // Close kebab menu on outside click
+  React.useEffect(() => {
+    if (!kebabOpenId) return;
+    const handler = (e: MouseEvent) => {
+      if (kebabRef.current && !kebabRef.current.contains(e.target as Node)) {
+        setKebabOpenId(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [kebabOpenId]);
 
   const handleAuthenticate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,7 +181,6 @@ export default function CredentialsPage() {
     setImportTotal(0);
     setIsImporting(true);
 
-    // ── Parse file client-side with xlsx ─────────────────────────────────────
     const reader = new FileReader();
     reader.onload = (e) => {
       let rows: Record<string, string>[] = [];
@@ -174,7 +201,6 @@ export default function CredentialsPage() {
         return;
       }
 
-      // ── Open WebSocket ────────────────────────────────────────────────────
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const ws = new WebSocket(`${protocol}//${window.location.host}/api/v1/users/bulk-import-ws`);
       wsRef.current = ws;
@@ -218,7 +244,6 @@ export default function CredentialsPage() {
       };
 
       ws.onclose = (event) => {
-        // Abnormal close (cancelled by user closes with code 1000 intentionally)
         if (isImporting && event.code !== 1000) {
           setImportError("Import was interrupted.");
           setIsImporting(false);
@@ -264,7 +289,6 @@ export default function CredentialsPage() {
           department: singleDepartment,
         }),
       });
-      console.log("DEBUG: User creation response:", data);
       setSingleUserResult({
         full_name: data.full_name,
         email: data.email,
@@ -276,11 +300,41 @@ export default function CredentialsPage() {
       setSingleEmail("");
       setSingleRole("Employee");
       setSingleDepartment("");
+      // Refresh the accounts list to show the new user
+      fetchAccounts();
     } catch (err: any) {
-      console.error("DEBUG: User creation error:", err);
       setCreateError(err.message || "Failed to create user");
     } finally {
       setIsCreatingUser(false);
+    }
+  };
+
+  const handleRegeneratePassword = async (account: RecentAccount) => {
+    setKebabOpenId(null);
+    setRegenError(null);
+    setIsRegenerating(true);
+    try {
+      const data = await apiFetch<{ generated_password: string; expires_at: string }>(
+        `/credentials/${account.user_id}/regenerate-password`,
+        {
+          method: "POST",
+          headers: { "X-Admin-Password": adminPassword },
+        }
+      );
+      setRegenResult({
+        user_id: account.user_id,
+        full_name: account.full_name,
+        email: account.email,
+        generated_password: data.generated_password,
+        expires_at: data.expires_at,
+      });
+      setShowRegenModal(true);
+      // Refresh the list so the new password shows as active
+      fetchAccounts();
+    } catch (err: any) {
+      setRegenError(err.message || "Failed to regenerate password");
+    } finally {
+      setIsRegenerating(false);
     }
   };
 
@@ -309,18 +363,72 @@ export default function CredentialsPage() {
       header: "Password",
       render: (a) => (
         <div className="text-ink-dim text-sm">
-          {a.password ? (
+          {a.password_revoked ? (
+            /* Password has been changed by user — show struck-through, no copy */
+            <div className="flex items-center gap-2">
+              <code
+                className="font-mono text-xs bg-sky-page/30 px-2 py-1 rounded line-through text-ink-dim/60 select-all"
+                title="User has changed their password"
+              >
+                {a.password ?? "••••••••••••"}
+              </code>
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-rose-50 text-rose-500 border border-rose-100 whitespace-nowrap"
+                title="This generated password is no longer active"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-400 inline-block" />
+                Changed
+              </span>
+            </div>
+          ) : a.password ? (
+            /* Active generated/temp password — show with copy button */
             <div className="flex items-center gap-2">
               <code className="font-mono text-xs bg-sky-page/50 px-2 py-1 rounded text-ink">{a.password}</code>
-              <Button variant="ghost" size="sm" onClick={() => copyToClipboard(a.password!)} className="p-1">
+              <Button variant="ghost" size="sm" onClick={() => copyToClipboard(a.password!)} className="p-1" title="Copy password">
                 <ICONS.copy className="w-4 h-4" />
               </Button>
             </div>
           ) : (
-            <span className="inline-flex items-center gap-1">
-              <span>••••••••••••</span>
-              <span className="text-[10px]">(not stored)</span>
+            /* No stored temp password */
+            <span className="inline-flex items-center gap-1 text-ink-dim/60">
+              <span className="line-through">••••••••••••</span>
+              <span className="text-[10px] no-underline">(not stored)</span>
             </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      header: "",
+      render: (a) => (
+        <div className="relative flex justify-end" ref={kebabOpenId === a.user_id ? kebabRef : undefined}>
+          <button
+            id={`kebab-${a.user_id}`}
+            className="p-1.5 rounded-lg hover:bg-sky-page/60 text-ink-dim hover:text-ink transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              setKebabOpenId(kebabOpenId === a.user_id ? null : a.user_id);
+              setRegenError(null);
+            }}
+            title="More actions"
+          >
+            <ICONS.kebab className="w-4 h-4" />
+          </button>
+
+          {kebabOpenId === a.user_id && (
+            <div
+              className="absolute right-0 top-8 z-50 bg-white border border-sky-cardBorder rounded-xl shadow-lg py-1 min-w-[180px] animate-in fade-in slide-in-from-top-1 duration-100"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                className="flex items-center gap-2.5 w-full text-left px-3.5 py-2 text-sm text-ink hover:bg-sky-page/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => handleRegeneratePassword(a)}
+                disabled={isRegenerating}
+              >
+                <ICONS.regenerate className="w-4 h-4 text-[#3b6abf]" />
+                <span className="font-medium">Regenerate Password</span>
+              </button>
+            </div>
           )}
         </div>
       ),
@@ -369,12 +477,9 @@ export default function CredentialsPage() {
       {/* Import Progress Modal */}
       <Modal open={isImporting} onClose={() => {}} title="">
         <div className="flex flex-col items-center px-4 pb-6 pt-2 select-none font-sans min-w-[320px]">
-          {/* Large animated ring with big percentage number */}
           <div className="relative flex items-center justify-center mb-6 mt-2">
             <svg className="w-40 h-40 -rotate-90" viewBox="0 0 120 120">
-              {/* Track circle */}
               <circle cx="60" cy="60" r="52" fill="none" stroke="#e8eef8" strokeWidth="8" />
-              {/* Progress arc */}
               <circle
                 cx="60" cy="60" r="52"
                 fill="none"
@@ -392,7 +497,6 @@ export default function CredentialsPage() {
                 </linearGradient>
               </defs>
             </svg>
-            {/* Centered percentage text */}
             <div className="absolute flex flex-col items-center justify-center">
               <span
                 className="font-black text-5xl leading-none text-[#3b6abf] tabular-nums"
@@ -404,7 +508,6 @@ export default function CredentialsPage() {
             </div>
           </div>
 
-          {/* Status line */}
           <p className="text-base font-bold text-ink mb-1 tracking-tight">
             {importProgress < 100 ? "Creating accounts…" : "Finalising import…"}
           </p>
@@ -414,7 +517,6 @@ export default function CredentialsPage() {
             </p>
           )}
 
-          {/* Progress bar */}
           <div className="w-full bg-sky-page/50 rounded-full h-2 mb-6 overflow-hidden border border-sky-cardBorder">
             <div
               className="bg-gradient-to-r from-[#6a94d4] to-[#3b6abf] h-full rounded-full"
@@ -422,7 +524,6 @@ export default function CredentialsPage() {
             />
           </div>
 
-          {/* Cancel button */}
           <Button
             variant="danger-outline"
             onClick={handleCancelImport}
@@ -486,6 +587,73 @@ export default function CredentialsPage() {
         </div>
       </Modal>
 
+      {/* Regenerate Password Result Modal */}
+      <Modal
+        open={showRegenModal}
+        onClose={() => { setShowRegenModal(false); setRegenResult(null); }}
+        title="Password Regenerated"
+      >
+        {regenResult && (
+          <div className="flex flex-col gap-6 font-sans select-none px-2 pb-2 min-w-[420px]">
+            {/* Warning banner */}
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/60 rounded-2xl p-5 flex gap-4 items-start shadow-sm">
+              <div className="bg-white p-2 rounded-full shadow-sm border border-amber-100 shrink-0">
+                <ICONS.alert className="w-5 h-5 text-amber-500" />
+              </div>
+              <div className="pt-0.5">
+                <h4 className="font-bold text-amber-900 text-sm tracking-tight">Share securely</h4>
+                <p className="text-amber-700/90 text-[13px] mt-1 leading-relaxed pr-2">
+                  This password will not be shown again. Copy it now and share it securely. Expires in <strong>7 days</strong>.
+                </p>
+              </div>
+            </div>
+
+            {/* User details */}
+            <div className="bg-white rounded-2xl border border-sky-cardBorder p-6 flex flex-col gap-5 shadow-sm">
+              <div className="grid grid-cols-2 gap-4 text-sm pb-5 border-b border-sky-page/50">
+                <div>
+                  <div className="text-[10px] text-ink-dim font-bold uppercase tracking-widest mb-1">User</div>
+                  <div className="font-bold text-ink">{regenResult.full_name}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-ink-dim font-bold uppercase tracking-widest mb-1">Email</div>
+                  <div className="font-medium text-ink">{regenResult.email}</div>
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[10px] text-ink-dim font-bold uppercase tracking-widest mb-2 flex items-center justify-between">
+                  <span>Temporary Password</span>
+                  <span className="text-[9px] text-ink-dim/60 normal-case font-medium bg-sky-page/50 px-2 py-0.5 rounded-full">
+                    Active until {new Date(regenResult.expires_at).toLocaleDateString()}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 group">
+                  <code className="font-mono text-base bg-[#f9f8f6] border-2 border-transparent group-hover:border-sky-cardBorder transition-colors px-4 py-3 rounded-xl text-ink font-semibold flex-1 select-all tracking-wide text-center">
+                    {regenResult.generated_password}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => copyToClipboard(regenResult.generated_password)}
+                    className="p-3 shrink-0 h-auto rounded-xl hover:bg-[#6a94d4] hover:text-white hover:border-[#6a94d4] transition-all"
+                    title="Copy password"
+                  >
+                    <ICONS.copy className="w-5 h-5" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button variant="primary" onClick={() => { setShowRegenModal(false); setRegenResult(null); }} className="px-8 rounded-xl shadow-md">
+                Done
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       {showResults && importResults && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
           <div className="flex justify-between items-start mb-3">
@@ -497,7 +665,6 @@ export default function CredentialsPage() {
               Dismiss
             </Button>
           </div>
-          {/* The generated_password values exist only in React state and are lost on unmount or dismiss */}
           <div className="max-h-64 overflow-y-auto">
             <table className="w-full text-sm">
               <thead>
@@ -577,107 +744,132 @@ export default function CredentialsPage() {
         subtitle="Create user accounts and review credentials for recently created accounts (last 7 days)"
       />
 
-      {/* Single User Creation Section */}
-      <div className="bg-white border border-sky-cardBorder rounded-2xl p-6 shadow-sm">
-        <h3 className="font-bold text-base text-ink mb-4">Create Single User</h3>
-        <form onSubmit={handleCreateSingleUser} className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div className="flex flex-col gap-2">
-            <label htmlFor="single-full-name" className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">
-              Full Name
-            </label>
-            <input
-              id="single-full-name"
-              type="text"
-              className={filterInputCls}
-              value={singleFullName}
-              onChange={(e) => setSingleFullName(e.target.value)}
-              required
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <label htmlFor="single-email" className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">
-              Email
-            </label>
-            <input
-              id="single-email"
-              type="email"
-              className={filterInputCls}
-              value={singleEmail}
-              onChange={(e) => setSingleEmail(e.target.value)}
-              required
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <label htmlFor="single-role" className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">
-              Role
-            </label>
-            <select
-              id="single-role"
-              className={filterSelectCls}
-              value={singleRole}
-              onChange={(e) => setSingleRole(e.target.value)}
-              required
-            >
-              <option value="Employee">Employee</option>
-              <option value="Asset Custodian">Asset Custodian</option>
-              <option value="Asset Manager">Asset Manager</option>
-              <option value="System Administrator">System Administrator</option>
-            </select>
-          </div>
-          <div className="flex flex-col gap-2">
-            <label htmlFor="single-department" className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">
-              Department
-            </label>
-            <input
-              id="single-department"
-              type="text"
-              className={filterInputCls}
-              value={singleDepartment}
-              onChange={(e) => setSingleDepartment(e.target.value)}
-            />
-          </div>
-          <div className="md:col-span-2 flex justify-between items-center pt-2">
-            {createError && <ErrorMessage message={createError} />}
-            <Button type="submit" isLoading={isCreatingUser}>
-              Create User
-            </Button>
-          </div>
-        </form>
-      </div>
-
-      {/* Bulk Import Section */}
-      <div className="bg-white border border-sky-cardBorder rounded-2xl p-6 shadow-sm">
-        <h3 className="font-bold text-base text-ink mb-4">Bulk Import Users</h3>
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-4">
-            <input
-              id="import-file"
-              type="file"
-              accept=".csv,.xlsx"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-            <label
-              htmlFor="import-file"
-              className="flex items-center justify-center font-bold transition-all duration-200 focus:outline-none transform active:scale-95 cursor-pointer select-none whitespace-nowrap rounded-xl py-2 px-4 text-sm bg-[#6a94d4] text-[#f9f8f6] hover:bg-[#f9f8f6] hover:text-[#6a94d4]"
-            >
-              {file ? file.name : "Choose File"}
-            </label>
-            <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
-              Download Template
-            </Button>
-          </div>
-          {importError && <ErrorMessage message={importError} />}
-          <Button onClick={handleImport} isLoading={isImporting} disabled={!file}>
-            Import
-          </Button>
+      {/* Regenerate error inline */}
+      {regenError && (
+        <div className="bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 flex items-center gap-2 text-sm text-rose-700">
+          <ICONS.alertCircle className="w-4 h-4 shrink-0" />
+          <span>{regenError}</span>
+          <button className="ml-auto text-rose-400 hover:text-rose-600" onClick={() => setRegenError(null)}>
+            <ICONS.close className="w-4 h-4" />
+          </button>
         </div>
+      )}
+
+      {/* Top Section: Create User & Bulk Import Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* Single User Creation Section */}
+        <div className="bg-white border border-sky-cardBorder rounded-2xl p-6 md:p-8 shadow-sm flex flex-col h-full">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-xl bg-sky-page/50 flex items-center justify-center text-[#3b6abf]">
+              <ICONS.user className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-lg text-ink tracking-tight">Create User</h3>
+              <p className="text-xs text-ink-dim mt-0.5">Add a new team member</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleCreateSingleUser} className="flex flex-col gap-5 flex-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="flex flex-col gap-2">
+                <label htmlFor="single-full-name" className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">Full Name</label>
+                <input id="single-full-name" type="text" className={filterInputCls} value={singleFullName} onChange={(e) => setSingleFullName(e.target.value)} required />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label htmlFor="single-email" className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">Email</label>
+                <input id="single-email" type="email" className={filterInputCls} value={singleEmail} onChange={(e) => setSingleEmail(e.target.value)} required />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label htmlFor="single-role" className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">Role</label>
+                <select id="single-role" className={filterSelectCls} value={singleRole} onChange={(e) => setSingleRole(e.target.value)} required>
+                  <option value="Employee">Employee</option>
+                  <option value="Asset Custodian">Asset Custodian</option>
+                  <option value="Asset Manager">Asset Manager</option>
+                  <option value="System Administrator">System Administrator</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-2">
+                <label htmlFor="single-department" className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">Department</label>
+                <input id="single-department" type="text" className={filterInputCls} value={singleDepartment} onChange={(e) => setSingleDepartment(e.target.value)} />
+              </div>
+            </div>
+            
+            <div className="mt-auto pt-5 flex justify-between items-center border-t border-sky-page/50">
+              <div className="flex-1 mr-4">
+                {createError && <ErrorMessage message={createError} />}
+              </div>
+              <Button type="submit" isLoading={isCreatingUser} className="px-6">
+                Create User
+              </Button>
+            </div>
+          </form>
+        </div>
+
+        {/* Bulk Import Section */}
+        <div className="bg-white border border-sky-cardBorder rounded-2xl p-6 md:p-8 shadow-sm flex flex-col h-full">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-xl bg-sky-page/50 flex items-center justify-center text-[#6a94d4]">
+              <ICONS.upload className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-lg text-ink tracking-tight">Bulk Import</h3>
+              <p className="text-xs text-ink-dim mt-0.5">Upload users via CSV/Excel</p>
+            </div>
+          </div>
+          
+          <div className="flex-1 flex flex-col">
+            <div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-sky-cardBorder hover:border-[#6a94d4]/50 hover:bg-sky-page/20 transition-all rounded-xl p-6 text-center group mb-5">
+              <div className="w-12 h-12 rounded-full bg-sky-page/60 text-ink-dim group-hover:text-[#6a94d4] flex items-center justify-center mb-3 transition-colors">
+                <ICONS.file className="w-5 h-5" />
+              </div>
+              <p className="text-sm font-bold text-ink mb-1">
+                {file ? file.name : "Select a file to upload"}
+              </p>
+              <p className="text-xs text-ink-dim mb-5 max-w-[200px]">
+                {file ? "Ready for import" : "Supports .csv and .xlsx formats up to 5MB"}
+              </p>
+              <div className="flex items-center gap-3">
+                <input id="import-file" type="file" accept=".csv,.xlsx" onChange={handleFileChange} className="hidden" />
+                <label
+                  htmlFor="import-file"
+                  className="font-bold transition-all focus:outline-none cursor-pointer rounded-lg py-2 px-5 text-sm bg-sky-page/50 text-ink hover:bg-sky-cardBorder"
+                >
+                  {file ? "Change File" : "Browse Files"}
+                </label>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-5 border-t border-sky-page/50">
+              <Button variant="ghost" size="sm" onClick={handleDownloadTemplate} className="text-[#6a94d4] hover:bg-[#6a94d4]/10 hover:text-[#3b6abf] font-medium">
+                Download Template
+              </Button>
+              <div className="flex items-center gap-3">
+                {importError && <div className="text-xs text-rose-500 font-medium">{importError}</div>}
+                <Button onClick={handleImport} isLoading={isImporting} disabled={!file} className="px-8">
+                  Import
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       {/* Recent Accounts Section */}
       <div className="bg-white border border-sky-cardBorder rounded-2xl p-6 shadow-sm">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="font-bold text-base text-ink">Recent Accounts (Last 7 Days)</h3>
+          <div className="flex flex-col gap-0.5">
+            <h3 className="font-bold text-base text-ink">Recent Accounts (Last 7 Days)</h3>
+            <p className="text-xs text-ink-dim">
+              Passwords marked{" "}
+              <span className="inline-flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-400 inline-block" />
+                <span className="text-rose-500 font-medium">Changed</span>
+              </span>{" "}
+              have been updated by the user and the generated password is no longer active. Use the ⋮ menu to regenerate.
+            </p>
+          </div>
           <div className="flex items-center gap-2">
             <input
               type="text"

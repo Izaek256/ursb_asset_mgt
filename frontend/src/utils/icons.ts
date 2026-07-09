@@ -30,6 +30,11 @@ import {
   FileText,
   FileSpreadsheet,
   Copy,
+  MoreVertical,
+  RefreshCw,
+  User,
+  Upload,
+  File,
 } from "lucide-react";
 
 export const ICONS = {
@@ -68,6 +73,11 @@ export const ICONS = {
   fileText: FileText,
   fileSpreadsheet: FileSpreadsheet,
   copy: Copy,
+  kebab: MoreVertical,
+  regenerate: RefreshCw,
+  user: User,
+  upload: Upload,
+  file: File,
 
   // Keep string mappings of emojis just in case any unmigrated files access them, 
   // though we will migrate all dashboard pages in this pass.
