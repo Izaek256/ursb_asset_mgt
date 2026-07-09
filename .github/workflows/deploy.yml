@@ -21,6 +21,9 @@ on:
         options:
           - production
           - staging
+  push:
+    branches:
+      - feature/self-host
 
 jobs:
   deploy:
@@ -30,7 +33,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.branch }}
+          ref: ${{ github.event.inputs.branch || github.ref }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
