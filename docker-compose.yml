@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: ursb_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-ursb_root_pass_2024}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-ursb_asset_db}
+      MYSQL_USER: ${MYSQL_USER:-ursb_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ursb_pass_2024}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-ursb_root_pass_2024}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ursb_backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      APP_NAME: URSB Asset Management
+      DEBUG: false
+      CORS_ORIGINS: http://192.168.8.82,http://localhost
+      DATABASE_URL: mysql+pymysql://${MYSQL_USER:-ursb_user}:${MYSQL_PASSWORD:-ursb_pass_2024}@mysql:3306/${MYSQL_DATABASE:-ursb_asset_db}
+      AUTH_DEFAULT_EMAIL: ${AUTH_DEFAULT_EMAIL:-admin@ursb.go.ug}
+      AUTH_DEFAULT_PASSWORD: ${AUTH_DEFAULT_PASSWORD:-eugenek890@E256}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    networks:
+      - ursb_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ursb_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    networks:
+      - ursb_network
+
+volumes:
+  mysql_data:
+
+networks:
+  ursb_network:
+    driver: bridge

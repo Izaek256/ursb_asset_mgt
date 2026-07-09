@@ -32,3 +32,9 @@ backend/ursb_asset.db
 skills-lock.json
 .agents/skills/frontend-design/LICENSE.txt
 .agents/skills/frontend-design/SKILL.md
+
+# Production Environment Files
+backend/.env.production
+frontend/.env.production
+.env
+docker-compose.override.yml
