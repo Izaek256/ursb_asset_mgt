@@ -1,9 +1,13 @@
 import React from "react";
 import * as XLSX from "xlsx";
+import pdfIcon  from "../assets/icons8-export-pdf-50.png";
+import xlsxIcon from "../assets/icons8-export-excel-50.png";
 import { useAuth } from "../AuthContext";
 import { apiFetch } from "../AuthContext";
 import { ICONS } from "../utils/icons";
 import Button from "../components/common/Button";
+import KebabMenu from "../components/common/KebabMenu";
+import DropdownButton from "../components/common/DropdownButton";
 import PageHeader from "../components/PageHeader";
 import ErrorMessage from "../components/ErrorMessage";
 import { filterInputCls, filterSelectCls } from "../components/common/FilterBar";
@@ -90,24 +94,11 @@ export default function CredentialsPage() {
   const [showSingleResult, setShowSingleResult] = React.useState(false);
 
   // Kebab menu & regenerate password state
-  const [kebabOpenId, setKebabOpenId] = React.useState<string | null>(null);
+  // (open/close state is now owned by <KebabMenu> — no kebabOpenId needed here)
   const [isRegenerating, setIsRegenerating] = React.useState(false);
   const [regenResult, setRegenResult] = React.useState<RegenResult | null>(null);
   const [showRegenModal, setShowRegenModal] = React.useState(false);
   const [regenError, setRegenError] = React.useState<string | null>(null);
-  const kebabRef = React.useRef<HTMLDivElement | null>(null);
-
-  // Close kebab menu on outside click
-  React.useEffect(() => {
-    if (!kebabOpenId) return;
-    const handler = (e: MouseEvent) => {
-      if (kebabRef.current && !kebabRef.current.contains(e.target as Node)) {
-        setKebabOpenId(null);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [kebabOpenId]);
 
   const handleAuthenticate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,15 +147,50 @@ export default function CredentialsPage() {
     setPage(1);
   };
 
-  const handleDownloadTemplate = () => {
-    const csvContent = "full_name,email,role,department\nJohn Doe,john.doe@ursb.go.ug,Employee,ICT";
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "user_import_template.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleExportAccounts = (format: "pdf" | "xlsx") => {
+    if (accounts.length === 0) {
+      alert("No accounts to export.");
+      return;
+    }
+
+    if (format === "xlsx") {
+      const exportData = accounts.map(a => ({
+        "Full Name": a.full_name,
+        "Email": a.email,
+        "Role": a.role,
+        "Department": a.department || "N/A",
+        "Created At": new Date(a.created_at).toLocaleString(),
+        "Password Status": a.password_revoked ? "Changed by user" : (a.password || "Not stored")
+      }));
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Credentials");
+      XLSX.writeFile(wb, "URSB_Recent_Credentials.xlsx");
+    } else if (format === "pdf") {
+      import("jspdf").then(({ jsPDF }) => {
+        import("jspdf-autotable").then(({ default: autoTable }) => {
+          const doc = new jsPDF();
+          doc.setFontSize(14);
+          doc.text("URSB Recent Account Credentials", 14, 15);
+          doc.setFontSize(10);
+          doc.text(`Generated on ${new Date().toLocaleString()}`, 14, 22);
+          
+          autoTable(doc, {
+            startY: 28,
+            head: [["Full Name", "Email", "Role", "Password"]],
+            body: accounts.map(a => [
+              a.full_name,
+              a.email,
+              a.role,
+              a.password_revoked ? "Changed by user" : (a.password || "N/A")
+            ]),
+            theme: 'grid',
+            headStyles: { fillColor: [59, 106, 191] },
+          });
+          doc.save("URSB_Recent_Credentials.pdf");
+        });
+      });
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -310,7 +336,6 @@ export default function CredentialsPage() {
   };
 
   const handleRegeneratePassword = async (account: RecentAccount) => {
-    setKebabOpenId(null);
     setRegenError(null);
     setIsRegenerating(true);
     try {
@@ -401,35 +426,22 @@ export default function CredentialsPage() {
     {
       header: "",
       render: (a) => (
-        <div className="relative flex justify-end" ref={kebabOpenId === a.user_id ? kebabRef : undefined}>
-          <button
+        <div className="flex justify-end">
+          <KebabMenu
             id={`kebab-${a.user_id}`}
-            className="p-1.5 rounded-lg hover:bg-sky-page/60 text-ink-dim hover:text-ink transition-colors"
-            onClick={(e) => {
-              e.stopPropagation();
-              setKebabOpenId(kebabOpenId === a.user_id ? null : a.user_id);
-              setRegenError(null);
-            }}
-            title="More actions"
-          >
-            <ICONS.kebab className="w-4 h-4" />
-          </button>
-
-          {kebabOpenId === a.user_id && (
-            <div
-              className="absolute right-0 top-8 z-50 bg-white border border-sky-cardBorder rounded-xl shadow-lg py-1 min-w-[180px] animate-in fade-in slide-in-from-top-1 duration-100"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                className="flex items-center gap-2.5 w-full text-left px-3.5 py-2 text-sm text-ink hover:bg-sky-page/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={() => handleRegeneratePassword(a)}
-                disabled={isRegenerating}
-              >
-                <ICONS.regenerate className="w-4 h-4 text-[#3b6abf]" />
-                <span className="font-medium">Regenerate Password</span>
-              </button>
-            </div>
-          )}
+            align="right"
+            items={[
+              {
+                label: "Regenerate Password",
+                icon: ICONS.regenerate,
+                disabled: isRegenerating,
+                onClick: () => {
+                  setRegenError(null);
+                  handleRegeneratePassword(a);
+                },
+              },
+            ]}
+          />
         </div>
       ),
     },
@@ -840,10 +852,29 @@ export default function CredentialsPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-5 border-t border-sky-page/50">
-              <Button variant="ghost" size="sm" onClick={handleDownloadTemplate} className="text-[#6a94d4] hover:bg-[#6a94d4]/10 hover:text-[#3b6abf] font-medium">
-                Download Template
-              </Button>
+            <div className="flex items-center justify-between pt-5 border-t border-sky-page/50 relative">
+              <DropdownButton
+                label="Export Credentials"
+                icon={ICONS.download}
+                variant="ghost"
+                direction="up"
+                align="left"
+                className="text-[#6a94d4]"
+                items={[
+                  {
+                    label: "Export as PDF",
+                    description: "Formatted report, print-ready",
+                    imgSrc: pdfIcon,
+                    onClick: () => handleExportAccounts("pdf"),
+                  },
+                  {
+                    label: "Export as Excel",
+                    description: "Editable spreadsheet (.xlsx)",
+                    imgSrc: xlsxIcon,
+                    onClick: () => handleExportAccounts("xlsx"),
+                  },
+                ]}
+              />
               <div className="flex items-center gap-3">
                 {importError && <div className="text-xs text-rose-500 font-medium">{importError}</div>}
                 <Button onClick={handleImport} isLoading={isImporting} disabled={!file} className="px-8">

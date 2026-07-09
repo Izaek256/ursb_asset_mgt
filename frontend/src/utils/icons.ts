@@ -35,6 +35,7 @@ import {
   User,
   Upload,
   File,
+  Download,
 } from "lucide-react";
 
 export const ICONS = {
@@ -78,6 +79,7 @@ export const ICONS = {
   user: User,
   upload: Upload,
   file: File,
+  download: Download,
 
   // Keep string mappings of emojis just in case any unmigrated files access them, 
   // though we will migrate all dashboard pages in this pass.
