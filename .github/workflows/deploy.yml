@@ -6,9 +6,10 @@ on:
       branch:
         description: 'Branch to deploy'
         required: true
-        default: 'main'
+        default: 'feature/self-host'
         type: choice
         options:
+          - feature/self-host
           - main
           - develop
           - staging
