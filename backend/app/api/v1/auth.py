@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models.session import Session as UserSession
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas import AuthStatusResponse, LoginRequest, LoginResponse, SignupRequest
 from app.services.auth import (
     SESSION_COOKIE_NAME,
@@ -66,10 +66,46 @@ def get_current_user(
     return db_user
 
 
-def require_roles(*allowed_roles: str):
-    """Return a dependency that checks if the current user has one of the allowed roles."""
+def require_role(*allowed_roles: UserRole):
+    """
+    Return a FastAPI dependency that checks if the current user has one of the allowed roles.
+    
+    This function can be used both as a route-level dependency (blocking access entirely) 
+    and as a parameter dependency (providing the current user to the handler).
+    
+    Args:
+        *allowed_roles: One or more UserRole enum values that are permitted to access the route.
+    
+    Returns:
+        A FastAPI dependency function that validates the user's role and returns the authenticated user.
+    
+    Raises:
+        HTTPException 401: If no valid session exists.
+        HTTPException 403: If the user's role is not in the allowed list.
+    
+    Example:
+        # As a route-level dependency (blocks access entirely):
+        @router.post("/assets")
+        def create_asset(
+            body: AssetCreate,
+            db: Session = Depends(get_db),
+            current_user=Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR))
+        ):
+            # Handler code here - current_user is the authenticated User object
+            ...
+        
+        # As a parameter dependency (provides current_user to handler):
+        @router.post("/assets")
+        def create_asset(
+            body: AssetCreate,
+            db: Session = Depends(get_db),
+            current_user: User = Depends(require_role(UserRole.ASSET_MANAGER))
+        ):
+            # Handler code here - current_user is the authenticated User object
+            ...
+    """
     def _checker(current_user: User = Depends(get_current_user)) -> User:
-        if current_user.role.value not in allowed_roles:
+        if current_user.role not in allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Role '{current_user.role.value}' is not authorized for this action",
@@ -77,6 +113,61 @@ def require_roles(*allowed_roles: str):
         return current_user
 
     return _checker
+
+
+def require_not_self_approval(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> None:
+    """
+    Guard that prevents a user from approving their own asset request.
+    
+    This enforces the business rule that an Asset Manager cannot approve their own
+    requests to prevent conflicts of interest. This applies regardless of the user's role.
+    
+    Extracts request_id from the path parameters of the current request.
+    
+    Raises:
+        HTTPException 403: If the logged-in user is the same person who submitted the request.
+    
+    Example:
+        @router.put("/{request_id}/approve")
+        def approve_request(
+            request_id: int,
+            body: AssetRequestApprove,
+            db: Session = Depends(get_db),
+            current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
+            _guard: None = Depends(require_not_self_approval)
+        ):
+            # Handler code here - self-approval is guaranteed to be blocked
+            ...
+    """
+    from app.models.asset_request import AssetRequest
+    
+    request_id = request.path_params.get("request_id")
+    if request_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="request_id path parameter is required"
+        )
+    
+    request_obj = db.query(AssetRequest).filter(AssetRequest.request_id == int(request_id)).first()
+    if not request_obj:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Request not found"
+        )
+    
+    if request_obj.requested_by == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot approve your own request. Conflict of interest restriction."
+        )
+
+
+# Backward compatibility alias for existing code using require_roles
+require_roles = require_role
 
 
 @router.post("/signup", response_model=LoginResponse)

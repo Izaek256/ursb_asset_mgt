@@ -1,4 +1,16 @@
-"""Asset routes: list, filter, search, and register assets."""
+"""Asset routes: list, filter, search, and register assets.
+
+Access Control Rules:
+- POST /api/assets — Asset Manager, Super System Administrator, Asset Custodian
+- PUT /api/assets/{id} — Asset Manager, Super System Administrator, Asset Custodian
+- GET /api/assets — All authenticated roles (no restriction)
+- GET /api/assets/{id} — All authenticated roles (no restriction)
+- PATCH /api/assets/{id}/deactivate — Asset Manager, Super System Administrator
+- PATCH /api/assets/{id}/reactivate — Asset Manager, Super System Administrator
+- PATCH /api/assets/{id}/activate — Asset Manager, Super System Administrator
+- GET /api/assets/export/pdf — All authenticated roles (no restriction)
+- GET /api/assets/export/excel — All authenticated roles (no restriction)
+"""
 
 import io
 import uuid
@@ -13,7 +25,8 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models.asset import Asset, AssetCondition, AssetStatus, AssetType, SourceType
 from app.models.audit_log import AuditLog
-from app.api.v1.auth import get_current_user, require_roles
+from app.api.v1.auth import get_current_user, require_role
+from app.models.user import UserRole
 
 router = APIRouter(prefix="/api/v1/assets", tags=["assets"])
 
@@ -121,7 +134,7 @@ _STATUS_MAP = {
 def create_asset(
     body: AssetCreate,
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles("Asset Manager")),
+    current_user=Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.ASSET_CUSTODIAN)),
 ):
     """Register a new asset. Only Asset Managers may call this endpoint."""
 
@@ -386,10 +399,10 @@ def update_asset(
     asset_id: str,
     body: AssetUpdateRequest,
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles("Asset Manager", "System Administrator")),
+    current_user=Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.ASSET_CUSTODIAN)),
 ):
     """
-    Update an asset. Only Asset Manager and System Administrator may call this endpoint.
+    Update an asset. Only Asset Manager, Super System Administrator, and Asset Custodian may call this endpoint.
     Validates status transitions and checks if asset is active and not disposed.
     """
     asset = db.query(Asset).filter(Asset.asset_id == asset_id).first()
@@ -475,7 +488,7 @@ def update_asset(
 def deactivate_asset(
     asset_id: str,
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles("Asset Manager", "System Administrator")),
+    current_user=Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
 ):
     """
     Deactivate an asset. Sets is_active = False.
@@ -535,7 +548,7 @@ def deactivate_asset(
 def reactivate_asset(
     asset_id: str,
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles("Asset Manager", "System Administrator")),
+    current_user=Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
 ):
     """
     Reactivate an asset. Sets is_active = True.
@@ -574,7 +587,7 @@ def reactivate_asset(
 def activate_asset(
     asset_id: str,
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles("Asset Manager", "System Administrator")),
+    current_user=Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
 ):
     """
     Activate a newly registered asset. Sets is_active = True.
