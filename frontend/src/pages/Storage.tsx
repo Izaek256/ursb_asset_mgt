@@ -36,6 +36,7 @@ export default function Storage() {
   const [search, setSearch] = React.useState("");
 
   // Modals state
+  const [confirmReturnAssignment, setConfirmReturnAssignment] = React.useState<{assignment_id: number; asset_name: string; employee_name: string} | null>(null);
   const [assignModalAsset, setAssignModalAsset] = React.useState<StorageAsset | null>(null);
   const [showReturnModal, setShowReturnModal] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -190,6 +191,24 @@ export default function Storage() {
       setIsSubmitting(false);
     }
   };
+  
+  const handleConfirmReturn = async () => {
+    if (!confirmReturnAssignment) return;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await apiFetch(`/assignments/${confirmReturnAssignment.assignment_id}/confirm-return`, {
+        method: "POST",
+      });
+      setSuccess(`Return confirmed for "${confirmReturnAssignment.asset_name}".`);
+      setConfirmReturnAssignment(null);
+      fetchStorageData();
+    } catch (err: any) {
+      setError(err.message || "Failed to confirm return.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const columns: Column<StorageAsset>[] = [
     {
@@ -213,13 +232,32 @@ export default function Storage() {
       header: "Department",
       render: (a) => a.department || "—",
     },
+    
     {
       header: "Actions",
       render: (a) => (
-        <div className="flex select-none">
+        <div className="flex select-none gap-2">
           {isAdminOrManager && (
             <Button variant="outline" onClick={() => handleAssignClick(a)}>
               Assign Asset
+            </Button>
+          )}
+          {/*
+            Confirm Return button — renders only when ALL of:
+            1. Current user is an Asset Custodian
+            2. Asset status is Returned (employee has initiated return, awaiting physical confirmation)
+            Displays employee name and asset name so Custodian can match to physical item
+          */}
+          {user?.role === "Asset Custodian" && a.status === "Returned" && (
+            <Button
+              variant="success"
+              onClick={() => setConfirmReturnAssignment({
+                assignment_id: a.current_assignment_id ?? 0,
+                asset_name: a.asset_name,
+                employee_name: a.current_custodian_name || "Unknown",
+              })}
+            >
+              Confirm Return
             </Button>
           )}
         </div>
@@ -497,6 +535,15 @@ export default function Storage() {
         message={`Are you sure you want to return asset "${returnConfirmAsset?.asset_name}" (${returnConfirmAsset?.asset_id}) back to storage? This will end its current custody assignment.`}
         onCancel={() => setReturnConfirmAsset(null)}
         onConfirm={handleReturnConfirm}
+      />
+
+      {/* Confirm Return Dialog — Custodian confirms physical receipt */}
+      <ConfirmDialog
+        open={!!confirmReturnAssignment}
+        title="Confirm Asset Return"
+        message={`Confirm physical receipt of "${confirmReturnAssignment?.asset_name}" from ${confirmReturnAssignment?.employee_name}? This will mark the asset as Available.`}
+        onCancel={() => setConfirmReturnAssignment(null)}
+        onConfirm={handleConfirmReturn}
       />
     </div>
   );
