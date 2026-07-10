@@ -476,6 +476,7 @@ def seed():
                 ),
                 "cost": 4_800_000, "next_service_date": date(2024, 10, 10),
                 "recorded_by": uid(manager),
+                "maintenance_type": "Corrective",
             },
             {
                 "asset_id": "AST-VEH00001", "service_date": date(2024, 1, 15),
@@ -483,6 +484,7 @@ def seed():
                 "description": "Routine 40,000 km service. Oil, air and fuel filters replaced. Brake pads inspected and cleared.",
                 "cost": 1_200_000, "next_service_date": date(2024, 7, 15),
                 "recorded_by": uid(manager),
+                "maintenance_type": "Preventive",
             },
             {
                 "asset_id": "AST-ICT00010", "service_date": date(2024, 5, 20),
@@ -494,6 +496,7 @@ def seed():
                 ),
                 "cost": 2_500_000, "next_service_date": date(2025, 5, 20),
                 "recorded_by": uid(custodian1),
+                "maintenance_type": "Corrective",
             },
             {
                 "asset_id": "AST-ICT00002", "service_date": date(2024, 2, 28),
@@ -501,6 +504,7 @@ def seed():
                 "description": "Fuser unit replaced. Paper feed rollers cleaned and lubricated. Test pages confirmed print quality.",
                 "cost": 320_000, "next_service_date": date(2025, 2, 28),
                 "recorded_by": uid(custodian1),
+                "maintenance_type": "Corrective",
             },
         ]
 

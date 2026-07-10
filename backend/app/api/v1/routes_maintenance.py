@@ -61,6 +61,7 @@ def _serialize(m: MaintenanceRecord, db: Session) -> dict:
         "next_service_date": str(m.next_service_date) if m.next_service_date else None,
         "recorded_by": m.recorded_by,
         "recorded_by_name": _user_name(recorder),
+        "maintenance_type": m.maintenance_type,
     }
 
 
@@ -123,6 +124,7 @@ def log_maintenance(
         cost=body.cost or 0,
         next_service_date=body.next_service_date,
         recorded_by=current_user.id,
+        maintenance_type=body.maintenance_type,
     )
     db.add(record)
     db.flush()

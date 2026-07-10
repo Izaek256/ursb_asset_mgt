@@ -55,6 +55,17 @@ async def lifespan(app: FastAPI):
             if column_name not in existing_asset_columns:
                 connection.execute(text(f"ALTER TABLE assets ADD COLUMN {definition}"))
 
+        # Add columns to maintenance_records table
+        existing_maint_columns = {
+            row[1] for row in connection.execute(text("PRAGMA table_info(maintenance_records)")).all()
+        }
+        maint_additional_columns = {
+            "maintenance_type": "maintenance_type TEXT",
+        }
+        for column_name, definition in maint_additional_columns.items():
+            if column_name not in existing_maint_columns:
+                connection.execute(text(f"ALTER TABLE maintenance_records ADD COLUMN {definition}"))
+
     default_email = os.getenv("AUTH_DEFAULT_EMAIL", "admin@ursb.local").strip().lower()
     default_password = os.getenv("AUTH_DEFAULT_PASSWORD", "Admin123!")
 

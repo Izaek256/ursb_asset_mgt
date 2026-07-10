@@ -22,6 +22,7 @@ class MaintenanceRecord(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     cost: Mapped[float] = mapped_column(DECIMAL(15, 2), nullable=False)
     next_service_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    maintenance_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     recorded_by: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="RESTRICT"),

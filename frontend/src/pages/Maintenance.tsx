@@ -27,10 +27,19 @@ interface MaintenanceRecordResponse {
   maintenance_type?: string;
 }
 
+interface AssetOption {
+  asset_id: string;
+  asset_name: string;
+  asset_type: string;
+  serial_number: string;
+  status: string;
+}
+
 export default function Maintenance() {
   const { user } = useAuth();
   const [records, setRecords] = React.useState<MaintenanceRecordResponse[]>([]);
   const [upcoming, setUpcoming] = React.useState<MaintenanceRecordResponse[]>([]);
+  const [assets, setAssets] = React.useState<AssetOption[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState<string | null>(null);
@@ -91,9 +100,21 @@ export default function Maintenance() {
     }
   }, []);
 
+  const fetchAssets = React.useCallback(async () => {
+    try {
+      const assetsData = await apiFetch<AssetOption[]>("/assets", {});
+      setAssets(assetsData);
+    } catch (err) {
+      console.error("Failed to load assets.", err);
+    }
+  }, []);
+
   React.useEffect(() => {
     fetchMaintenanceData();
-  }, [fetchMaintenanceData]);
+    if (isAdminOrManager) {
+      fetchAssets();
+    }
+  }, [fetchMaintenanceData, fetchAssets, isAdminOrManager]);
 
   // Dirty Form Checks
   const isLogFormDirty = 
@@ -268,7 +289,7 @@ export default function Maintenance() {
     setScheduleError("");
     try {
       await apiFetch(`/maintenance/${selectedRecord.maintenance_id}/schedule`, {
-        method: "PUT",
+        method: "PATCH",
         body: JSON.stringify({
           next_service_date: scheduleForm.next_service_date,
         }),
@@ -289,7 +310,7 @@ export default function Maintenance() {
     setError(null);
     try {
       await apiFetch(`/maintenance/${completeConfirm.maintenance_id}/complete`, {
-        method: "PUT",
+        method: "PATCH",
       });
       setSuccess(`Maintenance completed. Asset "${completeConfirm.asset_id}" is now Active.`);
       setCompleteConfirm(null);
@@ -352,6 +373,13 @@ export default function Maintenance() {
     },
   ];
 
+  const assetOptions = assets
+    .filter((a) => a.status !== "Disposed")
+    .map((a) => ({
+      value: a.asset_id,
+      label: `${a.asset_name || "Asset"} (${a.asset_id}) [${a.status}]`,
+    }));
+
   return (
     <div className="w-full flex flex-col gap-6 select-none font-sans">
       {success && <SuccessBanner message={success} onDismiss={() => setSuccess(null)} />}
@@ -408,13 +436,13 @@ export default function Maintenance() {
           {logErrors.general && <ErrorMessage message={logErrors.general} />}
 
           <FormInput 
-            type="text"
+            type="select"
             variant="light"
-            label="Asset ID *"
+            label="Asset *"
             value={logForm.asset_id}
             onChange={(val) => handleLogFieldChange("asset_id", val)}
+            options={[{ value: "", label: "Select an asset..." }, ...assetOptions]}
             required
-            placeholder="e.g. URSB-1234ABCD"
           />
 
           <FormInput 
@@ -438,12 +466,17 @@ export default function Maintenance() {
           />
 
           <FormInput 
-            type="text"
+            type="select"
             variant="light"
             label="Maintenance Type"
             value={logForm.maintenance_type}
             onChange={(val) => handleLogFieldChange("maintenance_type", val)}
-            placeholder="e.g. Preventive, Corrective, Inspection"
+            options={[
+              { value: "", label: "Select type..." },
+              { value: "Preventive", label: "Preventive" },
+              { value: "Corrective", label: "Corrective" },
+              { value: "Inspection", label: "Inspection" },
+            ]}
           />
 
           <FormInput 
