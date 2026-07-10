@@ -29,6 +29,7 @@ import {
   Menu,
   FileText,
   FileSpreadsheet,
+  Layers,
 } from "lucide-react";
 
 export const ICONS = {
@@ -36,6 +37,7 @@ export const ICONS = {
   dashboard: LayoutDashboard,
   requests: ClipboardList,
   assets: Package,
+  inventory: Layers,
   assignments: Key,
   storage: Archive,
   transfers: Repeat,
