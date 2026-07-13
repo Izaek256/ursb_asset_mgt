@@ -4,15 +4,17 @@ from datetime import datetime
 
 from sqlalchemy import Boolean, Column, DateTime, Enum, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.ext.hybrid import hybrid_property
 
 from app.db import Base
 
 
 class UserRole(str, enum.Enum):
-    ASSET_MANAGER = "Asset Manager"
-    ASSET_CUSTODIAN = "Asset Custodian"
-    EMPLOYEE = "Employee"
-    SYSTEM_ADMINISTRATOR = "System Administrator"
+    SUPER_SYSTEM_ADMINISTRATOR = "Super System Administrator"  # Has all permissions of Asset Manager plus user account management
+    SYSTEM_ADMINISTRATOR = "System Administrator"  # Can create users, view audit logs, read-only access to operations
+    ASSET_MANAGER = "Asset Manager"  # Can register, assign, transfer, dispose assets; approve requests (not own)
+    ASSET_CUSTODIAN = "Asset Custodian"  # Can register assets; confirms handover during transfers
+    EMPLOYEE = "Employee"  # Can submit asset requests; view assigned assets
 
 
 class User(Base):
@@ -78,4 +80,38 @@ class User(Base):
         "DisposalRecord", back_populates="authorised_by_user", foreign_keys="DisposalRecord.authorised_by"
     )
     audit_logs = relationship("AuditLog", back_populates="user")
+    # One-to-one relationship for user settings. uselist=False ensures a single settings row per user.
+    settings = relationship("UserSettings", back_populates="user", uselist=False, cascade="all, delete-orphan")
+
+    @hybrid_property
+    def user_id(self):
+        return self.id
+
+    @user_id.setter
+    def user_id(self, value):
+        self.id = value
+
+    @hybrid_property
+    def full_name(self):
+        parts = [self.first_name, self.last_name]
+        return " ".join([p for p in parts if p]).strip()
+
+    @full_name.expression
+    @classmethod
+    def full_name(cls):
+        return func.coalesce(cls.first_name, "") + " " + func.coalesce(cls.last_name, "")
+
+    @full_name.setter
+    def full_name(self, value):
+        if not value:
+            self.first_name = ""
+            self.last_name = ""
+            return
+        parts = value.strip().split(maxsplit=1)
+        if len(parts) == 1:
+            self.first_name = parts[0]
+            self.last_name = ""
+        else:
+            self.first_name = parts[0]
+            self.last_name = parts[1]
 
