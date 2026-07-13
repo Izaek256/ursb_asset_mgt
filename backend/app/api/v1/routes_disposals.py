@@ -1,4 +1,9 @@
-"""Disposal routes: create and list asset disposals."""
+"""Disposal routes: create and list asset disposals.
+
+Access Control Rules:
+- POST /api/disposals — Asset Manager, Super System Administrator
+- GET /api/disposals — Asset Manager, Super System Administrator, System Administrator (read-only)
+"""
 
 from datetime import date
 from typing import List, Optional
@@ -12,7 +17,8 @@ from app.models.asset import Asset, AssetStatus
 from app.models.disposal_record import DisposalRecord, DisposalMethod
 from app.models.assignment import Assignment, AssignmentStatus
 from app.models.audit_log import AuditLog
-from app.api.v1.auth import get_current_user, require_roles
+from app.api.v1.auth import get_current_user, require_role
+from app.models.user import UserRole
 
 router = APIRouter(prefix="/api/v1/disposals", tags=["disposals"])
 
@@ -50,7 +56,7 @@ class DisposalCreateRequest(BaseModel):
 def create_disposal(
     body: DisposalCreateRequest,
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles("Asset Manager", "System Administrator")),
+    current_user=Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
 ):
     """
     Create a disposal record for an asset.
@@ -141,7 +147,7 @@ def list_disposals(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
-    _user=Depends(get_current_user),
+    _user=Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR)),
 ):
     """
     List all disposal records with pagination.

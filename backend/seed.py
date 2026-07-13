@@ -125,6 +125,16 @@ def seed():
         # ----------------------------------------------------------------
         print("\n[1/6] Seeding users...")
 
+        super_admin = get_or_create_user(
+            db,
+            email="superadmin@ursb.go.ug",
+            first_name="James", last_name="Mugisha",
+            username="james.mugisha",
+            role=UserRole.SUPER_SYSTEM_ADMINISTRATOR,
+            department="ICT",
+            phone_number="+256701000000",
+            password="SuperAdmin@1234",
+        )
         admin = get_or_create_user(
             db,
             email="admin@ursb.go.ug",
@@ -658,15 +668,16 @@ def seed():
         print(f"  Audit Log Entries  : {db.query(AuditLog).count()}")
         print("=" * 60)
         print("\n  Default Credentials:")
-        print("  +--------------------------------------------------------------+")
-        print("  | Role                  | Email                    | Password   |")
-        print("  +--------------------------------------------------------------+")
-        print("  | System Administrator  | admin@ursb.go.ug         | Admin@1234 |")
-        print("  | Asset Manager         | asset.manager@ursb.go.ug | Manager@1234|")
-        print("  | Asset Custodian (ICT) | custodian.ict@ursb.go.ug | Custodian@1234|")
-        print("  | Asset Custodian (Adm) | custodian.admin@ursb.go.ug| Custodian@1234|")
-        print("  | Employee              | john.mukasa@ursb.go.ug   | Employee@1234|")
-        print("  +--------------------------------------------------------------+")
+        print("  +--------------------------------------------------------------------------+")
+        print("  | Role                      | Email                    | Password       |")
+        print("  +--------------------------------------------------------------------------+")
+        print("  | Super System Administrator| superadmin@ursb.go.ug    | SuperAdmin@1234|")
+        print("  | System Administrator      | admin@ursb.go.ug         | Admin@1234     |")
+        print("  | Asset Manager             | asset.manager@ursb.go.ug | Manager@1234   |")
+        print("  | Asset Custodian (ICT)     | custodian.ict@ursb.go.ug | Custodian@1234 |")
+        print("  | Asset Custodian (Adm)     | custodian.admin@ursb.go.ug| Custodian@1234 |")
+        print("  | Employee                  | john.mukasa@ursb.go.ug   | Employee@1234  |")
+        print("  +--------------------------------------------------------------------------+")
         print("")
 
     except Exception as e:
