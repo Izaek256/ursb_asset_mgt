@@ -14,6 +14,7 @@ from app.db import get_db
 from app.models.asset import Asset, AssetCondition, AssetStatus, AssetType, SourceType
 from app.models.audit_log import AuditLog
 from app.api.v1.auth import get_current_user, require_roles
+from app.services.asset_service import VALID_TRANSITIONS, validate_status_transition, get_asset, list_assets, create_asset, update_asset, export_assets_csv
 
 router = APIRouter(prefix="/api/v1/assets", tags=["assets"])
 
@@ -238,43 +239,40 @@ def create_asset(
     )
 
 
+@router.post("", response_model=AssetOut, status_code=status.HTTP_201_CREATED)
+def create_asset(
+    body: AssetCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles("Asset Manager")),
+):
+    """Register a new asset. Asset Manager only. SRS AM-R01."""
+    asset = create_asset(db, body, current_user.user_id)
+    return AssetOut(
+        asset_id=asset.asset_id,
+        asset_name=asset.asset_name,
+        asset_type=asset.asset_type.value if hasattr(asset.asset_type, "value") else str(asset.asset_type),
+        category=asset.category,
+        serial_number=asset.serial_number,
+        condition=asset.condition.value if hasattr(asset.condition, "value") else str(asset.condition),
+        status=asset.status.value if hasattr(asset.status, "value") else str(asset.status),
+        cost=float(asset.cost),
+        acquisition_date=str(asset.acquisition_date),
+        supplier=asset.supplier,
+        department=asset.department,
+        created_at=str(asset.created_at),
+    )
+
 @router.get("", response_model=List[AssetOut])
 def list_assets(
     status: Optional[str] = Query(None),
     asset_type: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    department: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     _user=Depends(get_current_user),
 ):
-    q = db.query(Asset)
-    if status:
-        # Convert string to enum using robust resolver
-        try:
-            status_enum = _resolve_status_enum(status)
-            q = q.filter(Asset.status == status_enum)
-        except ValueError:
-            valid_values = [e.value for e in AssetStatus]
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid status value. Valid values are: {', '.join(valid_values)}"
-            )
-    if asset_type:
-        # Convert string to enum using robust resolver
-        try:
-            asset_type_enum = _resolve_asset_type_enum(asset_type)
-            q = q.filter(Asset.asset_type == asset_type_enum)
-        except ValueError:
-            valid_values = [e.value for e in AssetType]
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid asset_type value. Valid values are: {', '.join(valid_values)}"
-            )
-    if search:
-        q = q.filter(
-            Asset.asset_name.ilike(f"%{search}%")
-            | Asset.serial_number.ilike(f"%{search}%")
-        )
-    assets = q.order_by(Asset.created_at.desc()).all()
+    """List assets with optional filters. All authenticated roles. SRS AM-P03."""
+    assets, _ = list_assets(db, status=status, asset_type=asset_type, search=search, department=department)
     return [
         AssetOut(
             asset_id=a.asset_id,
@@ -292,7 +290,6 @@ def list_assets(
         )
         for a in assets
     ]
-
 
 @router.get("/{asset_id}", response_model=AssetDetailResponse)
 def get_asset_detail(
@@ -409,158 +406,9 @@ def update_asset(
     db: Session = Depends(get_db),
     current_user=Depends(require_roles("Asset Manager", "System Administrator")),
 ):
-    """
-    Update an asset. Only Asset Manager and System Administrator may call this endpoint.
-    Validates status transitions and checks if asset is active and not disposed.
-    """
-    asset = db.query(Asset).filter(Asset.asset_id == asset_id).first()
-    if not asset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Asset with ID {asset_id} not found"
-        )
-
-    # Check if asset is disposed (terminal state)
-    if asset.status == AssetStatus.DISPOSED:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot update a disposed asset"
-        )
-
-    # Check if asset is inactive
-    if not asset.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot update an inactive asset"
-        )
-
-    # Validate status transition if status is being updated
-    resolved_status = None
-    if body.status is not None:
-        try:
-            new_status = AssetStatus(body.status)
-        except ValueError:
-            if body.status in _STATUS_MAP:
-                new_status = _STATUS_MAP[body.status]
-            else:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid status '{body.status}'"
-                )
-        
-        from app.services.asset_service import VALID_TRANSITIONS
-        
-        current_status = asset.status
-        allowed_transitions = VALID_TRANSITIONS.get(current_status, set())
-        if new_status not in allowed_transitions:
-            allowed_labels = [s.value for s in allowed_transitions]
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid status transition from {current_status.value} to {new_status.value}. Allowed: {', '.join(allowed_labels) or 'none'}"
-            )
-        resolved_status = new_status
-
-    # Update only provided fields
-    if body.asset_name is not None:
-        asset.asset_name = body.asset_name
-    if body.category is not None:
-        asset.category = body.category
-    if body.condition is not None:
-        try:
-            asset.condition = AssetCondition(body.condition)
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid condition '{body.condition}'"
-            )
-    if resolved_status is not None:
-        asset.status = resolved_status
-    if body.department is not None:
-        asset.department = body.department
-    if body.current_custodian_id is not None:
-        asset.current_custodian_id = str(body.current_custodian_id)
-    if body.supplier is not None:
-        asset.supplier = body.supplier
-    if body.procurement_ref is not None:
-        asset.procurement_ref = body.procurement_ref
-    if body.cost is not None:
-        asset.cost = body.cost
-
-    # Audit log
-    audit_entry = AuditLog(
-        user_id=current_user.user_id,
-        action="ASSET_UPDATE",
-        table_affected="assets",
-        record_id=asset_id,
-        details=f"Asset {asset.asset_name} updated",
-    )
-    db.add(audit_entry)
-    db.commit()
-    db.refresh(asset)
-
-    # Return updated asset detail by calling the get function
+    """Update an asset. Asset Manager and System Administrator only. SRS AM-R03."""
+    update_asset(db, asset_id, body, current_user.user_id)
     return get_asset_detail(asset_id, db, current_user)
-
-
-@router.patch("/{asset_id}/deactivate")
-def deactivate_asset(
-    asset_id: str,
-    db: Session = Depends(get_db),
-    current_user=Depends(require_roles("Asset Manager", "System Administrator")),
-):
-    """
-    Deactivate an asset. Sets is_active = False.
-    Requires: asset not inactive, no active assignment, not Disposed.
-    """
-    from app.models.assignment import Assignment, AssignmentStatus
-
-    asset = db.query(Asset).filter(Asset.asset_id == asset_id).first()
-    if not asset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Asset with ID {asset_id} not found"
-        )
-
-    # Check if already inactive
-    if not asset.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Asset is already inactive"
-        )
-
-    # Check if disposed
-    if asset.status == AssetStatus.DISPOSED:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot deactivate a disposed asset"
-        )
-
-    # Check for active assignment
-    active_assignment = db.query(Assignment).filter(
-        Assignment.asset_id == asset_id,
-        Assignment.status == AssignmentStatus.ACTIVE
-    ).first()
-    if active_assignment:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot deactivate asset with active assignment"
-        )
-
-    asset.is_active = False
-
-    # Audit log
-    audit_entry = AuditLog(
-        user_id=current_user.user_id,
-        action="ASSET_DEACTIVATE",
-        table_affected="assets",
-        record_id=asset_id,
-        details=f"Asset {asset.asset_name} deactivated",
-    )
-    db.add(audit_entry)
-    db.commit()
-
-    return {"message": "Asset deactivated successfully"}
-
 
 @router.patch("/{asset_id}/reactivate")
 def reactivate_asset(
@@ -571,14 +419,8 @@ def reactivate_asset(
     """
     Reactivate an asset. Sets is_active = True.
     """
-    asset = db.query(Asset).filter(Asset.asset_id == asset_id).first()
-    if not asset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Asset with ID {asset_id} not found"
-        )
-
-    # Check if already active
+    asset = get_asset(db, asset_id).filter(Asset.asset_id == asset_id).first()
+       # Check if already active
     if asset.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -610,14 +452,8 @@ def activate_asset(
     """
     Activate a newly registered asset. Sets is_active = True.
     """
-    asset = db.query(Asset).filter(Asset.asset_id == asset_id).first()
-    if not asset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Asset with ID {asset_id} not found"
-        )
-
-    # Check if already active
+    asset = get_asset(db, asset_id).filter(Asset.asset_id == asset_id).first()
+        # Check if already active
     if asset.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -668,33 +504,7 @@ def export_assets_pdf(
         )
 
     # Query assets with filters
-    q = db.query(Asset)
-    if status:
-        try:
-            status_enum = _resolve_status_enum(status)
-            q = q.filter(Asset.status == status_enum)
-        except ValueError:
-            valid_values = [e.value for e in AssetStatus]
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid status value. Valid values are: {', '.join(valid_values)}"
-            )
-    if asset_type:
-        try:
-            asset_type_enum = _resolve_asset_type_enum(asset_type)
-            q = q.filter(Asset.asset_type == asset_type_enum)
-        except ValueError:
-            valid_values = [e.value for e in AssetType]
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid asset_type value. Valid values are: {', '.join(valid_values)}"
-            )
-    if search:
-        q = q.filter(
-            Asset.asset_name.ilike(f"%{search}%")
-            | Asset.serial_number.ilike(f"%{search}%")
-        )
-    assets = q.order_by(Asset.created_at.desc()).all()
+    assets, _ = list_assets(db, status=status, asset_type=asset_type, search=search)
 
     # Create PDF with metadata
     buffer = io.BytesIO()
@@ -819,34 +629,8 @@ def export_assets_excel(
         )
 
     # Query assets with filters
-    q = db.query(Asset)
-    if status:
-        try:
-            status_enum = _resolve_status_enum(status)
-            q = q.filter(Asset.status == status_enum)
-        except ValueError:
-            valid_values = [e.value for e in AssetStatus]
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid status value. Valid values are: {', '.join(valid_values)}"
-            )
-    if asset_type:
-        try:
-            asset_type_enum = _resolve_asset_type_enum(asset_type)
-            q = q.filter(Asset.asset_type == asset_type_enum)
-        except ValueError:
-            valid_values = [e.value for e in AssetType]
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid asset_type value. Valid values are: {', '.join(valid_values)}"
-            )
-    if search:
-        q = q.filter(
-            Asset.asset_name.ilike(f"%{search}%")
-            | Asset.serial_number.ilike(f"%{search}%")
-        )
-    assets = q.order_by(Asset.created_at.desc()).all()
-
+    assets, _ = list_assets(db, status=status, asset_type=asset_type, search=search)
+    
     # Create Excel workbook
     wb = Workbook()
     ws = wb.active
