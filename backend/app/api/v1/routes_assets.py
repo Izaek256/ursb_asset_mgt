@@ -100,21 +100,42 @@ class AssetUpdateRequest(BaseModel):
     # - source_type: procurement record, immutable
 
 
-# Valid status transitions
-VALID_STATUS_TRANSITIONS = {
-    "Active": ["In Storage", "Under Maintenance", "Disposed"],
-    "In Storage": ["Active", "Disposed"],
-    "Under Maintenance": ["Active", "Disposed"],
-    "Disposed": [],  # Terminal state
-}
+# Note: Valid status transitions are defined in app.services.asset_service.VALID_TRANSITIONS
 
 
 # Map display-friendly status labels → model enum
 _STATUS_MAP = {
-    "Active": AssetStatus.ACTIVE,
-    "In Store": AssetStatus.IN_STORAGE,
-    "In Storage": AssetStatus.IN_STORAGE,
+    "Active": AssetStatus.ASSIGNED,
+    "In Store": AssetStatus.AVAILABLE,
+    "In Storage": AssetStatus.AVAILABLE,
 }
+
+
+def _resolve_status_enum(status_str: str) -> AssetStatus:
+    """Resolve status string to AssetStatus enum. Handles display labels and direct enum keys/values."""
+    if status_str in _STATUS_MAP:
+        return _STATUS_MAP[status_str]
+    try:
+        return AssetStatus(status_str)
+    except ValueError:
+        pass
+    try:
+        return AssetStatus[status_str.upper().replace(" ", "_")]
+    except KeyError:
+        raise ValueError(f"Invalid status value: {status_str}")
+
+
+def _resolve_asset_type_enum(type_str: str) -> AssetType:
+    """Resolve asset type string to AssetType enum."""
+    try:
+        return AssetType(type_str)
+    except ValueError:
+        pass
+    try:
+        return AssetType[type_str.upper().replace(" ", "_")]
+    except KeyError:
+        raise ValueError(f"Invalid asset type: {type_str}")
+
 
 
 @router.post("", response_model=AssetOut, status_code=status.HTTP_201_CREATED)
@@ -227,25 +248,25 @@ def list_assets(
 ):
     q = db.query(Asset)
     if status:
-        # Convert string to enum - Asset.status is an AssetStatus enum, not a raw string
+        # Convert string to enum using robust resolver
         try:
-            status_enum = AssetStatus(status)
+            status_enum = _resolve_status_enum(status)
             q = q.filter(Asset.status == status_enum)
         except ValueError:
             valid_values = [e.value for e in AssetStatus]
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=400,
                 detail=f"Invalid status value. Valid values are: {', '.join(valid_values)}"
             )
     if asset_type:
-        # Convert string to enum - Asset.asset_type is an AssetType enum, not a raw string
+        # Convert string to enum using robust resolver
         try:
-            asset_type_enum = AssetType(asset_type)
+            asset_type_enum = _resolve_asset_type_enum(asset_type)
             q = q.filter(Asset.asset_type == asset_type_enum)
         except ValueError:
             valid_values = [e.value for e in AssetType]
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=400,
                 detail=f"Invalid asset_type value. Valid values are: {', '.join(valid_values)}"
             )
     if search:
@@ -414,14 +435,30 @@ def update_asset(
         )
 
     # Validate status transition if status is being updated
+    resolved_status = None
     if body.status is not None:
-        current_status = asset.status.value if hasattr(asset.status, "value") else str(asset.status)
-        allowed_transitions = VALID_STATUS_TRANSITIONS.get(current_status, [])
-        if body.status not in allowed_transitions:
+        try:
+            new_status = AssetStatus(body.status)
+        except ValueError:
+            if body.status in _STATUS_MAP:
+                new_status = _STATUS_MAP[body.status]
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid status '{body.status}'"
+                )
+        
+        from app.services.asset_service import VALID_TRANSITIONS
+        
+        current_status = asset.status
+        allowed_transitions = VALID_TRANSITIONS.get(current_status, set())
+        if new_status not in allowed_transitions:
+            allowed_labels = [s.value for s in allowed_transitions]
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid status transition from {current_status} to {body.status}. Allowed: {', '.join(allowed_transitions) or 'none'}"
+                detail=f"Invalid status transition from {current_status.value} to {new_status.value}. Allowed: {', '.join(allowed_labels) or 'none'}"
             )
+        resolved_status = new_status
 
     # Update only provided fields
     if body.asset_name is not None:
@@ -436,14 +473,8 @@ def update_asset(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid condition '{body.condition}'"
             )
-    if body.status is not None:
-        try:
-            asset.status = AssetStatus(body.status)
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid status '{body.status}'"
-            )
+    if resolved_status is not None:
+        asset.status = resolved_status
     if body.department is not None:
         asset.department = body.department
     if body.current_custodian_id is not None:
@@ -632,16 +663,32 @@ def export_assets_pdf(
         from datetime import datetime
     except ImportError:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail="PDF export not available. Install reportlab."
         )
 
     # Query assets with filters
     q = db.query(Asset)
     if status:
-        q = q.filter(Asset.status == status)
+        try:
+            status_enum = _resolve_status_enum(status)
+            q = q.filter(Asset.status == status_enum)
+        except ValueError:
+            valid_values = [e.value for e in AssetStatus]
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid status value. Valid values are: {', '.join(valid_values)}"
+            )
     if asset_type:
-        q = q.filter(Asset.asset_type == asset_type)
+        try:
+            asset_type_enum = _resolve_asset_type_enum(asset_type)
+            q = q.filter(Asset.asset_type == asset_type_enum)
+        except ValueError:
+            valid_values = [e.value for e in AssetType]
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid asset_type value. Valid values are: {', '.join(valid_values)}"
+            )
     if search:
         q = q.filter(
             Asset.asset_name.ilike(f"%{search}%")
@@ -767,16 +814,32 @@ def export_assets_excel(
         from openpyxl.styles import Font, Alignment, PatternFill
     except ImportError:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail="Excel export not available. Install openpyxl."
         )
 
     # Query assets with filters
     q = db.query(Asset)
     if status:
-        q = q.filter(Asset.status == status)
+        try:
+            status_enum = _resolve_status_enum(status)
+            q = q.filter(Asset.status == status_enum)
+        except ValueError:
+            valid_values = [e.value for e in AssetStatus]
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid status value. Valid values are: {', '.join(valid_values)}"
+            )
     if asset_type:
-        q = q.filter(Asset.asset_type == asset_type)
+        try:
+            asset_type_enum = _resolve_asset_type_enum(asset_type)
+            q = q.filter(Asset.asset_type == asset_type_enum)
+        except ValueError:
+            valid_values = [e.value for e in AssetType]
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid asset_type value. Valid values are: {', '.join(valid_values)}"
+            )
     if search:
         q = q.filter(
             Asset.asset_name.ilike(f"%{search}%")

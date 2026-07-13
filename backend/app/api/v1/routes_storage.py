@@ -13,6 +13,7 @@ from app.models.asset import Asset, AssetStatus, AssetType
 from app.models.assignment import Assignment, AssignmentStatus
 from app.models.audit_log import AuditLog
 from app.models.user import User
+from app.services.asset_service import validate_status_transition
 
 router = APIRouter(prefix="/api/v1/storage", tags=["storage"])
 
@@ -62,7 +63,7 @@ def list_storage(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = db.query(Asset).filter(Asset.status == AssetStatus.IN_STORAGE)
+    query = db.query(Asset).filter(Asset.status == AssetStatus.AVAILABLE)
     if department:
         query = query.filter(Asset.department == department)
     if asset_type:
@@ -114,8 +115,8 @@ def assign_from_storage(
     asset = db.query(Asset).filter(Asset.asset_id == asset_id).first()
     if not asset:
         raise HTTPException(404, detail="Asset not found")
-    if asset.status != AssetStatus.IN_STORAGE:
-        raise HTTPException(400, detail="Asset is not in storage")
+    if asset.status != AssetStatus.AVAILABLE:
+        raise HTTPException(400, detail="Asset is not in storage (Available)")
     if not getattr(asset, "is_active", True):
         raise HTTPException(400, detail="Asset is inactive")
 
@@ -141,7 +142,8 @@ def assign_from_storage(
             notes=body.notes,
         )
     )
-    asset.status = AssetStatus.ACTIVE
+    validate_status_transition(asset.status, AssetStatus.ASSIGNED)
+    asset.status = AssetStatus.ASSIGNED
     asset.current_custodian_id = str(body.assigned_to)
     _log(db, actor=current_user, action="ASSIGN_FROM_STORAGE", record_id=asset.asset_id, details="Assigned asset from storage")
     db.commit()
@@ -166,8 +168,8 @@ def return_to_storage(
     asset = db.query(Asset).filter(Asset.asset_id == asset_id).first()
     if not asset:
         raise HTTPException(404, detail="Asset not found")
-    if asset.status != AssetStatus.ACTIVE:
-        raise HTTPException(400, detail="Asset is not active")
+    if asset.status != AssetStatus.ASSIGNED:
+        raise HTTPException(400, detail="Asset is not active (Assigned)")
 
     assignment = (
         db.query(Assignment)
@@ -179,7 +181,8 @@ def return_to_storage(
 
     assignment.status = AssignmentStatus.RETURNED
     assignment.return_date = date.today()
-    asset.status = AssetStatus.IN_STORAGE
+    validate_status_transition(asset.status, AssetStatus.AVAILABLE)
+    asset.status = AssetStatus.AVAILABLE
     asset.current_custodian_id = None
     _log(db, actor=current_user, action="RETURN_TO_STORAGE", record_id=asset.asset_id, details="Returned asset to storage")
     db.commit()

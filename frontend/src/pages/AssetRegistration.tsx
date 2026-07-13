@@ -3,7 +3,7 @@ import { apiFetch } from "../AuthContext";
 
 const ASSET_TYPES = ["ICT Equipment", "Furniture", "Vehicle", "Software", "Other"];
 const CONDITIONS = ["New", "Good", "Refurbished", "Damaged"];
-const STATUSES = ["Active", "In Store"];
+const STATUSES = ["Available"];
 const SOURCE_TYPES = ["Procurement", "Donation", "Other"];
 
 interface FormState {
@@ -28,7 +28,7 @@ const INITIAL: FormState = {
   cost: "",
   department: "",
   acquisition_date: "",
-  status: "Active",
+  status: "Available",
   category: "",
   supplier: "",
   source_type: "Procurement",

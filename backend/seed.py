@@ -205,12 +205,12 @@ def seed():
         print("\n[2/6] Seeding assets...")
 
         assets_data = [
-            # --- ICT Equipment (Active) ---
+            # --- ICT Equipment (Active / Assigned) ---
             {
                 "asset_id": "AST-ICT00001", "asset_name": "Dell Latitude 5540 Laptop",
                 "asset_type": AssetType.ICT_EQUIPMENT, "category": "Laptops",
                 "serial_number": "DL5540-UG-001", "condition": AssetCondition.NEW,
-                "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
+                "status": AssetStatus.ASSIGNED, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2024/ICT/001", "cost": 3_200_000,
                 "acquisition_date": date(2024, 3, 10), "supplier": "Dawa Technologies Uganda Ltd",
                 "current_custodian_id": uid(custodian1), "department": "ICT",
@@ -219,7 +219,7 @@ def seed():
                 "asset_id": "AST-ICT00002", "asset_name": "HP LaserJet Pro M404dn Printer",
                 "asset_type": AssetType.ICT_EQUIPMENT, "category": "Printers",
                 "serial_number": "HPLJ-M404-002", "condition": AssetCondition.GOOD,
-                "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
+                "status": AssetStatus.ASSIGNED, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2023/ICT/012", "cost": 1_450_000,
                 "acquisition_date": date(2023, 7, 15), "supplier": "Dawa Technologies Uganda Ltd",
                 "current_custodian_id": uid(custodian1), "department": "ICT",
@@ -228,7 +228,7 @@ def seed():
                 "asset_id": "AST-ICT00003", "asset_name": "Cisco Catalyst 2960 Network Switch",
                 "asset_type": AssetType.ICT_EQUIPMENT, "category": "Networking",
                 "serial_number": "CSCO-2960-UG-003", "condition": AssetCondition.GOOD,
-                "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
+                "status": AssetStatus.ASSIGNED, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2023/ICT/008", "cost": 4_800_000,
                 "acquisition_date": date(2023, 1, 20), "supplier": "Infocom Networks Uganda",
                 "current_custodian_id": uid(custodian1), "department": "ICT",
@@ -237,7 +237,7 @@ def seed():
                 "asset_id": "AST-ICT00004", "asset_name": "Samsung 55\" LED Conference Room Display",
                 "asset_type": AssetType.ICT_EQUIPMENT, "category": "Displays",
                 "serial_number": "SAM-LED55-004", "condition": AssetCondition.NEW,
-                "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
+                "status": AssetStatus.ASSIGNED, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2024/ICT/005", "cost": 2_100_000,
                 "acquisition_date": date(2024, 5, 2), "supplier": "Dawa Technologies Uganda Ltd",
                 "current_custodian_id": uid(custodian1), "department": "Administration",
@@ -246,7 +246,7 @@ def seed():
                 "asset_id": "AST-ICT00005", "asset_name": "APC Smart-UPS 1500VA",
                 "asset_type": AssetType.ICT_EQUIPMENT, "category": "Power Equipment",
                 "serial_number": "APC-1500-UG-005", "condition": AssetCondition.GOOD,
-                "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
+                "status": AssetStatus.ASSIGNED, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2022/ICT/019", "cost": 1_200_000,
                 "acquisition_date": date(2022, 11, 8), "supplier": "PowerTech Uganda",
                 "current_custodian_id": uid(custodian1), "department": "ICT",
@@ -255,7 +255,7 @@ def seed():
                 "asset_id": "AST-ICT00006", "asset_name": "Lenovo ThinkCentre Desktop",
                 "asset_type": AssetType.ICT_EQUIPMENT, "category": "Desktop Computers",
                 "serial_number": "LNV-TC-006", "condition": AssetCondition.GOOD,
-                "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
+                "status": AssetStatus.ASSIGNED, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2023/ICT/022", "cost": 2_500_000,
                 "acquisition_date": date(2023, 4, 18), "supplier": "Dawa Technologies Uganda Ltd",
                 "current_custodian_id": uid(employee1), "department": "Legal",
@@ -264,17 +264,17 @@ def seed():
                 "asset_id": "AST-ICT00007", "asset_name": "Logitech MeetUp Conference Camera",
                 "asset_type": AssetType.ICT_EQUIPMENT, "category": "Conferencing Equipment",
                 "serial_number": "LGT-MTUP-007", "condition": AssetCondition.NEW,
-                "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
+                "status": AssetStatus.ASSIGNED, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2024/ICT/009", "cost": 1_800_000,
                 "acquisition_date": date(2024, 2, 14), "supplier": "Infocom Networks Uganda",
                 "current_custodian_id": uid(custodian2), "department": "Administration",
             },
-            # --- Furniture (Active) ---
+            # --- Furniture (Active / Assigned) ---
             {
                 "asset_id": "AST-FRN00001", "asset_name": "Executive Office Desk (Mahogany)",
                 "asset_type": AssetType.FURNITURE, "category": "Desks",
                 "serial_number": "FRN-DESK-008", "condition": AssetCondition.GOOD,
-                "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
+                "status": AssetStatus.ASSIGNED, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2022/ADM/003", "cost": 850_000,
                 "acquisition_date": date(2022, 6, 1), "supplier": "Quality Furniture Uganda",
                 "current_custodian_id": uid(custodian2), "department": "Administration",
@@ -283,7 +283,7 @@ def seed():
                 "asset_id": "AST-FRN00002", "asset_name": "Ergonomic Office Chair (Set of 10)",
                 "asset_type": AssetType.FURNITURE, "category": "Chairs",
                 "serial_number": "FRN-CHAIR-009", "condition": AssetCondition.GOOD,
-                "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
+                "status": AssetStatus.ASSIGNED, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2022/ADM/004", "cost": 3_500_000,
                 "acquisition_date": date(2022, 6, 1), "supplier": "Quality Furniture Uganda",
                 "current_custodian_id": uid(custodian2), "department": "Administration",
@@ -292,17 +292,17 @@ def seed():
                 "asset_id": "AST-FRN00003", "asset_name": "6-Seater Conference Table",
                 "asset_type": AssetType.FURNITURE, "category": "Tables",
                 "serial_number": "FRN-TABLE-010", "condition": AssetCondition.GOOD,
-                "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
+                "status": AssetStatus.ASSIGNED, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2021/ADM/007", "cost": 1_200_000,
                 "acquisition_date": date(2021, 9, 14), "supplier": "Quality Furniture Uganda",
                 "current_custodian_id": uid(custodian2), "department": "Registry",
             },
-            # --- Vehicles (Active) ---
+            # --- Vehicles (Active / Assigned) ---
             {
                 "asset_id": "AST-VEH00001", "asset_name": "Toyota Land Cruiser Prado (UAG 001A)",
                 "asset_type": AssetType.VEHICLE, "category": "SUVs",
                 "serial_number": "TLC-PRADO-UAG001A", "condition": AssetCondition.GOOD,
-                "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
+                "status": AssetStatus.ASSIGNED, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2021/VEH/001", "cost": 120_000_000,
                 "acquisition_date": date(2021, 3, 5), "supplier": "CFAO Motors Uganda",
                 "current_custodian_id": uid(manager), "department": "Finance & Administration",
@@ -311,17 +311,17 @@ def seed():
                 "asset_id": "AST-VEH00002", "asset_name": "Toyota Hilux Double Cab (UAG 002B)",
                 "asset_type": AssetType.VEHICLE, "category": "Pick-Up Trucks",
                 "serial_number": "TYT-HLUX-UAG002B", "condition": AssetCondition.GOOD,
-                "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
+                "status": AssetStatus.ASSIGNED, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2022/VEH/002", "cost": 95_000_000,
                 "acquisition_date": date(2022, 8, 22), "supplier": "CFAO Motors Uganda",
                 "current_custodian_id": uid(employee3), "department": "Finance & Administration",
             },
-            # --- Software (Active) ---
+            # --- Software (Active / Assigned) ---
             {
                 "asset_id": "AST-SFT00001", "asset_name": "Microsoft Office 365 Business Premium (25 Seats)",
                 "asset_type": AssetType.SOFTWARE, "category": "Productivity Software",
                 "serial_number": "MS-O365-URSB-2024", "condition": AssetCondition.NEW,
-                "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
+                "status": AssetStatus.ASSIGNED, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2024/SFT/001", "cost": 8_750_000,
                 "acquisition_date": date(2024, 1, 1), "supplier": "Microsoft East Africa",
                 "current_custodian_id": uid(admin), "department": "ICT",
@@ -330,17 +330,17 @@ def seed():
                 "asset_id": "AST-SFT00002", "asset_name": "Kaspersky Endpoint Security (50 Licenses)",
                 "asset_type": AssetType.SOFTWARE, "category": "Security Software",
                 "serial_number": "KSP-ES-URSB-2024", "condition": AssetCondition.NEW,
-                "status": AssetStatus.ACTIVE, "source_type": SourceType.PROCUREMENT,
+                "status": AssetStatus.ASSIGNED, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2024/SFT/002", "cost": 5_600_000,
                 "acquisition_date": date(2024, 1, 15), "supplier": "Infocom Networks Uganda",
                 "current_custodian_id": uid(admin), "department": "ICT",
             },
-            # --- In Storage ---
+            # --- Available (In Storage) ---
             {
                 "asset_id": "AST-ICT00008", "asset_name": "HP EliteBook 840 G5 Laptop",
                 "asset_type": AssetType.ICT_EQUIPMENT, "category": "Laptops",
                 "serial_number": "HP-EB840-015", "condition": AssetCondition.REFURBISHED,
-                "status": AssetStatus.IN_STORAGE, "source_type": SourceType.PROCUREMENT,
+                "status": AssetStatus.AVAILABLE, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2020/ICT/031", "cost": 2_800_000,
                 "acquisition_date": date(2020, 5, 10), "supplier": "Dawa Technologies Uganda Ltd",
                 "current_custodian_id": None, "department": None,
@@ -349,7 +349,7 @@ def seed():
                 "asset_id": "AST-FRN00004", "asset_name": "Steel Filing Cabinet (4-Drawer)",
                 "asset_type": AssetType.FURNITURE, "category": "Storage",
                 "serial_number": "FRN-CABINET-016", "condition": AssetCondition.GOOD,
-                "status": AssetStatus.IN_STORAGE, "source_type": SourceType.PROCUREMENT,
+                "status": AssetStatus.AVAILABLE, "source_type": SourceType.PROCUREMENT,
                 "procurement_ref": "PROC/2021/ADM/012", "cost": 450_000,
                 "acquisition_date": date(2021, 11, 3), "supplier": "Quality Furniture Uganda",
                 "current_custodian_id": None, "department": None,
@@ -358,7 +358,7 @@ def seed():
                 "asset_id": "AST-ICT00009", "asset_name": "Epson EcoTank L3150 Printer",
                 "asset_type": AssetType.ICT_EQUIPMENT, "category": "Printers",
                 "serial_number": "EPS-L3150-017", "condition": AssetCondition.GOOD,
-                "status": AssetStatus.IN_STORAGE, "source_type": SourceType.DONATION,
+                "status": AssetStatus.AVAILABLE, "source_type": SourceType.DONATION,
                 "procurement_ref": None, "cost": 680_000,
                 "acquisition_date": date(2022, 3, 8), "supplier": "USAID Uganda Programme",
                 "current_custodian_id": None, "department": None,
@@ -648,8 +648,8 @@ def seed():
         print("=" * 60)
         print(f"  Users              : {db.query(User).count()}")
         print(f"  Assets             : {db.query(Asset).count()}")
-        print(f"    Active           : {db.query(Asset).filter(Asset.status == AssetStatus.ACTIVE).count()}")
-        print(f"    In Storage       : {db.query(Asset).filter(Asset.status == AssetStatus.IN_STORAGE).count()}")
+        print(f"    Assigned         : {db.query(Asset).filter(Asset.status == AssetStatus.ASSIGNED).count()}")
+        print(f"    Available        : {db.query(Asset).filter(Asset.status == AssetStatus.AVAILABLE).count()}")
         print(f"    Under Maintenance: {db.query(Asset).filter(Asset.status == AssetStatus.UNDER_MAINTENANCE).count()}")
         print(f"    Disposed         : {db.query(Asset).filter(Asset.status == AssetStatus.DISPOSED).count()}")
         print(f"  Assignments        : {db.query(Assignment).count()}")

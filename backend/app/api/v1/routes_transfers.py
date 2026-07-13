@@ -15,6 +15,7 @@ from app.models.assignment import Assignment, AssignmentStatus
 from app.models.user import User
 from app.models.audit_log import AuditLog
 from app.api.v1.auth import get_current_user, require_roles
+from app.services.asset_service import validate_status_transition
 
 router = APIRouter(prefix="/api/v1/transfers", tags=["transfers"])
 
@@ -104,9 +105,9 @@ def create_transfer(
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
 
-    # Asset must be in Active status
-    if asset.status != AssetStatus.ACTIVE:
-        raise HTTPException(status_code=400, detail=f"Only Active assets can be transferred. Current: {asset.status}")
+    # Asset must be in Assigned status
+    if asset.status != AssetStatus.ASSIGNED:
+        raise HTTPException(status_code=400, detail=f"Only Assigned assets can be transferred. Current: {asset.status}")
 
     # Some deployments may add an `is_active` flag to assets; respect it when present
     if not getattr(asset, "is_active", True):
@@ -170,7 +171,9 @@ def create_transfer(
         status=AssignmentStatus.ACTIVE,
     )
 
-    # Update asset custodian
+    # Update asset custodian and transition status to Under Transfer
+    validate_status_transition(asset.status, AssetStatus.UNDER_TRANSFER)
+    asset.status = AssetStatus.UNDER_TRANSFER
     asset.current_custodian_id = body.to_user_id
     asset.updated_at = datetime.utcnow()
 
@@ -233,6 +236,14 @@ def acknowledge_transfer(
     transfer.acknowledged_at = datetime.utcnow()
     db.add(transfer)
     db.commit()
+
+    # Transition asset status from Under Transfer to Assigned upon acknowledgment
+    asset = db.query(Asset).filter(Asset.asset_id == transfer.asset_id).first()
+    if asset:
+        validate_status_transition(asset.status, AssetStatus.ASSIGNED)
+        asset.status = AssetStatus.ASSIGNED
+        db.add(asset)
+        db.commit()
 
     # Audit
     audit = AuditLog(

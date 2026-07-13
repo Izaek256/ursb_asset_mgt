@@ -14,6 +14,7 @@ from app.models.assignment import Assignment, AssignmentStatus
 from app.models.audit_log import AuditLog
 from app.models.asset_request import AssetRequest, RequestPriority, RequestStatus
 from app.models.user import User, UserRole
+from app.services.asset_service import validate_status_transition
 
 router = APIRouter(prefix="/api/v1/requests", tags=["requests"])
 
@@ -124,8 +125,8 @@ def create_request(
         asset = db.query(Asset).filter(Asset.asset_id == body.asset_id).first()
         if not asset:
             raise HTTPException(404, detail="Asset not found")
-        if asset.status != AssetStatus.ACTIVE:
-            raise HTTPException(400, detail=f"Only Active assets can be requested. Current: {asset.status.value}")
+        if asset.status != AssetStatus.AVAILABLE:
+            raise HTTPException(400, detail=f"Only Available assets can be requested. Current: {asset.status.value}")
         if not getattr(asset, "is_active", True):
             raise HTTPException(400, detail="Asset is inactive")
         existing = (
@@ -228,13 +229,13 @@ def approve_request(
         asset = db.query(Asset).filter(Asset.asset_id == request.asset_id).first()
         if not asset:
             raise HTTPException(404, detail="Asset not found")
-        if asset.status != AssetStatus.ACTIVE or not getattr(asset, "is_active", True):
+        if asset.status != AssetStatus.AVAILABLE or not getattr(asset, "is_active", True):
             raise HTTPException(400, detail="Asset is no longer available")
     elif body.assigned_asset_id:
         asset = db.query(Asset).filter(Asset.asset_id == body.assigned_asset_id).first()
         if not asset:
             raise HTTPException(404, detail="Asset not found")
-        if asset.status != AssetStatus.ACTIVE or not getattr(asset, "is_active", True):
+        if asset.status != AssetStatus.AVAILABLE or not getattr(asset, "is_active", True):
             raise HTTPException(400, detail="Asset is no longer available")
         request.asset_id = asset.asset_id
 
@@ -292,7 +293,7 @@ def assign_request(
     asset = db.query(Asset).filter(Asset.asset_id == asset_id).first()
     if not asset:
         raise HTTPException(404, detail="Asset not found")
-    if asset.status != AssetStatus.ACTIVE or not getattr(asset, "is_active", True):
+    if asset.status != AssetStatus.AVAILABLE or not getattr(asset, "is_active", True):
         raise HTTPException(400, detail="Asset is not available for assignment")
 
     existing_assignment = (
@@ -321,6 +322,8 @@ def assign_request(
             notes="Assigned from asset request",
         )
     )
+    validate_status_transition(asset.status, AssetStatus.ASSIGNED)
+    asset.status = AssetStatus.ASSIGNED
     asset.current_custodian_id = str(custodian_id)
     _log(db, actor=current_user, action="ASSIGN_FROM_REQUEST", record_id=str(request.request_id), details="Assigned request to asset")
     db.commit()

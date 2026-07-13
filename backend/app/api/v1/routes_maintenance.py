@@ -23,6 +23,7 @@ from app.models.audit_log import AuditLog
 from app.models.maintenance_record import MaintenanceRecord
 from app.models.user import User
 from app.api.v1.auth import get_current_user, require_roles
+from app.services.asset_service import validate_status_transition
 
 router = APIRouter(prefix="/api/v1/maintenance", tags=["maintenance"])
 
@@ -102,9 +103,9 @@ def log_maintenance(
     asset = db.query(Asset).filter(Asset.asset_id == body.asset_id).first()
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found.")
-    if asset.status == AssetStatus.DISPOSED:
+    if asset.status in {AssetStatus.DISPOSED, AssetStatus.DEACTIVATED}:
         raise HTTPException(
-            status_code=400, detail="Cannot log maintenance for a disposed asset."
+            status_code=400, detail="Cannot log maintenance for a disposed or deactivated asset."
         )
     if body.service_date > date.today():
         raise HTTPException(
@@ -128,7 +129,8 @@ def log_maintenance(
     db.flush()
 
     # Transition Active asset to Under Maintenance
-    if asset.status == AssetStatus.ACTIVE:
+    if asset.status in {AssetStatus.AVAILABLE, AssetStatus.ASSIGNED}:
+        validate_status_transition(asset.status, AssetStatus.UNDER_MAINTENANCE)
         asset.status = AssetStatus.UNDER_MAINTENANCE
 
     _log(db, actor=current_user, action="RECORD_MAINTENANCE",
@@ -163,7 +165,9 @@ def complete_maintenance(
             detail=f"Asset must be Under Maintenance. Current: {asset.status.value}",
         )
 
-    asset.status = AssetStatus.ACTIVE
+    target_status = AssetStatus.ASSIGNED if asset.current_custodian_id else AssetStatus.AVAILABLE
+    validate_status_transition(asset.status, target_status)
+    asset.status = target_status
 
     _log(db, actor=current_user, action="COMPLETE_MAINTENANCE",
          record_id=str(record.maintenance_id),

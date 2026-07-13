@@ -13,6 +13,7 @@ from app.models.asset import Asset, AssetStatus
 from app.models.assignment import Assignment, AssignmentStatus
 from app.models.audit_log import AuditLog
 from app.models.user import User
+from app.services.asset_service import validate_status_transition
 
 router = APIRouter(prefix="/api/v1/assignments", tags=["assignments"])
 
@@ -87,8 +88,8 @@ def create_assignment(
     asset = db.query(Asset).filter(Asset.asset_id == body.asset_id).first()
     if not asset:
         raise HTTPException(404, detail="Asset not found")
-    if asset.status != AssetStatus.ACTIVE:
-        raise HTTPException(400, detail=f"Only Active assets can be assigned. Current: {asset.status.value}")
+    if asset.status != AssetStatus.AVAILABLE:
+        raise HTTPException(400, detail=f"Only Available assets can be assigned. Current: {asset.status.value}")
     if not getattr(asset, "is_active", True):
         raise HTTPException(400, detail="Asset is inactive")
 
@@ -116,8 +117,9 @@ def create_assignment(
         notes=body.notes,
     )
     db.add(assignment)
+    validate_status_transition(asset.status, AssetStatus.ASSIGNED)
+    asset.status = AssetStatus.ASSIGNED
     asset.current_custodian_id = str(body.assigned_to)
-    asset.status = AssetStatus.ACTIVE
     _log(db, actor=current_user, action="ASSIGN_ASSET", record_id=asset.asset_id, details="Assigned asset")
     db.commit()
     db.refresh(assignment)
@@ -140,6 +142,8 @@ def return_assignment(
     assignment.return_date = assignment.return_date or date.today()
     asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
     if asset:
+        validate_status_transition(asset.status, AssetStatus.AVAILABLE)
+        asset.status = AssetStatus.AVAILABLE
         asset.current_custodian_id = None
     _log(db, actor=current_user, action="RETURN_ASSET", record_id=str(assignment.assignment_id), details="Returned asset")
     db.commit()
