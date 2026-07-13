@@ -17,3 +17,6 @@ frontend/dist/
 frontend/.env
 frontend/.env.local
 *.db
+skills-lock.json
+.agents/skills/frontend-design/LICENSE.txt
+.agents/skills/frontend-design/SKILL.md
