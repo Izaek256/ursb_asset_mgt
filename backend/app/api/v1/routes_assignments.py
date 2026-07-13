@@ -181,12 +181,11 @@ def get_assignment(
         raise HTTPException(404, detail="Assignment not found")
     return _serialize_assignment(assignment, db)
 
-@router.post("/{assignment_id}/return", response_model=AssignmentResponse)
+@router.post("/{assignment_id}/initiate-return", response_model=AssignmentResponse)
 def initiate_return(
     assignment_id: int,
     db: Session = Depends(get_db),
-    # TODO: Replace get_current_user with require_roles("Employee") once S3-04 merges
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles("Employee")),
 ):
     """Step 1 of 2: Employee initiates asset return. Employee only. SRS §7 — Asset Returns."""
     assignment = assignment_service.initiate_return(db, assignment_id, current_user.user_id)
@@ -197,8 +196,7 @@ def initiate_return(
 def confirm_return(
     assignment_id: int,
     db: Session = Depends(get_db),
-    # TODO: Replace get_current_user with require_roles("Asset Custodian") once S3-04 merges
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles("Asset Custodian")),
 ):
     """Step 2 of 2: Custodian confirms physical receipt of returned asset. Custodian only. SRS §7 — Asset Returns."""
     assignment = assignment_service.confirm_return(db, assignment_id, current_user.user_id)
