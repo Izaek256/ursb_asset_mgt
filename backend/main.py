@@ -106,11 +106,13 @@ from app.api.v1.routes_storage import router as storage_router
 from app.api.v1.routes_maintenance import router as maintenance_router
 from app.api.v1.routes_settings import router as settings_router
 from app.api.v1.routes_disposals import router as disposals_router
+from app.api.v1.routes_import import router as import_router
 from app.middleware.auth_middleware import AuthMiddleware
 
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(dashboard_router)   # prefix: /api/v1/dashboard
 app.include_router(admin_router)       # prefix: /api/v1/admin
+app.include_router(import_router)
 app.include_router(assets_router)      # prefix: /api/v1/assets
 app.include_router(transfers_router)   # prefix: /api/v1/transfers
 app.include_router(requests_router)    # prefix: /api/v1/requests

@@ -33,10 +33,10 @@ class AssetCondition(str, enum.Enum):
 
 
 class AssetStatus(str, enum.Enum):
-    ACTIVE = "Active"
-    IN_STORAGE = "In Storage"
-    UNDER_MAINTENANCE = "Under Maintenance"
-    DISPOSED = "Disposed"
+    AVAILABLE = "AVAILABLE"
+    ASSIGNED = "ASSIGNED"
+    UNDER_MAINTENANCE = "UNDER_MAINTENANCE"
+    DISPOSED = "DISPOSED"
 
 
 class SourceType(str, enum.Enum):
@@ -65,7 +65,7 @@ class Asset(Base):
     status: Mapped[AssetStatus] = mapped_column(
         Enum(AssetStatus, native_enum=False, length=50),
         nullable=False,
-        default=AssetStatus.ACTIVE,
+        default=AssetStatus.AVAILABLE,
     )
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True

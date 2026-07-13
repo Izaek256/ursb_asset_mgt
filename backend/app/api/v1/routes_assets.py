@@ -102,18 +102,22 @@ class AssetUpdateRequest(BaseModel):
 
 # Valid status transitions
 VALID_STATUS_TRANSITIONS = {
-    "Active": ["In Storage", "Under Maintenance", "Disposed"],
-    "In Storage": ["Active", "Disposed"],
-    "Under Maintenance": ["Active", "Disposed"],
-    "Disposed": [],  # Terminal state
+    "AVAILABLE": ["ASSIGNED", "UNDER_MAINTENANCE", "DISPOSED"],
+    "ASSIGNED": ["AVAILABLE", "UNDER_MAINTENANCE", "DISPOSED"],
+    "UNDER_MAINTENANCE": ["AVAILABLE", "DISPOSED"],
+    "DISPOSED": [],  # Terminal state
 }
 
 
 # Map display-friendly status labels → model enum
 _STATUS_MAP = {
-    "Active": AssetStatus.ACTIVE,
-    "In Store": AssetStatus.IN_STORAGE,
-    "In Storage": AssetStatus.IN_STORAGE,
+    "Active": AssetStatus.AVAILABLE,
+    "Available": AssetStatus.AVAILABLE,
+    "Assigned": AssetStatus.ASSIGNED,
+    "In Store": AssetStatus.AVAILABLE,
+    "In Storage": AssetStatus.AVAILABLE,
+    "Under Maintenance": AssetStatus.UNDER_MAINTENANCE,
+    "Disposed": AssetStatus.DISPOSED,
 }
 
 
