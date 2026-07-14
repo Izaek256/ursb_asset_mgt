@@ -8,6 +8,7 @@ import AssetDetail from "./pages/AssetDetail";
 import AssetRegistration from "./pages/AssetRegistration";
 import Assignments from "./pages/Assignments";
 import Dashboard from "./pages/Dashboard";
+import Inventory from "./pages/Inventory";
 import LoginPage from "./pages/Login";
 import Maintenance from "./pages/Maintenance";
 import Requests from "./pages/Requests";
@@ -20,6 +21,7 @@ const NAV_LABELS: Record<string, string> = {
   "/requests": "Requests",
   "/assets": "Assets",
   "/assets/register": "Register Asset",
+  "/inventory": "Inventory",
   "/assignments": "Assignments",
   "/storage": "Storage",
   "/transfers": "Transfers",
@@ -69,6 +71,8 @@ function AppShell() {
         return <Assets />;
       case "/assets/register":
         return <AssetRegistration />;
+      case "/inventory":
+        return <Inventory />;
       case "/assignments":
         return <Assignments />;
       case "/storage":

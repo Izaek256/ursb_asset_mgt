@@ -29,6 +29,7 @@ import {
   Menu,
   FileText,
   FileSpreadsheet,
+  Layers,
 } from "lucide-react";
 import exportCsvIcon from "../assets/icons8-export-excel-50.png";
 import exportPdfIcon from "../assets/icons8-export-pdf-50.png";
@@ -38,6 +39,7 @@ export const ICONS = {
   dashboard: LayoutDashboard,
   requests: ClipboardList,
   assets: Package,
+  inventory: Layers,
   assignments: Key,
   storage: Archive,
   transfers: Repeat,
