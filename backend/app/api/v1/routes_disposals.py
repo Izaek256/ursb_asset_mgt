@@ -19,6 +19,7 @@ from app.models.assignment import Assignment, AssignmentStatus
 from app.models.audit_log import AuditLog
 from app.api.v1.auth import get_current_user, require_role
 from app.models.user import UserRole
+from app.services.asset_service import validate_status_transition
 
 router = APIRouter(prefix="/api/v1/disposals", tags=["disposals"])
 
@@ -98,11 +99,11 @@ def create_disposal(
             detail=f"Asset with ID {body.asset_id} not found"
         )
 
-    # Check if already disposed
-    if asset.status == AssetStatus.DISPOSED:
+    # Check if already disposed or deactivated
+    if asset.status in {AssetStatus.DISPOSED, AssetStatus.DEACTIVATED}:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Asset is already disposed"
+            detail=f"Asset is in terminal state ({asset.status.value}) and cannot be disposed"
         )
 
     # Check if asset is inactive
@@ -134,6 +135,7 @@ def create_disposal(
     db.add(disposal)
 
     # Update asset status and clear custodian
+    validate_status_transition(asset.status, AssetStatus.DISPOSED)
     asset.status = AssetStatus.DISPOSED
     asset.current_custodian_id = None
 

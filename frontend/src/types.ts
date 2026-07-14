@@ -4,6 +4,18 @@ export type Role =
   | "Asset Custodian"
   | "Employee";
 
+export type AssetStatus =
+  | "Available"
+  | "Reserved"
+  | "Pending Acceptance"
+  | "Pending Pickup"
+  | "Assigned"
+  | "Under Transfer"
+  | "Under Maintenance"
+  | "Returned"
+  | "Disposed"
+  | "Deactivated";
+
 export interface UserRow {
   id: string;
   name: string;

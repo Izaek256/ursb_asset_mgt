@@ -33,13 +33,16 @@ class AssetCondition(str, enum.Enum):
 
 
 class AssetStatus(str, enum.Enum):
-    ACTIVE = "Active"
-    IN_STORAGE = "In Storage"
-    UNDER_MAINTENANCE = "Under Maintenance"
-    DISPOSED = "Disposed"
-    PENDING_PICKUP = "Pending Pickup"
     AVAILABLE = "Available"
+    RESERVED = "Reserved"
+    PENDING_ACCEPTANCE = "Pending Acceptance"
+    PENDING_PICKUP = "Pending Pickup"
     ASSIGNED = "Assigned"
+    UNDER_TRANSFER = "Under Transfer"
+    UNDER_MAINTENANCE = "Under Maintenance"
+    RETURNED = "Returned"
+    DISPOSED = "Disposed"
+    DEACTIVATED = "Deactivated"
 
 
 class SourceType(str, enum.Enum):

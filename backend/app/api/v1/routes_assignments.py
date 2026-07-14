@@ -21,6 +21,8 @@ from app.models.asset import Asset, AssetStatus
 from app.models.assignment import Assignment, AssignmentStatus
 from app.models.audit_log import AuditLog
 from app.models.user import User
+from app.services import assignment_service
+from app.services.asset_service import validate_status_transition
 
 require_role = require_roles
 
@@ -98,56 +100,23 @@ def create_assignment(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
 ):
-    asset = db.query(Asset).filter(Asset.asset_id == body.asset_id).first()
-    if not asset:
-        raise HTTPException(404, detail="Asset not found")
-    # For pending assignments, asset must be AVAILABLE. Let's support Active/Available status checks.
-    if asset.status not in (AssetStatus.ACTIVE, AssetStatus.AVAILABLE):
-        raise HTTPException(400, detail=f"Only Available assets can be assigned. Current: {asset.status.value}")
-    if not getattr(asset, "is_active", True):
-        raise HTTPException(400, detail="Asset is inactive")
-
-    existing = (
-        db.query(Assignment)
-        .filter(Assignment.asset_id == asset.asset_id, Assignment.status == AssignmentStatus.ACTIVE)
-        .first()
-    )
-    if existing:
-        raise HTTPException(400, detail="Asset already assigned. Return first.")
-
-    target_user = db.query(User).filter(User.id == body.assigned_to).first()
-    if not target_user:
-        raise HTTPException(404, detail="User not found")
-    if not target_user.is_active:
-        raise HTTPException(400, detail="Assigned user is inactive")
-
-    r_date = body.return_date or body.expected_return_date
-    assignment = Assignment(
-        asset_id=asset.asset_id,
-        assigned_to=str(body.assigned_to),
-        assigned_by=str(current_user.id),
-        assignment_date=body.assignment_date or date.today(),
-        return_date=r_date,
-        status=AssignmentStatus.PENDING_ACCEPTANCE,
-        notes=body.notes,
-    )
-    db.add(assignment)
-    asset.status = AssetStatus.AVAILABLE
-    _log(db, actor=current_user, action="ASSIGN_ASSET", record_id=asset.asset_id, details="Assigned asset (pending acceptance)")
+    """Assign an asset to a custodian. Asset Manager and System Administrator only. SRS AM-A01."""
+    assignment = assignment_service.assign_asset(db, body.asset_id, body, current_user.user_id)
+    
     # S3-08: Notify employee of assignment
     from app.services.notification_service import create_notification
-    create_notification(
-        db=db,
-        user_id=str(assignment.assigned_to),
-        title="New Asset Custody Assignment",
-        message=f"You have been assigned the asset '{asset.asset_name}'. Please accept or decline custody of this asset.",
-        notification_type="ASSIGNMENT_SENT",
-        related_asset_id=asset.asset_id,
-    )
-    db.commit()
-    db.refresh(assignment)
+    asset = db.query(Asset).filter(Asset.asset_id == body.asset_id).first()
+    if asset:
+        create_notification(
+            db=db,
+            user_id=str(assignment.assigned_to),
+            title="New Asset Custody Assignment",
+            message=f"You have been assigned the asset '{asset.asset_name}'. Please accept or decline custody of this asset.",
+            notification_type="ASSIGNMENT_SENT",
+            related_asset_id=asset.asset_id,
+        )
+    
     return _serialize_assignment(assignment, db)
-
 
 @router.post("/{assignment_id}/return", response_model=AssignmentResponse)
 def return_assignment(
@@ -165,6 +134,8 @@ def return_assignment(
     assignment.return_date = assignment.return_date or date.today()
     asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
     if asset:
+        validate_status_transition(asset.status, AssetStatus.AVAILABLE)
+        asset.status = AssetStatus.AVAILABLE
         asset.current_custodian_id = None
     _log(db, actor=current_user, action="RETURN_ASSET", record_id=str(assignment.assignment_id), details="Returned asset")
     db.commit()
@@ -180,19 +151,24 @@ def list_assignments(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR)),
 ):
-    query = db.query(Assignment)
+    """List assignments with optional filters. All authenticated roles. SRS AM-A04."""
     if asset_id:
-        query = query.filter(Assignment.asset_id == asset_id)
-    if user_id is not None:
-        query = query.filter(Assignment.assigned_to == str(user_id))
-    if status:
-        try:
-            query = query.filter(Assignment.status == AssignmentStatus(status))
-        except ValueError:
-            raise HTTPException(400, detail="Invalid status")
-    assignments = query.order_by(Assignment.assignment_date.desc()).all()
-    return AssignmentListResponse(assignments=[_serialize_assignment(a, db) for a in assignments], total=len(assignments))
+        assignments = assignment_service.get_assignment_history(db, asset_id)
+    elif user_id is not None:
+        assignments = assignment_service.get_user_assignments(db, user_id)
+    else:
+        query = db.query(Assignment)
+        if status:
+            try:
+                query = query.filter(Assignment.status == AssignmentStatus(status))
+            except ValueError:
+                raise HTTPException(400, detail="Invalid status")
+        assignments = query.order_by(Assignment.assignment_date.desc()).all()
 
+    return AssignmentListResponse(
+        assignments=[_serialize_assignment(a, db) for a in assignments],
+        total=len(assignments),
+    )
 
 @router.get("/{assignment_id}", response_model=AssignmentResponse)
 def get_assignment(

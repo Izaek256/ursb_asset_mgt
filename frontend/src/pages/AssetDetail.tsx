@@ -5,10 +5,16 @@ import type { AssetDetail } from "../types";
 import ConfirmDialog from "../components/ConfirmDialog";
 
 const STATUS_CLASS: Record<string, string> = {
-  Active: "badge-active",
-  "In Storage": "badge-info",
+  Available: "badge-info",
+  Reserved: "badge-warning",
+  "Pending Acceptance": "badge-warning",
+  "Pending Pickup": "badge-warning",
+  Assigned: "badge-active",
+  "Under Transfer": "badge-warning",
   "Under Maintenance": "badge-warning",
+  Returned: "badge-warning",
   Disposed: "badge-inactive",
+  Deactivated: "badge-inactive",
 };
 
 const CONDITION_CLASS: Record<string, string> = {
@@ -594,12 +600,18 @@ export default function AssetDetail() {
                       value={editForm.status || ""}
                       onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
                     >
-                      <option value="Active">Active</option>
-                      <option value="In Storage">In Storage</option>
+                      <option value="Available">Available</option>
+                      <option value="Reserved">Reserved</option>
+                      <option value="Pending Acceptance">Pending Acceptance</option>
+                      <option value="Pending Pickup">Pending Pickup</option>
+                      <option value="Assigned">Assigned</option>
+                      <option value="Under Transfer">Under Transfer</option>
                       <option value="Under Maintenance">Under Maintenance</option>
+                      <option value="Returned">Returned</option>
                       {asset.status === "Disposed" && <option value="Disposed">Disposed</option>}
+                      {asset.status === "Deactivated" && <option value="Deactivated">Deactivated</option>}
                     </select>
-                    {editForm.status === "Disposed" && (
+                    {(editForm.status === "Disposed" || editForm.status === "Deactivated") && (
                       <div style={{
                         backgroundColor: "#fef3c7",
                         color: "#92400e",
@@ -608,7 +620,7 @@ export default function AssetDetail() {
                         marginTop: "8px",
                         fontSize: "13px",
                       }}>
-                        Warning: Disposed is a terminal state. No further changes will be allowed.
+                        Warning: {editForm.status} is a terminal state. No further changes will be allowed.
                       </div>
                     )}
                   </div>

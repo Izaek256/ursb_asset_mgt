@@ -286,7 +286,7 @@ export default function Assignments() {
     },
   ];
 
-  const assetOptions = assets.filter(a => a.status === "Active").map(a => ({
+  const assetOptions = assets.filter(a => a.status === "Available").map(a => ({
     value: a.asset_id,
     label: `${a.asset_name} (${a.asset_id})`,
   }));

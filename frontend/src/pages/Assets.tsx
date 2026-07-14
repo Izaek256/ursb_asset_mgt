@@ -30,7 +30,7 @@ interface AssetRow {
   department: string | null;
 }
 
-const STATUS_FILTERS = ["All", "Active", "In Storage", "Under Maintenance", "Disposed"];
+const STATUS_FILTERS = ["All", "Available", "Reserved", "Pending Acceptance", "Pending Pickup", "Assigned", "Under Transfer", "Under Maintenance", "Returned", "Disposed", "Deactivated"];
 const TYPE_FILTERS = ["All", "ICT Equipment", "Furniture", "Vehicle", "Software", "Other"];
 
 const EXPORT_HEADERS = [

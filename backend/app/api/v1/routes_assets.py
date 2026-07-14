@@ -27,6 +27,7 @@ from app.models.asset import Asset, AssetCondition, AssetStatus, AssetType, Sour
 from app.models.audit_log import AuditLog
 from app.api.v1.auth import get_current_user, require_role
 from app.models.user import UserRole
+from app.services.asset_service import VALID_TRANSITIONS, validate_status_transition, get_asset, list_assets, create_asset, update_asset, export_assets_csv
 
 router = APIRouter(prefix="/api/v1/assets", tags=["assets"])
 
@@ -113,13 +114,7 @@ class AssetUpdateRequest(BaseModel):
     # - source_type: procurement record, immutable
 
 
-# Valid status transitions
-VALID_STATUS_TRANSITIONS = {
-    "AVAILABLE": ["ASSIGNED", "UNDER_MAINTENANCE", "DISPOSED"],
-    "ASSIGNED": ["AVAILABLE", "UNDER_MAINTENANCE", "DISPOSED"],
-    "UNDER_MAINTENANCE": ["AVAILABLE", "DISPOSED"],
-    "DISPOSED": [],  # Terminal state
-}
+# Note: Valid status transitions are defined in app.services.asset_service.VALID_TRANSITIONS
 
 
 # Map display-friendly status labels → model enum
@@ -132,6 +127,33 @@ _STATUS_MAP = {
     "Under Maintenance": AssetStatus.UNDER_MAINTENANCE,
     "Disposed": AssetStatus.DISPOSED,
 }
+
+
+def _resolve_status_enum(status_str: str) -> AssetStatus:
+    """Resolve status string to AssetStatus enum. Handles display labels and direct enum keys/values."""
+    if status_str in _STATUS_MAP:
+        return _STATUS_MAP[status_str]
+    try:
+        return AssetStatus(status_str)
+    except ValueError:
+        pass
+    try:
+        return AssetStatus[status_str.upper().replace(" ", "_")]
+    except KeyError:
+        raise ValueError(f"Invalid status value: {status_str}")
+
+
+def _resolve_asset_type_enum(type_str: str) -> AssetType:
+    """Resolve asset type string to AssetType enum."""
+    try:
+        return AssetType(type_str)
+    except ValueError:
+        pass
+    try:
+        return AssetType[type_str.upper().replace(" ", "_")]
+    except KeyError:
+        raise ValueError(f"Invalid asset type: {type_str}")
+
 
 
 @router.post("", response_model=AssetOut, status_code=status.HTTP_201_CREATED)
@@ -234,43 +256,40 @@ def create_asset(
     )
 
 
+@router.post("", response_model=AssetOut, status_code=status.HTTP_201_CREATED)
+def create_asset(
+    body: AssetCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles("Asset Manager")),
+):
+    """Register a new asset. Asset Manager only. SRS AM-R01."""
+    asset = create_asset(db, body, current_user.user_id)
+    return AssetOut(
+        asset_id=asset.asset_id,
+        asset_name=asset.asset_name,
+        asset_type=asset.asset_type.value if hasattr(asset.asset_type, "value") else str(asset.asset_type),
+        category=asset.category,
+        serial_number=asset.serial_number,
+        condition=asset.condition.value if hasattr(asset.condition, "value") else str(asset.condition),
+        status=asset.status.value if hasattr(asset.status, "value") else str(asset.status),
+        cost=float(asset.cost),
+        acquisition_date=str(asset.acquisition_date),
+        supplier=asset.supplier,
+        department=asset.department,
+        created_at=str(asset.created_at),
+    )
+
 @router.get("", response_model=List[AssetOut])
 def list_assets(
     status: Optional[str] = Query(None),
     asset_type: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    department: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     _user=Depends(get_current_user),
 ):
-    q = db.query(Asset)
-    if status:
-        # Convert string to enum - Asset.status is an AssetStatus enum, not a raw string
-        try:
-            status_enum = AssetStatus(status)
-            q = q.filter(Asset.status == status_enum)
-        except ValueError:
-            valid_values = [e.value for e in AssetStatus]
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid status value. Valid values are: {', '.join(valid_values)}"
-            )
-    if asset_type:
-        # Convert string to enum - Asset.asset_type is an AssetType enum, not a raw string
-        try:
-            asset_type_enum = AssetType(asset_type)
-            q = q.filter(Asset.asset_type == asset_type_enum)
-        except ValueError:
-            valid_values = [e.value for e in AssetType]
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid asset_type value. Valid values are: {', '.join(valid_values)}"
-            )
-    if search:
-        q = q.filter(
-            Asset.asset_name.ilike(f"%{search}%")
-            | Asset.serial_number.ilike(f"%{search}%")
-        )
-    assets = q.order_by(Asset.created_at.desc()).all()
+    """List assets with optional filters. All authenticated roles. SRS AM-P03."""
+    assets, _ = list_assets(db, status=status, asset_type=asset_type, search=search, department=department)
     return [
         AssetOut(
             asset_id=a.asset_id,
@@ -288,7 +307,6 @@ def list_assets(
         )
         for a in assets
     ]
-
 
 @router.get("/{asset_id}", response_model=AssetDetailResponse)
 def get_asset_detail(
@@ -405,6 +423,7 @@ def update_asset(
     db: Session = Depends(get_db),
     current_user=Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.ASSET_CUSTODIAN)),
 ):
+<<<<<<< HEAD
     """
     Update an asset. Only Asset Manager, Super System Administrator, and Asset Custodian may call this endpoint.
     Validates status transitions and checks if asset is active and not disposed.
@@ -548,6 +567,12 @@ def deactivate_asset(
     return {"message": "Asset deactivated successfully"}
 
 
+=======
+    """Update an asset. Asset Manager and System Administrator only. SRS AM-R03."""
+    update_asset(db, asset_id, body, current_user.user_id)
+    return get_asset_detail(asset_id, db, current_user)
+
+>>>>>>> origin/feature/s3-service-layer
 @router.patch("/{asset_id}/reactivate")
 def reactivate_asset(
     asset_id: str,
@@ -557,14 +582,8 @@ def reactivate_asset(
     """
     Reactivate an asset. Sets is_active = True.
     """
-    asset = db.query(Asset).filter(Asset.asset_id == asset_id).first()
-    if not asset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Asset with ID {asset_id} not found"
-        )
-
-    # Check if already active
+    asset = get_asset(db, asset_id).filter(Asset.asset_id == asset_id).first()
+       # Check if already active
     if asset.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -596,14 +615,8 @@ def activate_asset(
     """
     Activate a newly registered asset. Sets is_active = True.
     """
-    asset = db.query(Asset).filter(Asset.asset_id == asset_id).first()
-    if not asset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Asset with ID {asset_id} not found"
-        )
-
-    # Check if already active
+    asset = get_asset(db, asset_id).filter(Asset.asset_id == asset_id).first()
+        # Check if already active
     if asset.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -649,22 +662,12 @@ def export_assets_pdf(
         from datetime import datetime
     except ImportError:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail="PDF export not available. Install reportlab."
         )
 
     # Query assets with filters
-    q = db.query(Asset)
-    if status:
-        q = q.filter(Asset.status == status)
-    if asset_type:
-        q = q.filter(Asset.asset_type == asset_type)
-    if search:
-        q = q.filter(
-            Asset.asset_name.ilike(f"%{search}%")
-            | Asset.serial_number.ilike(f"%{search}%")
-        )
-    assets = q.order_by(Asset.created_at.desc()).all()
+    assets, _ = list_assets(db, status=status, asset_type=asset_type, search=search)
 
     # Create PDF with metadata
     buffer = io.BytesIO()
@@ -784,23 +787,13 @@ def export_assets_excel(
         from openpyxl.styles import Font, Alignment, PatternFill
     except ImportError:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail="Excel export not available. Install openpyxl."
         )
 
     # Query assets with filters
-    q = db.query(Asset)
-    if status:
-        q = q.filter(Asset.status == status)
-    if asset_type:
-        q = q.filter(Asset.asset_type == asset_type)
-    if search:
-        q = q.filter(
-            Asset.asset_name.ilike(f"%{search}%")
-            | Asset.serial_number.ilike(f"%{search}%")
-        )
-    assets = q.order_by(Asset.created_at.desc()).all()
-
+    assets, _ = list_assets(db, status=status, asset_type=asset_type, search=search)
+    
     # Create Excel workbook
     wb = Workbook()
     ws = wb.active

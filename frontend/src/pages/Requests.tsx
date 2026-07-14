@@ -198,7 +198,7 @@ export default function Requests() {
     setSelectedRequest(req);
     // If request does not have an asset_id, we need to assign one of the requested type
     if (!req.asset_id) {
-      const typeAssets = assets.filter(a => a.asset_type === req.asset_type && a.status === "Active");
+      const typeAssets = assets.filter(a => a.asset_type === req.asset_type && a.status === "Available");
       setApproveForm({
         assigned_asset_id: typeAssets[0]?.asset_id || "",
       });
@@ -404,7 +404,7 @@ export default function Requests() {
     },
   ];
 
-  const assetOptions = assets.filter(a => a.status === "Active").map(a => ({
+  const assetOptions = assets.filter(a => a.status === "Available").map(a => ({
     value: a.asset_id,
     label: `${a.asset_name} (${a.asset_id})`,
   }));
@@ -425,7 +425,7 @@ export default function Requests() {
   ];
 
   const approveAssetOptions = assets
-    .filter(a => a.asset_type === selectedRequest?.asset_type && a.status === "Active")
+    .filter(a => a.asset_type === selectedRequest?.asset_type && a.status === "Available")
     .map(a => ({
       value: a.asset_id,
       label: `${a.asset_name} (${a.asset_id}) - SN: ${a.serial_number}`,
