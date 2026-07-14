@@ -35,6 +35,10 @@ export default function Storage() {
   const [typeFilter, setTypeFilter] = React.useState("");
   const [search, setSearch] = React.useState("");
 
+  // Pagination
+  const PAGE_SIZE = 6;
+  const [currentPage, setCurrentPage] = React.useState(1);
+
   // Modals state
   const [confirmReturnAssignment, setConfirmReturnAssignment] = React.useState<{assignment_id: number; asset_name: string; employee_name: string} | null>(null);
   const [assignModalAsset, setAssignModalAsset] = React.useState<StorageAsset | null>(null);
@@ -73,6 +77,11 @@ export default function Storage() {
     } finally {
       setIsLoading(false);
     }
+  }, [deptFilter, typeFilter, search]);
+
+  // Reset to first page whenever filters/data change
+  React.useEffect(() => {
+    setCurrentPage(1);
   }, [deptFilter, typeFilter, search]);
 
   const fetchContextData = React.useCallback(async () => {
@@ -280,6 +289,11 @@ export default function Storage() {
     label: `${a.asset_name} (${a.asset_id})`,
   }));
 
+  // Pagination helpers
+  const allAssets = data?.assets ?? [];
+  const totalPages = Math.max(1, Math.ceil(allAssets.length / PAGE_SIZE));
+  const paginatedAssets = allAssets.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
   return (
     <div className="w-full flex flex-col gap-6 select-none font-sans">
       {success && <SuccessBanner message={success} onDismiss={() => setSuccess(null)} />}
@@ -402,13 +416,37 @@ export default function Storage() {
         />
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 flex flex-col gap-4">
             <Table
-              data={data.assets}
+              data={paginatedAssets}
               columns={columns}
               rowKey={(a) => a.asset_id}
               emptyMessage="No assets in storage."
             />
+
+            {/* Pagination controls */}
+            {allAssets.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between gap-3 p-4 bg-white border border-sky-cardBorder rounded-2xl shadow-sm">
+                <Button
+                  variant="outline"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm font-semibold text-ink-dim">
+                  Page {currentPage} of {totalPages}
+                  <span className="ml-2 text-[11px] font-normal text-ink-dim/70">({allAssets.length} total)</span>
+                </span>
+                <Button
+                  variant="outline"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col gap-6">

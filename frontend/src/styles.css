@@ -1714,3 +1714,163 @@ select.form-control {
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: rgba(168, 205, 247, 0.5);
 }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+/* DARK MODE — applied via html.dark class set by AuthContext                 */
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* ── Core backgrounds ──────────────────────────────────────────────────────── */
+html.dark body {
+  background: #0d1b2e !important;
+  color: #c8dff5 !important;
+}
+
+html.dark main,
+html.dark .bg-sky-page {
+  background-color: #0d1b2e !important;
+}
+
+/* ── Header ────────────────────────────────────────────────────────────────── */
+html.dark header {
+  background-color: #111e30 !important;
+  border-bottom-color: #1e3450 !important;
+}
+
+/* ── Sidebar ───────────────────────────────────────────────────────────────── */
+html.dark aside {
+  background: linear-gradient(to bottom, #111e30, #0b1726) !important;
+  border-right-color: #1e3450 !important;
+}
+
+html.dark aside .text-ink {
+  color: #c8dff5 !important;
+}
+
+html.dark aside .text-ink-dim {
+  color: #6fa3cc !important;
+}
+
+html.dark aside .bg-white\/60 {
+  background-color: rgba(17, 30, 48, 0.8) !important;
+}
+
+/* ── Cards ─────────────────────────────────────────────────────────────────── */
+html.dark .bg-white {
+  background-color: #162338 !important;
+}
+
+html.dark .border-sky-cardBorder {
+  border-color: #1e3a5c !important;
+}
+
+html.dark .border-sky-border {
+  border-color: #1e3a5c !important;
+}
+
+/* ── Typography ────────────────────────────────────────────────────────────── */
+html.dark .text-ink {
+  color: #d0e6f8 !important;
+}
+
+html.dark .text-ink-dim {
+  color: #7eadd4 !important;
+}
+
+/* ── Form inputs ───────────────────────────────────────────────────────────── */
+html.dark input:not([type="checkbox"]):not([type="radio"]),
+html.dark select,
+html.dark textarea {
+  background-color: #0f1f33 !important;
+  border-color: #1e3a5c !important;
+  color: #c8dff5 !important;
+}
+
+html.dark input:not([type="checkbox"]):not([type="radio"]):focus,
+html.dark select:focus,
+html.dark textarea:focus {
+  border-color: #2f6cb5 !important;
+  box-shadow: 0 0 0 3px rgba(31, 111, 196, 0.2) !important;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #4a7aaa !important;
+}
+
+html.dark input:disabled,
+html.dark select:disabled {
+  background-color: #0b1726 !important;
+  color: #3d6a90 !important;
+}
+
+/* ── Table ─────────────────────────────────────────────────────────────────── */
+html.dark table {
+  background-color: #162338 !important;
+}
+
+html.dark thead {
+  background-color: #0f1f33 !important;
+}
+
+html.dark thead th {
+  color: #7eadd4 !important;
+  border-bottom-color: #1e3a5c !important;
+}
+
+html.dark tbody tr {
+  border-bottom-color: #1a3050 !important;
+}
+
+html.dark tbody tr:hover {
+  background-color: #1a2d47 !important;
+}
+
+html.dark td {
+  color: #c8dff5 !important;
+}
+
+/* ── Stat / summary cards ──────────────────────────────────────────────────── */
+html.dark .bg-stat-blueChip   { background-color: #0f2340 !important; }
+html.dark .bg-stat-greenChip  { background-color: #0d2218 !important; }
+html.dark .bg-stat-amberChip  { background-color: #221800 !important; }
+html.dark .bg-stat-roseChip   { background-color: #220d0d !important; }
+html.dark .bg-stat-purpleChip { background-color: #1a1030 !important; }
+html.dark .bg-stat-tealChip   { background-color: #081e1c !important; }
+html.dark .bg-stat-indigoChip { background-color: #0f1530 !important; }
+
+/* ── Badges ────────────────────────────────────────────────────────────────── */
+html.dark .bg-badge-greenBg  { background-color: #0a1f10 !important; }
+html.dark .bg-badge-blueBg   { background-color: #0a1930 !important; }
+html.dark .bg-badge-amberBg  { background-color: #1e1200 !important; }
+html.dark .bg-badge-roseBg   { background-color: #1e0808 !important; }
+html.dark .bg-badge-greyBg   { background-color: #111e30 !important; }
+
+/* ── Modal overlays ────────────────────────────────────────────────────────── */
+html.dark [role="dialog"] > div,
+html.dark .modal-panel {
+  background-color: #162338 !important;
+  border-color: #1e3a5c !important;
+}
+
+/* ── Filter bar ────────────────────────────────────────────────────────────── */
+html.dark .filter-bar,
+html.dark .filterbar-wrapper {
+  background-color: #111e30 !important;
+  border-color: #1e3450 !important;
+}
+
+/* ── Scrollbar in dark mode ─────────────────────────────────────────────────── */
+html.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(31, 111, 196, 0.25) !important;
+}
+
+html.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(31, 111, 196, 0.5) !important;
+}
+
+/* ── Page-level wrappers set by Tailwind ────────────────────────────────────── */
+html.dark .h-screen,
+html.dark .flex.h-screen,
+html.dark .bg-sky-topbar\/95 {
+  background-color: #111e30 !important;
+}

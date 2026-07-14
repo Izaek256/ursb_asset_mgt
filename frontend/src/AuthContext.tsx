@@ -9,6 +9,8 @@ export interface AuthUser {
   department: string;
   is_active: boolean;
   created_at?: string;
+  phone_number?: string;
+  theme?: string;
 }
 
 interface AuthContextValue {
@@ -106,6 +108,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsInitialLoading(false);
     }
   }, []);
+
+  // Apply / remove dark mode class whenever user theme preference changes
+  useEffect(() => {
+    if (user?.theme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, [user?.theme]);
 
   // Validate session on mount
   useEffect(() => {

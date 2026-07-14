@@ -6,11 +6,9 @@ import { UserSettings, SystemSettings } from "../types";
 import LoadingSpinner from "../components/LoadingSpinner";
 import ErrorMessage from "../components/ErrorMessage";
 import SuccessBanner from "../components/common/SuccessBanner";
-import EmptyState from "../components/EmptyState";
 import Button from "../components/common/Button";
 import ToggleSwitch from "../components/common/ToggleSwitch";
 import PageHeader from "../components/PageHeader";
-import { ICONS } from "../utils/icons";
 import { filterInputCls } from "../components/common/FilterBar";
 
 const TABS = ["General", "Notifications", "Security", "System"] as const;
@@ -22,7 +20,7 @@ function splitName(fullName: string) {
 }
 
 export default function Settings() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [isLoadingSettings, setIsLoadingSettings] = React.useState(true);
   const [settingsError, setSettingsError] = React.useState<string | null>(null);
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
@@ -42,15 +40,14 @@ export default function Settings() {
     notifications_request_updates: false,
   });
 
-  const [systemToggles, setSystemToggles] = React.useState({
-    dark_mode: false,
-  });
+  const [darkMode, setDarkMode] = React.useState(false);
 
+  // System settings form — uses backend field names to avoid mapping bugs
   const [systemForm, setSystemForm] = React.useState({
-    organisation_name: "",
+    org_name: "",
     asset_id_prefix: "",
     session_timeout_hours: 8,
-    max_failed_login_attempts: 5,
+    max_failed_logins: 5,
   });
 
   const [isSavingGeneral, setIsSavingGeneral] = React.useState(false);
@@ -67,6 +64,8 @@ export default function Settings() {
   const [isChangingPassword, setIsChangingPassword] = React.useState(false);
   const [passwordSuccess, setPasswordSuccess] = React.useState<string | null>(null);
 
+  const isAdmin = user?.role === "System Administrator";
+
   React.useEffect(() => {
     const loadSettings = async () => {
       setIsLoadingSettings(true);
@@ -74,17 +73,17 @@ export default function Settings() {
       try {
         const [userSettingsData, systemSettingsData] = await Promise.all([
           apiFetch<UserSettings>("/settings"),
-          user?.role === "System Administrator"
+          isAdmin
             ? apiFetch<SystemSettings>("/settings/system")
             : Promise.resolve(null),
         ]);
 
-        const nameParts = splitName(user?.full_name || "Robert Ssekandi");
+        const nameParts = splitName(user?.full_name || "");
         setProfileForm({
           firstName: nameParts.first,
           lastName: nameParts.last,
-          email: user?.email || "admin@ursb.go.ug",
-          phone: user?.phone_number || "+256700000000",
+          email: user?.email || "",
+          phone: user?.phone_number || "",
         });
 
         if (userSettingsData) {
@@ -95,17 +94,15 @@ export default function Settings() {
             notifications_transfer_alerts: userSettingsData.notifications_transfer_alerts,
             notifications_request_updates: userSettingsData.notifications_request_updates,
           });
-          setSystemToggles({
-            dark_mode: userSettingsData.theme === "dark",
-          });
+          setDarkMode(userSettingsData.theme === "dark");
         }
 
         if (systemSettingsData) {
           setSystemForm({
-            organisation_name: systemSettingsData.organisation_name,
+            org_name: systemSettingsData.org_name,
             asset_id_prefix: systemSettingsData.asset_id_prefix,
             session_timeout_hours: systemSettingsData.session_timeout_hours,
-            max_failed_login_attempts: systemSettingsData.max_failed_login_attempts,
+            max_failed_logins: systemSettingsData.max_failed_logins,
           });
         }
       } catch (err: unknown) {
@@ -117,8 +114,9 @@ export default function Settings() {
     };
 
     loadSettings();
-  }, [user?.role, user?.full_name, user?.email]);
+  }, [user?.role, user?.full_name, user?.email, user?.phone_number, isAdmin]);
 
+  // ── General (profile) save ─────────────────────────────────────────────────
   const handleGeneralSave = async () => {
     setGeneralError(null);
     setIsSavingGeneral(true);
@@ -129,19 +127,21 @@ export default function Settings() {
           first_name: profileForm.firstName,
           last_name: profileForm.lastName,
           phone_number: profileForm.phone,
-          theme: systemToggles.dark_mode ? "dark" : "light",
           language: "en",
         }),
       });
-      setSuccessMessage("General settings saved.");
+      // Refresh the global user state so the sidebar, header, etc. update immediately
+      await refreshUser();
+      setSuccessMessage("Profile updated successfully.");
       setTimeout(() => setSuccessMessage(null), 5000);
     } catch (err: unknown) {
-      setGeneralError(err instanceof Error ? err.message : "Failed to save general settings");
+      setGeneralError(err instanceof Error ? err.message : "Failed to save profile");
     } finally {
       setIsSavingGeneral(false);
     }
   };
 
+  // ── Notifications save ─────────────────────────────────────────────────────
   const handleNotificationsSave = async () => {
     setNotificationsError(null);
     setIsSavingNotifications(true);
@@ -156,13 +156,29 @@ export default function Settings() {
     }
   };
 
+  // ── System save ────────────────────────────────────────────────────────────
   const handleSystemSave = async () => {
     setSystemFormError(null);
     setIsSavingSystem(true);
     try {
-      if (user?.role === "System Administrator") {
-        await apiFetch("/settings/system", { method: "PUT", body: JSON.stringify(systemForm) });
+      // Always persist the theme preference (user-level setting)
+      await apiFetch("/settings", {
+        method: "PUT",
+        body: JSON.stringify({
+          theme: darkMode ? "dark" : "light",
+        }),
+      });
+
+      // Persist organisation-level settings (admin only)
+      if (isAdmin) {
+        await apiFetch("/settings/system", {
+          method: "PUT",
+          body: JSON.stringify(systemForm),
+        });
       }
+
+      // Refresh user so dark-mode class is applied system-wide immediately
+      await refreshUser();
       setSuccessMessage("System settings saved.");
       setTimeout(() => setSuccessMessage(null), 5000);
     } catch (err: unknown) {
@@ -172,6 +188,7 @@ export default function Settings() {
     }
   };
 
+  // ── Password change ────────────────────────────────────────────────────────
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError(null);
@@ -206,6 +223,7 @@ export default function Settings() {
     }
   };
 
+  // ── Shared sub-components ──────────────────────────────────────────────────
   const ToggleRow = ({
     label,
     description,
@@ -223,6 +241,23 @@ export default function Settings() {
         <div className="text-sm text-ink mt-1">{description}</div>
       </div>
       <ToggleSwitch checked={checked} onChange={onChange} />
+    </div>
+  );
+
+  const FormField = ({
+    id,
+    label,
+    children,
+  }: {
+    id?: string;
+    label: string;
+    children: React.ReactNode;
+  }) => (
+    <div className="flex flex-col gap-2">
+      <label htmlFor={id} className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">
+        {label}
+      </label>
+      {children}
     </div>
   );
 
@@ -262,42 +297,54 @@ export default function Settings() {
         </Tab.List>
 
         <Tab.Panels className="mt-2">
+
+          {/* ── General / Profile tab ────────────────────────────────────────── */}
           <Tab.Panel className="bg-white border border-sky-cardBorder rounded-2xl p-8 sm:p-10 shadow-sm focus:outline-none">
             <h3 className="font-bold text-base text-ink">Profile</h3>
-            <p className="text-sm text-ink-dim mt-1 mb-6">Update your personal details.</p>
+            <p className="text-sm text-ink-dim mt-1 mb-6">Update your personal details. Your email address cannot be changed.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
-              {["first-name", "last-name", "phone"].map((fieldId) => {
-                const fieldConfig = {
-                  "first-name": { label: "First name", key: "firstName" as const },
-                  "last-name": { label: "Last name", key: "lastName" as const },
-                  "phone": { label: "Phone number", key: "phone" as const },
-                }[fieldId];
-                return (
-                  <div key={fieldId} className="flex flex-col gap-2">
-                    <label htmlFor={fieldId} className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">
-                      {fieldConfig.label}
-                    </label>
-                    <input
-                      id={fieldId}
-                      className={filterInputCls}
-                      value={profileForm[fieldConfig.key]}
-                      onChange={(e) => setProfileForm({ ...profileForm, [fieldConfig.key]: e.target.value })}
-                    />
-                  </div>
-                );
-              })}
-              <div className="flex flex-col gap-2">
-                <label htmlFor="email" className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">
-                  Email address
-                </label>
+              <FormField id="first-name" label="First name">
+                <input
+                  id="first-name"
+                  className={filterInputCls}
+                  value={profileForm.firstName}
+                  onChange={(e) => setProfileForm({ ...profileForm, firstName: e.target.value })}
+                  placeholder="First name"
+                />
+              </FormField>
+
+              <FormField id="last-name" label="Last name">
+                <input
+                  id="last-name"
+                  className={filterInputCls}
+                  value={profileForm.lastName}
+                  onChange={(e) => setProfileForm({ ...profileForm, lastName: e.target.value })}
+                  placeholder="Last name"
+                />
+              </FormField>
+
+              <FormField id="phone" label="Phone number">
+                <input
+                  id="phone"
+                  type="tel"
+                  className={filterInputCls}
+                  value={profileForm.phone}
+                  onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
+                  placeholder="+256 700 000 000"
+                />
+              </FormField>
+
+              <FormField id="email" label="Email address">
                 <input
                   id="email"
+                  type="email"
                   className={filterInputCls}
                   value={profileForm.email}
                   disabled
-                  style={{ backgroundColor: "#f5f5f5", cursor: "not-allowed" }}
+                  style={{ opacity: 0.6, cursor: "not-allowed" }}
                 />
-              </div>
+                <p className="text-[10px] text-ink-dim mt-0.5">Email is managed by your administrator and cannot be changed here.</p>
+              </FormField>
             </div>
             {generalError && <div className="mt-4"><ErrorMessage message={generalError} /></div>}
             <div className="flex justify-end pt-6 mt-6 border-t border-sky-page/30">
@@ -305,6 +352,7 @@ export default function Settings() {
             </div>
           </Tab.Panel>
 
+          {/* ── Notifications tab ────────────────────────────────────────────── */}
           <Tab.Panel className="bg-white border border-sky-cardBorder rounded-2xl p-8 sm:p-10 shadow-sm focus:outline-none">
             <h3 className="font-bold text-base text-ink">Notification Preferences</h3>
             <div className="mt-6">
@@ -320,6 +368,7 @@ export default function Settings() {
             </div>
           </Tab.Panel>
 
+          {/* ── Security tab ─────────────────────────────────────────────────── */}
           <Tab.Panel className="bg-white border border-sky-cardBorder rounded-2xl p-8 sm:p-10 shadow-sm focus:outline-none">
             <h3 className="font-bold text-base text-ink">Change Password</h3>
             <p className="text-sm text-ink-dim mt-1 mb-6">Use at least 8 characters, including a number and a special character.</p>
@@ -344,16 +393,88 @@ export default function Settings() {
             </form>
           </Tab.Panel>
 
+          {/* ── System tab ───────────────────────────────────────────────────── */}
           <Tab.Panel className="bg-white border border-sky-cardBorder rounded-2xl p-8 sm:p-10 shadow-sm focus:outline-none">
             <h3 className="font-bold text-base text-ink">System</h3>
-            <div className="mt-6">
-              <ToggleRow label="Dark Mode" description="Switch the interface to a dark theme" checked={systemToggles.dark_mode} onChange={(v) => setSystemToggles({ ...systemToggles, dark_mode: v })} />
+            <p className="text-sm text-ink-dim mt-1 mb-6">
+              {isAdmin ? "Manage interface and organisation-wide system configuration." : "Manage your interface preferences."}
+            </p>
+
+            {/* Appearance */}
+            <div className="mb-6">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-ink-dim mb-1">Appearance</p>
+              <ToggleRow
+                label="Dark Mode"
+                description="Switch the interface to a dark theme"
+                checked={darkMode}
+                onChange={setDarkMode}
+              />
             </div>
+
+            {/* Organisation settings — admin only */}
+            {isAdmin && (
+              <>
+                <div className="pt-4 border-t border-sky-page/30">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-ink-dim mb-4">Organisation Configuration</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
+                    <FormField id="org-name" label="Organisation Name">
+                      <input
+                        id="org-name"
+                        className={filterInputCls}
+                        value={systemForm.org_name}
+                        onChange={(e) => setSystemForm({ ...systemForm, org_name: e.target.value })}
+                        placeholder="Uganda Registration Services Bureau"
+                      />
+                    </FormField>
+
+                    <FormField id="asset-prefix" label="Asset ID Prefix">
+                      <input
+                        id="asset-prefix"
+                        className={filterInputCls}
+                        value={systemForm.asset_id_prefix}
+                        onChange={(e) => setSystemForm({ ...systemForm, asset_id_prefix: e.target.value.toUpperCase() })}
+                        placeholder="AST"
+                        maxLength={20}
+                      />
+                      <p className="text-[10px] text-ink-dim mt-0.5">Used as a prefix when generating new asset IDs (e.g. AST-A1B2C3).</p>
+                    </FormField>
+
+                    <FormField id="session-timeout" label="Session Timeout (hours)">
+                      <input
+                        id="session-timeout"
+                        type="number"
+                        min={1}
+                        max={168}
+                        className={filterInputCls}
+                        value={systemForm.session_timeout_hours}
+                        onChange={(e) => setSystemForm({ ...systemForm, session_timeout_hours: parseInt(e.target.value, 10) || 8 })}
+                      />
+                      <p className="text-[10px] text-ink-dim mt-0.5">Between 1 and 168 hours (1 week).</p>
+                    </FormField>
+
+                    <FormField id="max-failed-logins" label="Max Failed Login Attempts">
+                      <input
+                        id="max-failed-logins"
+                        type="number"
+                        min={1}
+                        max={10}
+                        className={filterInputCls}
+                        value={systemForm.max_failed_logins}
+                        onChange={(e) => setSystemForm({ ...systemForm, max_failed_logins: parseInt(e.target.value, 10) || 5 })}
+                      />
+                      <p className="text-[10px] text-ink-dim mt-0.5">Between 1 and 10 attempts before account lock.</p>
+                    </FormField>
+                  </div>
+                </div>
+              </>
+            )}
+
             {systemFormError && <div className="mt-4"><ErrorMessage message={systemFormError} /></div>}
             <div className="flex justify-end pt-6 mt-6 border-t border-sky-page/30">
               <Button onClick={handleSystemSave} isLoading={isSavingSystem}>Save Changes</Button>
             </div>
           </Tab.Panel>
+
         </Tab.Panels>
       </Tab.Group>
     </div>

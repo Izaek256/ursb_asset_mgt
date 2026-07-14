@@ -265,24 +265,23 @@ def logout(
 
 
 @router.get("/auth/check", response_model=AuthStatusResponse)
-def auth_check(request: Request) -> dict[str, object]:
-    user = getattr(request.state, "user", None)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-        )
+def auth_check(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, object]:
+    settings = current_user.settings
     return {
         "authenticated": True,
-        "email": user.email,
-        "first_name": user.first_name,
-        "last_name": user.last_name,
-        "username": user.username,
-        "phone_number": user.phone_number,
-        "department": user.department,
-        "user_id": str(user.user_id) if user.user_id is not None else None,
-        "role": user.role.value if hasattr(user.role, "value") else user.role,
-        "full_name": user.full_name or f"{user.first_name or ''} {user.last_name or ''}".strip(),
+        "email": current_user.email,
+        "first_name": current_user.first_name,
+        "last_name": current_user.last_name,
+        "username": current_user.username,
+        "phone_number": current_user.phone_number,
+        "department": current_user.department,
+        "user_id": str(current_user.user_id) if current_user.user_id is not None else None,
+        "role": current_user.role.value if hasattr(current_user.role, "value") else current_user.role,
+        "full_name": current_user.full_name or f"{current_user.first_name or ''} {current_user.last_name or ''}".strip(),
+        "theme": settings.theme if settings else "light",
     }
 
 

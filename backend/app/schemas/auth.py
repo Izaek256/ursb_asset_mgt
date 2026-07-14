@@ -46,3 +46,4 @@ class AuthStatusResponse(BaseModel):
     user_id: str | None = None
     role: str | None = None
     full_name: str | None = None
+    theme: str | None = None

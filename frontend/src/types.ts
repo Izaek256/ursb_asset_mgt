@@ -78,10 +78,10 @@ export interface UserSettings {
 }
 
 export interface SystemSettings {
-  organisation_name: string;
+  org_name: string;
   asset_id_prefix: string;
   session_timeout_hours: number;
-  max_failed_login_attempts: number;
+  max_failed_logins: number;
 }
 
 export interface AssetRequest {
@@ -371,10 +371,10 @@ export interface UserSettings {
 
 // ── System Settings Types (GET /api/v1/settings/system, PUT /api/v1/settings/system) ─
 export interface SystemSettings {
-  organisation_name: string;
+  org_name: string;
   asset_id_prefix: string;
   session_timeout_hours: number;
-  max_failed_login_attempts: number;
+  max_failed_logins: number;
 }
 
 // ── Asset Request Types (GET /api/v1/requests) ───────────────────────────────────
