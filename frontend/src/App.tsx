@@ -1,73 +1,125 @@
-import { useEffect, useState } from "react";
-import Login from "../components/Login/Login";
-import "./App.css";
+import React from "react";
+import { AuthProvider, useAuth } from "./AuthContext";
+import AppLayout from "./components/AppLayout";
+import UserManagement from "./pages/UserManagement";
+import AuditLogs from "./pages/AuditLogs";
+import Assets from "./pages/Assets";
+import AssetDetail from "./pages/AssetDetail";
+import AssetRegistration from "./pages/AssetRegistration";
+import Assignments from "./pages/Assignments";
+import Dashboard from "./pages/Dashboard";
+import LoginPage from "./pages/Login";
+import Maintenance from "./pages/Maintenance";
+import Requests from "./pages/Requests";
+import Settings from "./pages/Settings";
+import Storage from "./pages/Storage";
+import Transfers from "./pages/Transfers";
 
-interface AuthState {
-  loading: boolean;
-  authenticated: boolean;
-  email?: string;
-  firstName?: string;
-  username?: string;
-}
+const NAV_LABELS: Record<string, string> = {
+  "/dashboard": "Dashboard",
+  "/requests": "Requests",
+  "/assets": "Assets",
+  "/assets/register": "Register Asset",
+  "/assignments": "Assignments",
+  "/storage": "Storage",
+  "/transfers": "Transfers",
+  "/maintenance": "Maintenance",
+  "/admin/users": "User Management",
+  "/admin/audit-logs": "Audit Logs",
+  "/settings": "Settings",
+};
 
-function App() {
-  const [auth, setAuth] = useState<AuthState>({ loading: true, authenticated: false });
+function AppShell() {
+  const { user } = useAuth();
+  const [path, setPath] = React.useState(window.location.pathname || "/dashboard");
 
-  const checkAuth = async () => {
-    try {
-      const response = await fetch("/api/v1/auth/check", {
-        credentials: "include",
-      });
-      if (!response.ok) {
-        setAuth({ loading: false, authenticated: false });
-        return;
-      }
-      const data = await response.json();
-      setAuth({
-        loading: false,
-        authenticated: true,
-        email: data.email,
-        firstName: data.first_name ?? undefined,
-        username: data.username ?? undefined,
-      });
-    } catch (err) {
-      setAuth({ loading: false, authenticated: false });
+  React.useEffect(() => {
+    const onPop = () => setPath(window.location.pathname);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  const navigate = (to: string) => {
+    window.history.pushState({}, "", to);
+    setPath(to);
+  };
+
+  const getRequestsLabel = () =>
+    ["System Administrator", "Asset Manager"].includes(user!.role) ? "Requests" : "My Requests";
+
+  const getPageTitle = (): string => {
+    if (path.startsWith("/assets/") && path !== "/assets" && path !== "/assets/register") {
+      return "Asset Detail";
+    }
+    if (path === "/requests") return getRequestsLabel();
+    return NAV_LABELS[path] ?? "Dashboard";
+  };
+
+  const renderContent = (): React.ReactNode => {
+    if (path.startsWith("/assets/") && path !== "/assets" && path !== "/assets/register") {
+      return <AssetDetail />;
+    }
+
+    switch (path) {
+      case "/dashboard":
+        return <Dashboard onNavigate={navigate} />;
+      case "/requests":
+        return <Requests />;
+      case "/assets":
+        return <Assets />;
+      case "/assets/register":
+        return <AssetRegistration />;
+      case "/assignments":
+        return <Assignments />;
+      case "/storage":
+        return <Storage />;
+      case "/transfers":
+        return <Transfers />;
+      case "/maintenance":
+        return <Maintenance />;
+      case "/admin/audit-logs":
+        return <AuditLogs />;
+      case "/admin/users":
+        return <UserManagement />;
+      case "/settings":
+        return <Settings />;
+      default:
+        return <Dashboard onNavigate={navigate} />;
     }
   };
 
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
-  const signOut = async () => {
-    await fetch("/api/v1/logout", {
-      method: "POST",
-      credentials: "include",
-    });
-    setAuth({ loading: false, authenticated: false });
-  };
-
-  if (auth.loading) {
-    return <div className="pageShell">Checking authentication...</div>;
-  }
-
-  if (!auth.authenticated) {
-    return <Login onSuccess={checkAuth} />;
-  }
-
-  const welcomeName = auth.firstName || auth.username || auth.email || "";
-
   return (
-    <div className="pageShell">
-      <div className="card">
-        <h1>Welcome back{welcomeName ? `, ${welcomeName}` : ""}</h1>
-        <p>Signed in as {auth.email}</p>
-        <button onClick={signOut} className="actionButton">
-          Sign out
-        </button>
-      </div>
+    <div className="h-screen overflow-hidden">
+      <AppLayout pageTitle={getPageTitle()} activePath={path} onNavigate={navigate}>
+        {renderContent()}
+      </AppLayout>
     </div>
   );
 }
 
-export default App;
+function AppRoot() {
+  const { user, isInitialLoading } = useAuth();
+
+  if (isInitialLoading) {
+    return (
+      <div className="flex flex-col justify-center items-center h-screen bg-sky-page gap-5 select-none">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-sky-border border-t-ursb" />
+        <div className="text-base text-ink-dim font-semibold">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginPage />;
+  }
+
+  return <AppShell />;
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppRoot />
+    </AuthProvider>
+  );
+}
