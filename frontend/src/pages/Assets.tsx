@@ -131,6 +131,8 @@ export default function Assets() {
   const [statusFilter, setStatusFilter] = React.useState("All");
   const [typeFilter, setTypeFilter] = React.useState("All");
   const [search, setSearch] = React.useState("");
+  const [page, setPage] = React.useState(1);
+  const pageSize = 50;
 
   React.useEffect(() => {
     let cancelled = false;
@@ -315,14 +317,20 @@ export default function Assets() {
             className={filterInputCls}
             placeholder="Search assets..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
           />
         </FilterField>
         <FilterField label="Status" htmlFor="status-filter">
           <select
             id="status-filter"
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setPage(1);
+            }}
             className={filterSelectCls}
           >
             {STATUS_FILTERS.map((s) => (
@@ -334,7 +342,10 @@ export default function Assets() {
           <select
             id="type-filter"
             value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
+            onChange={(e) => {
+              setTypeFilter(e.target.value);
+              setPage(1);
+            }}
             className={filterSelectCls}
           >
             {TYPE_FILTERS.map((t) => (
@@ -344,13 +355,46 @@ export default function Assets() {
         </FilterField>
       </FilterBar>
 
-      <Table
-        data={assets}
-        columns={columns}
-        rowKey={(a) => a.asset_id}
-        isLoading={isLoading}
-        emptyMessage="No assets found matching your filters."
-      />
+      {(() => {
+        const totalPages = Math.ceil(assets.length / pageSize);
+        const paginatedAssets = assets.slice((page - 1) * pageSize, page * pageSize);
+        return (
+          <>
+            <Table
+              data={paginatedAssets}
+              columns={columns}
+              rowKey={(a) => a.asset_id}
+              isLoading={isLoading}
+              emptyMessage="No assets found matching your filters."
+            />
+            {totalPages > 1 && (
+              <div className="flex justify-between items-center mt-4 pt-4 border-t border-sky-page/30">
+                <div className="text-sm text-ink-dim font-sans">
+                  Page {page} of {totalPages} ({assets.length} total assets)
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
+        );
+      })()}
     </div>
   );
 }

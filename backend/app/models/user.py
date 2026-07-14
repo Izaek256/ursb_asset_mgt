@@ -35,6 +35,7 @@ class User(Base):
     role = Column(Enum(UserRole, native_enum=False, length=50), nullable=True)
     
     # Authentication fields
+    # Plain-text passwords are never stored - they are generated, returned once to the admin, and discarded
     password_hash = Column(String(length=128), nullable=False)
     password_salt = Column(String(length=128), nullable=False)
     
@@ -45,6 +46,9 @@ class User(Base):
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    # Stamped whenever a user successfully changes their own password.
+    # Used by the credentials page to detect if the generated/temp password is still active.
+    password_changed_at = Column(DateTime, nullable=True)
 
     # Authentication relationship
     sessions = relationship(

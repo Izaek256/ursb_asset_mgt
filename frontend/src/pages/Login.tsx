@@ -1,5 +1,5 @@
 import React from "react";
-import { apiFetch, useAuth } from "../AuthContext";
+import { useAuth } from "../AuthContext";
 import { ICONS } from "../utils/icons";
 import Button from "../components/common/Button";
 import FormInput from "../components/common/FormInput";
@@ -11,20 +11,8 @@ import bg2 from "../assets/building 2.jpeg";
 import bg3 from "../assets/cabinet.jpeg";
 import logoImg from "../assets/logo 1.jpeg";
 
-type AuthMode = "signin" | "signup";
-
-const DEPARTMENTS = [
-  { value: "ICT", label: "ICT" },
-  { value: "Registration", label: "Registration" },
-  { value: "Finance", label: "Finance" },
-  { value: "Legal", label: "Legal" },
-  { value: "Human Resources", label: "Human Resources" },
-  { value: "Business Registration", label: "Business Registration" },
-];
-
 export default function LoginPage() {
   const { login, isLoading } = useAuth();
-  const [mode, setMode] = React.useState<AuthMode>("signin");
   const [isMounted, setIsMounted] = React.useState(false);
   const [postAuthMessage, setPostAuthMessage] = React.useState<string | null>(null);
 
@@ -36,19 +24,8 @@ export default function LoginPage() {
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
 
-  const [firstName, setFirstName] = React.useState("");
-  const [lastName, setLastName] = React.useState("");
-  const [username, setUsername] = React.useState("");
-  const [phone, setPhone] = React.useState("");
-  const [signupEmail, setSignupEmail] = React.useState("");
-  const [signupPassword, setSignupPassword] = React.useState("");
-  const [confirmPassword, setConfirmPassword] = React.useState("");
-  const [department, setDepartment] = React.useState(DEPARTMENTS[0].value);
-
   // Alerts
   const [error, setError] = React.useState<string | null>(null);
-  const [success, setSuccess] = React.useState<string | null>(null);
-  const [isSigningUp, setIsSigningUp] = React.useState(false);
   const [isDeactivated, setIsDeactivated] = React.useState(false);
 
   // Mount animation trigger
@@ -77,16 +54,9 @@ export default function LoginPage() {
     }
   }, []);
 
-  const switchMode = (newMode: AuthMode) => {
-    setMode(newMode);
-    setError(null);
-    setSuccess(null);
-  };
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setSuccess(null);
     setIsDeactivated(false);
 
     if (!email || !password) {
@@ -96,73 +66,6 @@ export default function LoginPage() {
 
     const err = await login(email, password);
     if (err) setError(err);
-  };
-
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSuccess(null);
-
-    if (
-      !firstName ||
-      !lastName ||
-      !username ||
-      !signupEmail ||
-      !phone ||
-      !signupPassword ||
-      !confirmPassword
-    ) {
-      setError("Please fill in all fields.");
-      return;
-    }
-
-    // Password validation constraints
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-    if (!passwordRegex.test(signupPassword)) {
-      setError(
-        "Password must be at least 8 characters with upper, lower, number, and special character."
-      );
-      return;
-    }
-
-    if (signupPassword !== confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
-
-    setIsSigningUp(true);
-    try {
-      const data = await apiFetch<{ message: string }>("/signup", {
-        method: "POST",
-        body: JSON.stringify({
-          first_name: firstName,
-          last_name: lastName,
-          username: username,
-          email: signupEmail,
-          phone_number: phone,
-          department: department,
-          password: signupPassword,
-          confirm_password: confirmPassword,
-        }),
-      });
-
-      setSuccess(`${data.message} Please sign in below.`);
-      setMode("signin");
-      setEmail(signupEmail);
-      setPassword("");
-      // Clear signup form
-      setFirstName("");
-      setLastName("");
-      setUsername("");
-      setPhone("");
-      setSignupEmail("");
-      setSignupPassword("");
-      setConfirmPassword("");
-    } catch (err: any) {
-      setError(err.message || "Registration failed.");
-    } finally {
-      setIsSigningUp(false);
-    }
   };
 
   return (
@@ -250,37 +153,9 @@ export default function LoginPage() {
           <h1 className="text-[19px] font-bold text-white tracking-wide font-sans">
             URSB Asset Management
           </h1>
-          <p className="text-sm text-white/60 mt-1.5 transition-all duration-200">
-            {mode === "signin"
-              ? "Sign in to your account"
-              : "Create a new account"}
+          <p className="text-sm text-white/60 mt-1.5">
+            Sign in to your account
           </p>
-        </div>
-
-        {/* Translucent Tab Switcher */}
-        <div className="flex p-1 bg-navy-deep/40 backdrop-blur-sm rounded-xl border border-glass-border/10 mb-6 select-none">
-          <button
-            type="button"
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 cursor-pointer focus:outline-none ${
-              mode === "signin"
-                ? "bg-white text-ursb shadow-sm"
-                : "text-white/60 hover:text-white bg-transparent"
-            }`}
-            onClick={() => switchMode("signin")}
-          >
-            Sign In
-          </button>
-          <button
-            type="button"
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 cursor-pointer focus:outline-none ${
-              mode === "signup"
-                ? "bg-white text-ursb shadow-sm"
-                : "text-white/60 hover:text-white bg-transparent"
-            }`}
-            onClick={() => switchMode("signup")}
-          >
-            Create Account
-          </button>
         </div>
 
         {/* Error / Success Alerts */}
@@ -296,185 +171,36 @@ export default function LoginPage() {
             <span>{error}</span>
           </div>
         )}
-        {success && (
-          <div className="mb-5 p-3.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold flex items-center gap-2 animate-fadeIn motion-reduce:animate-none">
-            <ICONS.checkCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>{success}</span>
-          </div>
-        )}
 
-        {/* ── Forms Panel Container (Auto-Height Grid) ───────────────────────────── */}
-        <div className="relative w-full">
-          {/* Sign In Form Panel */}
-          <div
-            className={`grid transition-[grid-template-rows] duration-500 ease-out ${
-              mode === "signin" ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-            } motion-reduce:transition-none motion-reduce:grid-rows-[1fr]`}
+        {/* Sign In Form */}
+        <form onSubmit={handleLogin} className="flex flex-col gap-5">
+          <FormInput
+            type="email"
+            label="Email Address"
+            placeholder="e.g. admin@ursb.go.ug"
+            value={email}
+            onChange={setEmail}
+            autoFocus
+            autoComplete="email"
+          />
+          <FormInput
+            type="password"
+            label="Password"
+            placeholder="Enter your password"
+            value={password}
+            onChange={setPassword}
+            autoComplete="current-password"
+          />
+          <Button
+            type="submit"
+            variant="primary"
+            fullWidth
+            isLoading={isLoading}
+            className="mt-2"
           >
-            <div className="overflow-hidden">
-              <form
-                onSubmit={handleLogin}
-                className={`flex flex-col gap-5 transition-all duration-300 ${
-                  mode === "signin"
-                    ? "opacity-100 translate-y-0 delay-150"
-                    : "opacity-0 -translate-y-2 pointer-events-none"
-                } motion-reduce:transition-none motion-reduce:transform-none motion-reduce:opacity-100`}
-              >
-                <FormInput
-                  type="email"
-                  label="Email Address"
-                  placeholder="e.g. admin@ursb.go.ug"
-                  value={email}
-                  onChange={setEmail}
-                  autoFocus
-                  autoComplete="email"
-                />
-                <FormInput
-                  type="password"
-                  label="Password"
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={setPassword}
-                  autoComplete="current-password"
-                />
-                <Button
-                  type="submit"
-                  variant="primary"
-                  fullWidth
-                  isLoading={isLoading}
-                  className="mt-2"
-                >
-                  Sign In
-                </Button>
-                <div className="border-t border-glass-border/16 my-1" />
-                <p className="text-center text-xs text-white/50">
-                  New to URSB?{" "}
-                  <button
-                    type="button"
-                    onClick={() => switchMode("signup")}
-                    className="font-bold text-ice hover:text-white underline bg-transparent border-none cursor-pointer focus:outline-none"
-                  >
-                    Create Account
-                  </button>{" "}
-                  to get started.
-                </p>
-              </form>
-            </div>
-          </div>
-
-          {/* Create Account Form Panel */}
-          <div
-            className={`grid transition-[grid-template-rows] duration-500 ease-out ${
-              mode === "signup" ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-            } motion-reduce:transition-none motion-reduce:grid-rows-[1fr]`}
-          >
-            <div className="overflow-hidden">
-              <form
-                onSubmit={handleSignup}
-                className={`flex flex-col gap-5 transition-all duration-300 ${
-                  mode === "signup"
-                    ? "opacity-100 translate-y-0 delay-150"
-                    : "opacity-0 -translate-y-2 pointer-events-none"
-                } motion-reduce:transition-none motion-reduce:transform-none motion-reduce:opacity-100`}
-              >
-                <div className="flex gap-4">
-                  <FormInput
-                    type="text"
-                    label="First Name"
-                    placeholder="e.g. John"
-                    value={firstName}
-                    onChange={setFirstName}
-                    required
-                    autoComplete="given-name"
-                  />
-                  <FormInput
-                    type="text"
-                    label="Last Name"
-                    placeholder="e.g. Mukasa"
-                    value={lastName}
-                    onChange={setLastName}
-                    required
-                    autoComplete="family-name"
-                  />
-                </div>
-                <FormInput
-                  type="text"
-                  label="Username"
-                  placeholder="e.g. jmukasa"
-                  value={username}
-                  onChange={setUsername}
-                  required
-                  autoComplete="username"
-                />
-                <FormInput
-                  type="text"
-                  label="Phone Number"
-                  placeholder="e.g. +256700000000"
-                  value={phone}
-                  onChange={setPhone}
-                  required
-                  autoComplete="tel"
-                />
-                <FormInput
-                  type="email"
-                  label="Email Address"
-                  placeholder="e.g. john@ursb.go.ug"
-                  value={signupEmail}
-                  onChange={setSignupEmail}
-                  required
-                  autoComplete="email"
-                />
-                <FormInput
-                  type="select"
-                  label="Department"
-                  value={department}
-                  onChange={setDepartment}
-                  options={DEPARTMENTS}
-                  required
-                />
-                <FormInput
-                  type="password"
-                  label="Password"
-                  placeholder="Min. 8 chars (A-Z, a-z, 0-9, special)"
-                  value={signupPassword}
-                  onChange={setSignupPassword}
-                  required
-                  autoComplete="new-password"
-                />
-                <FormInput
-                  type="password"
-                  label="Confirm Password"
-                  placeholder="Re-enter your password"
-                  value={confirmPassword}
-                  onChange={setConfirmPassword}
-                  required
-                  autoComplete="new-password"
-                />
-                <Button
-                  type="submit"
-                  variant="primary"
-                  fullWidth
-                  isLoading={isSigningUp}
-                  className="mt-2"
-                >
-                  Create Account
-                </Button>
-                <div className="border-t border-glass-border/16 my-1" />
-                <p className="text-center text-xs text-white/50">
-                  Already have an account?{" "}
-                  <button
-                    type="button"
-                    onClick={() => switchMode("signin")}
-                    className="font-bold text-ice hover:text-white underline bg-transparent border-none cursor-pointer focus:outline-none"
-                  >
-                    Sign In
-                  </button>{" "}
-                  instead.
-                </p>
-              </form>
-            </div>
-          </div>
-        </div>
+            Sign In
+          </Button>
+        </form>
       </div>
     </div>
   );

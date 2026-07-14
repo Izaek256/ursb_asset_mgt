@@ -22,7 +22,7 @@ function splitName(fullName: string) {
 }
 
 export default function Settings() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [isLoadingSettings, setIsLoadingSettings] = React.useState(true);
   const [settingsError, setSettingsError] = React.useState<string | null>(null);
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
@@ -66,6 +66,7 @@ export default function Settings() {
   const [confirmNewPassword, setConfirmNewPassword] = React.useState("");
   const [passwordError, setPasswordError] = React.useState<string | null>(null);
   const [isChangingPassword, setIsChangingPassword] = React.useState(false);
+  const [passwordSuccess, setPasswordSuccess] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const loadSettings = async () => {
@@ -173,6 +174,7 @@ export default function Settings() {
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError(null);
+    setPasswordSuccess(null);
     if (!currentPassword || !newPassword || !confirmNewPassword) {
       setPasswordError("Please fill in all fields.");
       return;
@@ -183,19 +185,19 @@ export default function Settings() {
     }
     setIsChangingPassword(true);
     try {
-      await apiFetch("/auth/password", {
-        method: "PUT",
+      await apiFetch("/change-password", {
+        method: "POST",
         body: JSON.stringify({
           current_password: currentPassword,
           new_password: newPassword,
           confirm_new_password: confirmNewPassword,
         }),
       });
-      sessionStorage.setItem(
-        "post_auth_message",
-        "Your password has been changed. Please log in with your new password."
-      );
-      await logout();
+      setPasswordSuccess("Password changed successfully.");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+      setTimeout(() => setPasswordSuccess(null), 5000);
     } catch (err: unknown) {
       setPasswordError(err instanceof Error ? err.message : "Password change failed.");
     } finally {
@@ -307,6 +309,7 @@ export default function Settings() {
             <h3 className="font-bold text-base text-ink">Change Password</h3>
             <p className="text-sm text-ink-dim mt-1 mb-6">Use at least 8 characters, including a number and a special character.</p>
             {passwordError && <ErrorMessage message={passwordError} />}
+            {passwordSuccess && <SuccessBanner message={passwordSuccess} onDismiss={() => setPasswordSuccess(null)} />}
             <form onSubmit={handlePasswordChange} className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6 max-w-3xl">
               <div className="flex flex-col gap-2 md:col-span-2">
                 <label htmlFor="current-password" className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">Current password</label>
@@ -317,7 +320,7 @@ export default function Settings() {
                 <input id="new-password" type="password" className={filterInputCls} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="••••••••" required />
               </div>
               <div className="flex flex-col gap-2">
-                <label htmlFor="confirm-password" className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">Confirm password</label>
+                <label htmlFor="confirm-password" className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">Confirm new password</label>
                 <input id="confirm-password" type="password" className={filterInputCls} value={confirmNewPassword} onChange={(e) => setConfirmNewPassword(e.target.value)} placeholder="••••••••" required />
               </div>
               <div className="md:col-span-2 flex justify-end pt-2">

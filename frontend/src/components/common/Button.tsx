@@ -2,21 +2,33 @@ import React from "react";
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "auth" | "outline" | "danger-outline" | "danger-inverse" | "success" | "ghost" | "icon" | "nav";
+  size?: "sm" | "md" | "lg";
   fullWidth?: boolean;
   isLoading?: boolean;
   active?: boolean;
 };
 
-export default function Button({
-  variant = "primary",
-  fullWidth = false,
-  isLoading = false,
-  active = false,
-  children,
-  className = "",
-  disabled,
-  ...props
-}: ButtonProps) {
+const Button = React.forwardRef<
+  HTMLButtonElement,
+  ButtonProps & { hover?: boolean; focus?: boolean; autofocus?: boolean }
+>(function Button(
+  {
+    variant = "primary",
+    size: _size,
+    fullWidth = false,
+    isLoading = false,
+    active = false,
+    children,
+    className = "",
+    disabled,
+    // Destructure Headless UI internal render props so they don't land on the DOM element
+    hover: _hover,
+    focus: _focus,
+    autofocus: _autofocus,
+    ...props
+  },
+  ref
+) {
   const baseStyle =
     "flex items-center justify-center font-bold transition-all duration-200 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-95 motion-reduce:transform-none motion-reduce:transition-none cursor-pointer select-none whitespace-nowrap";
 
@@ -50,6 +62,7 @@ export default function Button({
 
   return (
     <button
+      ref={ref}
       className={`${baseStyle} ${variants[variant]} ${activeNav} ${widthStyle} ${className}`}
       disabled={disabled || isLoading}
       {...props}
@@ -79,4 +92,6 @@ export default function Button({
       {children}
     </button>
   );
-}
+});
+
+export default Button;

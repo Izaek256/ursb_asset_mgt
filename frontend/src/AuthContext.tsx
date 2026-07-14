@@ -31,8 +31,11 @@ export async function apiFetch<T>(
   opts: RequestInit = {},
   _token?: string
 ): Promise<T> {
+  const isFormData = opts.body instanceof FormData;
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    // Don't set Content-Type for FormData — the browser sets it automatically
+    // with the correct multipart boundary. Forcing application/json breaks file uploads.
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...(opts.headers as Record<string, string> || {}),
   };
   // Note: JWT token header is ignored because we are using HTTP cookies.
