@@ -209,19 +209,19 @@ export default function Assignments() {
   };
 
   const handleReturnConfirm = async () => {
-    if (!returnConfirm) return;
-    setError(null);
-    try {
-      await apiFetch(`/assignments/${returnConfirm.assignment_id}/return`, {
-        method: "PUT",
-      });
-      setSuccess(`Asset "${returnConfirm.asset_name}" returned successfully.`);
-      setReturnConfirm(null);
-      fetchAssignments();
-    } catch (err: any) {
-      setError(err.message || "Failed to return asset.");
-    }
-  };
+  if (!returnConfirm) return;
+  setError(null);
+  try {
+    await apiFetch(`/assignments/${returnConfirm.assignment_id}/return`, {
+      method: "POST",
+    });
+    setSuccess(`Asset "${returnConfirm.asset_name}" return initiated successfully.`);
+    setReturnConfirm(null);
+    fetchAssignments();
+  } catch (err: any) {
+    setError(err.message || "Failed to initiate return.");
+  }
+};
 
   const columns: Column<Assignment>[] = [
     {
@@ -257,6 +257,7 @@ export default function Assignments() {
       header: "Status",
       render: (a) => <StatusBadge status={a.status} />,
     },
+    
     {
       header: "Actions",
       render: (a) => (
@@ -278,6 +279,22 @@ export default function Assignments() {
           )}
           {isAdminOrManager && a.status === "Active" && (
             <Button variant="outline" className="!py-1.5 !px-3 text-xs" onClick={() => setReturnConfirm(a)}>
+              Return Asset
+            </Button>
+          )}
+          {/*
+            Employee Return Asset button — renders only when ALL of:
+            1. Current user is an Employee (not admin or manager)
+            2. Current user is the assigned_to user on this assignment
+            3. Assignment status is Active
+          */}
+          {user?.role === "Employee" &&
+            String(a.assigned_to) === String(user?.user_id) &&
+            a.status === "Active" && (
+            <Button
+              variant="outline"
+              onClick={() => setReturnConfirm(a)}
+            >
               Return Asset
             </Button>
           )}

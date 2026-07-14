@@ -117,6 +117,9 @@ export interface StorageAsset {
   condition: string;
   department: string;
   stored_at: string;
+  status?: string;
+  current_assignment_id?: number;
+  current_custodian_name?: string;
 }
 
 export interface StorageListResponse {

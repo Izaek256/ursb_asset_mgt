@@ -181,6 +181,27 @@ def get_assignment(
         raise HTTPException(404, detail="Assignment not found")
     return _serialize_assignment(assignment, db)
 
+@router.post("/{assignment_id}/initiate-return", response_model=AssignmentResponse)
+def initiate_return(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("Employee")),
+):
+    """Step 1 of 2: Employee initiates asset return. Employee only. SRS §7 — Asset Returns."""
+    assignment = assignment_service.initiate_return(db, assignment_id, current_user.user_id)
+    return _serialize_assignment(assignment, db)
+
+
+@router.post("/{assignment_id}/confirm-return", response_model=AssignmentResponse)
+def confirm_return(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("Asset Custodian")),
+):
+    """Step 2 of 2: Custodian confirms physical receipt of returned asset. Custodian only. SRS §7 — Asset Returns."""
+    assignment = assignment_service.confirm_return(db, assignment_id, current_user.user_id)
+    return _serialize_assignment(assignment, db)
+
 
 @router.post("/{assignment_id}/accept", response_model=AssignmentResponse)
 def accept_assignment_route(
