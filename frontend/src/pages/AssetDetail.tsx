@@ -41,6 +41,22 @@ export default function AssetDetail() {
   const [showDeactivateDialog, setShowDeactivateDialog] = React.useState(false);
   const [isDeactivating, setIsDeactivating] = React.useState(false);
 
+  // Disposal recommendation state
+  const [showRecommendDialog, setShowRecommendDialog] = React.useState(false);
+  const [recommendReason, setRecommendReason] = React.useState("");
+  const [recommendError, setRecommendError] = React.useState<string | null>(null);
+  const [isRecommending, setIsRecommending] = React.useState(false);
+
+  // Pending recommendation for Asset Manager view
+  const [pendingDisposal, setPendingDisposal] = React.useState<any>(null);
+  const [showApproveDialog, setShowApproveDialog] = React.useState(false);
+  const [showRejectDialog, setShowRejectDialog] = React.useState(false);
+  const [approvalMethod, setApprovalMethod] = React.useState("Write-off");
+  const [approvalDate, setApprovalDate] = React.useState("");
+  const [rejectReason, setRejectReason] = React.useState("");
+  const [isActioning, setIsActioning] = React.useState(false);
+  const [actionError, setActionError] = React.useState<string | null>(null);
+
   // Active tab
   const [activeTab, setActiveTab] = React.useState<1 | 2 | 3 | 4>(1);
 
@@ -77,9 +93,24 @@ export default function AssetDetail() {
     return () => { cancelled = true; };
   }, [assetId, token]);
 
+  // Fetch pending disposal recommendation for Asset Manager view
+  React.useEffect(() => {
+    if (!assetId || !user) return;
+    if (user.role !== "Asset Manager" && user.role !== "System Administrator") return;
+
+    apiFetch<any>(`/disposals?asset_id=${assetId}&status=Recommended`, {}, token)
+      .then((data) => {
+        if (data?.disposals?.length > 0) {
+          setPendingDisposal(data.disposals[0]);
+        } else {
+          setPendingDisposal(null);
+        }
+      })
+      .catch(() => setPendingDisposal(null));
+  }, [assetId, token, user]);
+
   const handleSaveEdit = async () => {
     if (!asset) return;
-
     // Only include changed fields
     const changes: Record<string, any> = {};
     if (editForm.asset_name !== asset.asset_name) changes.asset_name = editForm.asset_name;
@@ -183,6 +214,78 @@ export default function AssetDetail() {
       setDisposalError(err.message || "Failed to dispose asset");
     } finally {
       setIsDisposing(false);
+    }
+  };
+
+  const handleRecommend = async () => {
+    if (!assetId || recommendReason.length < 10) return;
+    setIsRecommending(true);
+    setRecommendError(null);
+    try {
+      await apiFetch(`/assets/${assetId}/recommend-disposal`, {
+        method: "POST",
+        body: JSON.stringify({ reason: recommendReason }),
+      }, token);
+      setSuccessMessage("Disposal recommendation submitted successfully");
+      setTimeout(() => setSuccessMessage(null), 3000);
+      setShowRecommendDialog(false);
+      setRecommendReason("");
+      const updated = await apiFetch<AssetDetail>(`/assets/${assetId}`, {}, token);
+      setAsset(updated);
+      setEditForm(updated);
+    } catch (err: any) {
+      setRecommendError(err.message || "Failed to submit recommendation");
+    } finally {
+      setIsRecommending(false);
+    }
+  };
+
+  const handleApprove = async () => {
+    if (!pendingDisposal || !approvalDate) return;
+    setIsActioning(true);
+    setActionError(null);
+    try {
+      await apiFetch(`/disposals/${pendingDisposal.disposal_id}/approve`, {
+        method: "POST",
+        body: JSON.stringify({
+          disposal_method: approvalMethod,
+          disposal_date: approvalDate,
+        }),
+      }, token);
+      setSuccessMessage("Disposal approved successfully");
+      setTimeout(() => setSuccessMessage(null), 3000);
+      setShowApproveDialog(false);
+      setPendingDisposal(null);
+      const updated = await apiFetch<AssetDetail>(`/assets/${assetId}`, {}, token);
+      setAsset(updated);
+      setEditForm(updated);
+    } catch (err: any) {
+      setActionError(err.message || "Failed to approve disposal");
+    } finally {
+      setIsActioning(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!pendingDisposal || rejectReason.length < 5) return;
+    setIsActioning(true);
+    setActionError(null);
+    try {
+      await apiFetch(`/disposals/${pendingDisposal.disposal_id}/reject`, {
+        method: "POST",
+        body: JSON.stringify({ reason: rejectReason }),
+      }, token);
+      setSuccessMessage("Disposal recommendation rejected");
+      setTimeout(() => setSuccessMessage(null), 3000);
+      setShowRejectDialog(false);
+      setPendingDisposal(null);
+      const updated = await apiFetch<AssetDetail>(`/assets/${assetId}`, {}, token);
+      setAsset(updated);
+      setEditForm(updated);
+    } catch (err: any) {
+      setActionError(err.message || "Failed to reject disposal");
+    } finally {
+      setIsActioning(false);
     }
   };
 
@@ -299,6 +402,42 @@ export default function AssetDetail() {
               </Button>
             </>
           )}
+
+          {/* Custodian: Recommend Disposal button
+              Renders only when: user is Custodian, asset is not Disposed or Deactivated,
+              and no pending recommendation already exists for this asset */}
+          {user?.role === "Asset Custodian" &&
+            asset.status !== "Disposed" &&
+            asset.is_active && (
+            <Button
+              variant="danger-outline"
+              onClick={() => setShowRecommendDialog(true)}
+            >
+              Recommend Disposal
+            </Button>
+          )}
+
+          {/* Asset Manager: Approve/Reject buttons
+              Renders only when: user is Asset Manager or Admin,
+              and a pending recommendation exists for this asset */}
+          {(user?.role === "Asset Manager" || user?.role === "System Administrator") &&
+            pendingDisposal && asset.status !== "Disposed" && (
+            <>
+              <Button
+                variant="success"
+                onClick={() => setShowApproveDialog(true)}
+              >
+                Approve Disposal
+              </Button>
+              <Button
+                variant="danger-outline"
+                onClick={() => setShowRejectDialog(true)}
+              >
+                Reject
+              </Button>
+            </>
+          )}
+
         </div>
       </div>
 
@@ -1053,6 +1192,105 @@ export default function AssetDetail() {
           </div>
         </div>
       )}
+
+      {/* Recommend Disposal Modal */}
+      {showRecommendDialog && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+          <div style={{ background: "white", borderRadius: "12px", maxWidth: "500px", width: "90%", overflow: "auto" }}>
+            <div style={{ padding: "20px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ fontSize: "18px", fontWeight: "600", color: "#1e293b", margin: 0 }}>Recommend Disposal</h3>
+              <button onClick={() => { setShowRecommendDialog(false); setRecommendReason(""); setRecommendError(null); }} style={{ background: "none", border: "none", fontSize: "24px", color: "#64748b", cursor: "pointer" }}>×</button>
+            </div>
+            <div style={{ padding: "24px" }}>
+              {/* Reason field for disposal recommendation */}
+              <label style={{ display: "block", fontSize: "14px", fontWeight: "500", color: "#475569", marginBottom: "6px" }}>
+                Reason for recommending disposal (min. 10 characters)
+              </label>
+              <textarea
+                style={{ width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "14px", minHeight: "100px", resize: "vertical" }}
+                value={recommendReason}
+                onChange={(e) => setRecommendReason(e.target.value)}
+                placeholder="Explain why this asset should be disposed..."
+              />
+              {recommendError && <div style={{ backgroundColor: "#fee2e2", color: "#991b1b", padding: "12px", borderRadius: "8px", marginTop: "12px" }}>{recommendError}</div>}
+            </div>
+            <div style={{ padding: "16px 24px", borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "flex-end", gap: "12px" }}>
+              <button onClick={() => { setShowRecommendDialog(false); setRecommendReason(""); setRecommendError(null); }} style={{ padding: "10px 20px", borderRadius: "8px", border: "1px solid #e2e8f0", background: "white", color: "#475569", cursor: "pointer" }}>Cancel</button>
+              <button onClick={handleRecommend} disabled={recommendReason.length < 10 || isRecommending} style={{ padding: "10px 20px", borderRadius: "8px", border: "none", background: recommendReason.length < 10 || isRecommending ? "#cbd5e1" : "#ef4444", color: "white", cursor: recommendReason.length < 10 || isRecommending ? "not-allowed" : "pointer" }}>
+                {isRecommending ? "Submitting..." : "Submit Recommendation"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Approve Disposal Modal */}
+      {showApproveDialog && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+          <div style={{ background: "white", borderRadius: "12px", maxWidth: "500px", width: "90%", overflow: "auto" }}>
+            <div style={{ padding: "20px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ fontSize: "18px", fontWeight: "600", color: "#1e293b", margin: 0 }}>Approve Disposal</h3>
+              <button onClick={() => { setShowApproveDialog(false); setActionError(null); }} style={{ background: "none", border: "none", fontSize: "24px", color: "#64748b", cursor: "pointer" }}>×</button>
+            </div>
+            <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
+              {/* Disposal method dropdown — calls POST /disposals/{id}/approve */}
+              <div>
+                <label style={{ display: "block", fontSize: "14px", fontWeight: "500", color: "#475569", marginBottom: "6px" }}>Disposal Method</label>
+                <select value={approvalMethod} onChange={(e) => setApprovalMethod(e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "14px" }}>
+                  <option value="Sale">Sale</option>
+                  <option value="Write-off">Write-off</option>
+                  <option value="Donation">Donation</option>
+                  <option value="Destruction">Destruction</option>
+                </select>
+              </div>
+              {/* Disposal date picker */}
+              <div>
+                <label style={{ display: "block", fontSize: "14px", fontWeight: "500", color: "#475569", marginBottom: "6px" }}>Disposal Date</label>
+                <input type="date" value={approvalDate} onChange={(e) => setApprovalDate(e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "14px" }} />
+              </div>
+              {actionError && <div style={{ backgroundColor: "#fee2e2", color: "#991b1b", padding: "12px", borderRadius: "8px" }}>{actionError}</div>}
+            </div>
+            <div style={{ padding: "16px 24px", borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "flex-end", gap: "12px" }}>
+              <button onClick={() => { setShowApproveDialog(false); setActionError(null); }} style={{ padding: "10px 20px", borderRadius: "8px", border: "1px solid #e2e8f0", background: "white", color: "#475569", cursor: "pointer" }}>Cancel</button>
+              <button onClick={handleApprove} disabled={!approvalDate || isActioning} style={{ padding: "10px 20px", borderRadius: "8px", border: "none", background: !approvalDate || isActioning ? "#cbd5e1" : "#10b981", color: "white", cursor: !approvalDate || isActioning ? "not-allowed" : "pointer" }}>
+                {isActioning ? "Approving..." : "Confirm Approval"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Disposal Modal */}
+      {showRejectDialog && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+          <div style={{ background: "white", borderRadius: "12px", maxWidth: "500px", width: "90%", overflow: "auto" }}>
+            <div style={{ padding: "20px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ fontSize: "18px", fontWeight: "600", color: "#1e293b", margin: 0 }}>Reject Disposal Recommendation</h3>
+              <button onClick={() => { setShowRejectDialog(false); setRejectReason(""); setActionError(null); }} style={{ background: "none", border: "none", fontSize: "24px", color: "#64748b", cursor: "pointer" }}>×</button>
+            </div>
+            <div style={{ padding: "24px" }}>
+              {/* Rejection reason — required per spec, manager must explain decision */}
+              <label style={{ display: "block", fontSize: "14px", fontWeight: "500", color: "#475569", marginBottom: "6px" }}>
+                Reason for rejection (min. 5 characters)
+              </label>
+              <textarea
+                style={{ width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "14px", minHeight: "100px", resize: "vertical" }}
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Explain why this disposal recommendation is being rejected..."
+              />
+              {actionError && <div style={{ backgroundColor: "#fee2e2", color: "#991b1b", padding: "12px", borderRadius: "8px", marginTop: "12px" }}>{actionError}</div>}
+            </div>
+            <div style={{ padding: "16px 24px", borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "flex-end", gap: "12px" }}>
+              <button onClick={() => { setShowRejectDialog(false); setRejectReason(""); setActionError(null); }} style={{ padding: "10px 20px", borderRadius: "8px", border: "1px solid #e2e8f0", background: "white", color: "#475569", cursor: "pointer" }}>Cancel</button>
+              <button onClick={handleReject} disabled={rejectReason.length < 5 || isActioning} style={{ padding: "10px 20px", borderRadius: "8px", border: "none", background: rejectReason.length < 5 || isActioning ? "#cbd5e1" : "#ef4444", color: "white", cursor: rejectReason.length < 5 || isActioning ? "not-allowed" : "pointer" }}>
+                {isActioning ? "Rejecting..." : "Confirm Rejection"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
