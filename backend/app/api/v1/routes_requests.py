@@ -1,4 +1,16 @@
-"""Asset request workflow endpoints."""
+"""Asset request workflow endpoints.
+
+Access Control Rules:
+- POST /api/requests — Employee, Asset Manager (Asset Managers may submit requests)
+- GET /api/requests — All authenticated roles (filtered by role)
+- GET /api/requests/{request_id} — All authenticated roles (filtered by role)
+- PUT /api/requests/{id}/approve — Asset Manager, Super System Administrator (with self-approval guard)
+- PUT /api/requests/{id}/reject — Asset Manager, Super System Administrator (with self-approval guard)
+- PUT /api/requests/{id}/assign — Asset Manager, Super System Administrator
+- PUT /api/requests/{id}/pickup — All authenticated roles (requester only)
+- PUT /api/requests/{id}/complete — Asset Manager, Super System Administrator
+- PUT /api/requests/{id}/cancel — Employee (own pending requests), Asset Manager, Super System Administrator
+"""
 
 from datetime import datetime, date
 from typing import List, Optional
@@ -8,7 +20,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.api.v1.auth import get_current_user, require_roles
+from app.api.v1.auth import get_current_user, require_role, require_not_self_approval
+from app.models.user import UserRole
 from app.models.asset import Asset, AssetStatus
 from app.models.assignment import Assignment, AssignmentStatus
 from app.models.audit_log import AuditLog
@@ -216,7 +229,8 @@ def approve_request(
     request_id: int,
     body: AssetRequestApprove,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("System Administrator", "Asset Manager")),
+    current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
+    _guard: None = Depends(require_not_self_approval),
 ):
     request = db.query(AssetRequest).filter(AssetRequest.request_id == request_id).first()
     if not request:
@@ -252,7 +266,8 @@ def reject_request(
     request_id: int,
     body: AssetRequestReject,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("System Administrator", "Asset Manager")),
+    current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
+    _guard: None = Depends(require_not_self_approval),
 ):
     request = db.query(AssetRequest).filter(AssetRequest.request_id == request_id).first()
     if not request:
@@ -277,7 +292,7 @@ def assign_request(
     request_id: int,
     body: AssetRequestAssign,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("System Administrator", "Asset Manager")),
+    current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
 ):
     request = db.query(AssetRequest).filter(AssetRequest.request_id == request_id).first()
     if not request:
@@ -354,7 +369,7 @@ def pickup_request(
 def complete_request(
     request_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("System Administrator", "Asset Manager")),
+    current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
 ):
     request = db.query(AssetRequest).filter(AssetRequest.request_id == request_id).first()
     if not request:
@@ -381,7 +396,7 @@ def cancel_request(
     if request.status not in {RequestStatus.PENDING, RequestStatus.APPROVED}:
         raise HTTPException(400, detail="Invalid status transition")
 
-    if current_user.role in {UserRole.SYSTEM_ADMINISTRATOR, UserRole.ASSET_MANAGER}:
+    if current_user.role in {UserRole.SYSTEM_ADMINISTRATOR, UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR}:
         allowed = True
     elif current_user.role == UserRole.EMPLOYEE and request.status == RequestStatus.PENDING and request.requested_by == current_user.id:
         allowed = True

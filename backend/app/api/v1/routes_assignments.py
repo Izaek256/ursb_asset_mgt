@@ -1,4 +1,11 @@
-"""Assignment workflow endpoints."""
+"""Assignment workflow endpoints.
+
+Access Control Rules:
+- POST /api/assignments — Asset Manager, Super System Administrator
+- POST /api/assignments/{assignment_id}/return — Asset Manager, Super System Administrator
+- GET /api/assignments — Asset Manager, Super System Administrator, System Administrator (read-only)
+- GET /api/assignments/{assignment_id} — Asset Manager, Super System Administrator, System Administrator (read-only)
+"""
 
 from datetime import date
 from typing import List, Optional
@@ -8,7 +15,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.api.v1.auth import get_current_user, require_roles
+from app.api.v1.auth import get_current_user, require_role
+from app.models.user import UserRole
 from app.models.asset import Asset, AssetStatus
 from app.models.assignment import Assignment, AssignmentStatus
 from app.models.audit_log import AuditLog
@@ -82,7 +90,7 @@ def _log(db: Session, *, actor: User, action: str, record_id: str, details: str)
 def create_assignment(
     body: AssignmentCreateRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("System Administrator", "Asset Manager")),
+    current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
 ):
     asset = db.query(Asset).filter(Asset.asset_id == body.asset_id).first()
     if not asset:
@@ -128,7 +136,7 @@ def create_assignment(
 def return_assignment(
     assignment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("System Administrator", "Asset Manager")),
+    current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
 ):
     assignment = db.query(Assignment).filter(Assignment.assignment_id == assignment_id).first()
     if not assignment:
@@ -153,7 +161,7 @@ def list_assignments(
     user_id: Optional[int] = None,
     status: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR)),
 ):
     query = db.query(Assignment)
     if asset_id:
@@ -173,7 +181,7 @@ def list_assignments(
 def get_assignment(
     assignment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR)),
 ):
     assignment = db.query(Assignment).filter(Assignment.assignment_id == assignment_id).first()
     if not assignment:

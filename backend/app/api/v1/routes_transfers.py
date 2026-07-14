@@ -1,4 +1,10 @@
-"""Transfer routes: create, list, and acknowledge transfers."""
+"""Transfer routes: create, list, and acknowledge transfers.
+
+Access Control Rules:
+- POST /api/transfers — Asset Manager, Super System Administrator
+- GET /api/transfers — Asset Manager, Super System Administrator, System Administrator (read-only)
+- PUT /api/transfers/{transfer_id}/acknowledge — Receiving user or System Administrator
+"""
 
 from typing import List, Optional
 
@@ -14,7 +20,8 @@ from app.models.asset import Asset, AssetStatus
 from app.models.assignment import Assignment, AssignmentStatus
 from app.models.user import User
 from app.models.audit_log import AuditLog
-from app.api.v1.auth import get_current_user, require_roles
+from app.api.v1.auth import get_current_user, require_role
+from app.models.user import UserRole
 
 router = APIRouter(prefix="/api/v1/transfers", tags=["transfers"])
 
@@ -51,7 +58,7 @@ def list_transfers(
     user_id: Optional[int] = None,
     acknowledged: Optional[bool] = None,
     db: Session = Depends(get_db),
-    _user=Depends(get_current_user),
+    _user=Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR)),
 ):
     """List transfers with optional filters. Returns resolved user names and asset info."""
     q = db.query(Transfer)
@@ -97,7 +104,7 @@ def list_transfers(
 def create_transfer(
     body: TransferCreateRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("Asset Manager", "System Administrator")),
+    current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
 ):
     """Create a transfer and perform all related state changes atomically."""
     asset = db.query(Asset).filter(Asset.asset_id == body.asset_id).first()
