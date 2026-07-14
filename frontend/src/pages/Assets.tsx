@@ -14,6 +14,7 @@ import { ICONS } from "../utils/icons";
 import { CHART } from "../theme/chartColors";
 import excelIcon from "../assets/icons8-export-excel-50.png";
 import pdfIcon from "../assets/icons8-export-pdf-50.png";
+import BulkImportModal from "../components/assets/BulkImportModal";
 
 interface AssetRow {
   asset_id: string;
@@ -131,25 +132,36 @@ export default function Assets() {
   const [statusFilter, setStatusFilter] = React.useState("All");
   const [typeFilter, setTypeFilter] = React.useState("All");
   const [search, setSearch] = React.useState("");
+  const [isImportModalOpen, setIsImportModalOpen] = React.useState(false);
   const [page, setPage] = React.useState(1);
   const pageSize = 50;
 
   React.useEffect(() => {
-    let cancelled = false;
-    setIsLoading(true);
+    setPage(1);
+  }, [statusFilter, typeFilter, search]);
 
+  const totalPages = Math.ceil(assets.length / pageSize);
+
+  const paginatedAssets = React.useMemo(() => {
+    return assets.slice((page - 1) * pageSize, page * pageSize);
+  }, [assets, page]);
+
+  const fetchAssets = React.useCallback(() => {
+    setIsLoading(true);
     const params = new URLSearchParams();
     if (statusFilter !== "All") params.set("status", statusFilter);
     if (typeFilter !== "All") params.set("asset_type", typeFilter);
     if (search) params.set("search", search);
 
     apiFetch<AssetRow[]>(`/assets?${params.toString()}`, {})
-      .then((data) => { if (!cancelled) setAssets(data); })
-      .catch(() => { if (!cancelled) setAssets([]); })
-      .finally(() => { if (!cancelled) setIsLoading(false); });
-
-    return () => { cancelled = true; };
+      .then((data) => setAssets(data))
+      .catch(() => setAssets([]))
+      .finally(() => setIsLoading(false));
   }, [statusFilter, typeFilter, search]);
+
+  React.useEffect(() => {
+    fetchAssets();
+  }, [fetchAssets]);
 
   const navigateToRegister = () => {
     window.history.pushState({}, "", "/assets/register");
@@ -301,6 +313,10 @@ export default function Assets() {
                 </>
               )}
             </Menu>
+            <Button variant="outline" onClick={() => setIsImportModalOpen(true)}>
+              <ICONS.upload className="w-4 h-4 mr-1.5 stroke-[2.4]" />
+              Bulk Import
+            </Button>
             <Button onClick={navigateToRegister}>
               <ICONS.plus className="w-4 h-4 mr-1.5 stroke-[2.4]" />
               Add Asset
@@ -355,46 +371,52 @@ export default function Assets() {
         </FilterField>
       </FilterBar>
 
-      {(() => {
-        const totalPages = Math.ceil(assets.length / pageSize);
-        const paginatedAssets = assets.slice((page - 1) * pageSize, page * pageSize);
-        return (
-          <>
-            <Table
-              data={paginatedAssets}
-              columns={columns}
-              rowKey={(a) => a.asset_id}
-              isLoading={isLoading}
-              emptyMessage="No assets found matching your filters."
-            />
-            {totalPages > 1 && (
-              <div className="flex justify-between items-center mt-4 pt-4 border-t border-sky-page/30">
-                <div className="text-sm text-ink-dim font-sans">
-                  Page {page} of {totalPages} ({assets.length} total assets)
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
-            )}
-          </>
-        );
-      })()}
+      <Table
+        data={paginatedAssets}
+        columns={columns}
+        rowKey={(a) => a.asset_id}
+        isLoading={isLoading}
+        emptyMessage="No assets found matching your filters."
+      />
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between bg-white border border-sky-cardBorder rounded-2xl p-4 shadow-sm select-none">
+          <div className="text-xs text-ink-dim font-medium">
+            Showing <span className="font-semibold text-ink">{Math.min((page - 1) * pageSize + 1, assets.length)}</span> to{" "}
+            <span className="font-semibold text-ink">{Math.min(page * pageSize, assets.length)}</span> of{" "}
+            <span className="font-semibold text-ink">{assets.length}</span> assets
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setPage((p) => Math.max(p - 1, 1))}
+              disabled={page === 1}
+              className="py-1 px-3 gap-1"
+            >
+              <ICONS.chevronLeft className="w-3.5 h-3.5" />
+              Previous
+            </Button>
+            <div className="flex items-center gap-1.5 px-2">
+              <span className="text-xs font-semibold text-ink">Page {page} of {totalPages}</span>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+              disabled={page === totalPages}
+              className="py-1 px-3 gap-1"
+            >
+              Next
+              <ICONS.chevronRight className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <BulkImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImportSuccess={() => fetchAssets()}
+      />
     </div>
   );
 }

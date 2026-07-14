@@ -93,10 +93,13 @@ def get_dashboard_stats(
 
     # --- Stat cards ---
     total_assets = db.query(func.count(Asset.asset_id)).scalar() or 0
-    active_assets = db.query(func.count(Asset.asset_id)).filter(Asset.status == AssetStatus.ACTIVE).scalar() or 0
+    active_assets = (
+        db.query(func.count(Asset.asset_id))
+        .filter(Asset.status.in_([AssetStatus.AVAILABLE, AssetStatus.ASSIGNED]))
+        .scalar() or 0
+    )
     maintenance_assets = db.query(func.count(Asset.asset_id)).filter(Asset.status == AssetStatus.UNDER_MAINTENANCE).scalar() or 0
     disposed_assets = db.query(func.count(Asset.asset_id)).filter(Asset.status == AssetStatus.DISPOSED).scalar() or 0
-    in_storage = db.query(func.count(Asset.asset_id)).filter(Asset.status == AssetStatus.IN_STORAGE).scalar() or 0
 
     stats = [
         StatCard(label="Total Assets", value=total_assets, icon="📦", color="#8b5cf6"),

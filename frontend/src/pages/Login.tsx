@@ -6,9 +6,6 @@ import FormInput from "../components/common/FormInput";
 import SuccessBanner from "../components/common/SuccessBanner";
 
 // Background slideshow assets
-import bg1 from "../assets/building 1.jpeg";
-import bg2 from "../assets/building 2.jpeg";
-import bg3 from "../assets/cabinet.jpeg";
 import logoImg from "../assets/logo 1.jpeg";
 
 export default function LoginPage() {
@@ -17,7 +14,11 @@ export default function LoginPage() {
   const [postAuthMessage, setPostAuthMessage] = React.useState<string | null>(null);
 
   // Slideshow state
-  const slides = [bg1, bg2, bg3];
+  const slides = [
+    "https://res.cloudinary.com/dun3og1nu/image/upload/v1783924198/building_1_qtql5q.jpg",
+    "https://res.cloudinary.com/dun3og1nu/image/upload/v1783924198/building_2_lga9u4.jpg",
+    "https://res.cloudinary.com/dun3og1nu/image/upload/v1783924199/cabinet_or4efw.jpg"
+  ];
   const [activeSlide, setActiveSlide] = React.useState(0);
 
   // Form states

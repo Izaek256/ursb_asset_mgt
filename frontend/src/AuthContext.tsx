@@ -29,7 +29,8 @@ const API_BASE = "/api/v1";
 export async function apiFetch<T>(
   path: string,
   opts: RequestInit = {},
-  _token?: string
+  _token?: string,
+  timeoutMs = 10000
 ): Promise<T> {
   const isFormData = opts.body instanceof FormData;
   const headers: Record<string, string> = {
@@ -40,11 +41,25 @@ export async function apiFetch<T>(
   };
   // Note: JWT token header is ignored because we are using HTTP cookies.
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    credentials: "include",
-    ...opts,
-    headers,
-  });
+  const controller = new AbortController();
+  const timerId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      credentials: "include",
+      ...opts,
+      headers,
+      signal: controller.signal,
+    });
+  } catch (err: any) {
+    if (err?.name === "AbortError") {
+      throw new Error("Request timed out. Is the server running?");
+    }
+    throw err;
+  } finally {
+    window.clearTimeout(timerId);
+  }
 
   if (res.status === 401) {
     // If we get 401, clear local user session

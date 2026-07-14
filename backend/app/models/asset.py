@@ -68,7 +68,7 @@ class Asset(Base):
     status: Mapped[AssetStatus] = mapped_column(
         Enum(AssetStatus, native_enum=False, length=50),
         nullable=False,
-        default=AssetStatus.ACTIVE,
+        default=AssetStatus.AVAILABLE,
     )
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True
