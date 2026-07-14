@@ -143,6 +143,11 @@ export interface Assignment {
   status: string;
   notes: string | null;
   acknowledged_at?: string | null;
+  return_requested_by?: string;
+  return_requested_at?: string;
+  return_approved_by?: string;
+  return_approved_at?: string;
+  return_rejection_reason?: string;
 }
 
 export interface AssignmentListResponse {
@@ -431,6 +436,11 @@ export interface Assignment {
   status: string;
   notes: string | null;
   acknowledged_at?: string | null;
+  return_requested_by?: string;
+  return_requested_at?: string;
+  return_approved_by?: string;
+  return_approved_at?: string;
+  return_rejection_reason?: string;
 }
 
 export interface AssignmentListResponse {

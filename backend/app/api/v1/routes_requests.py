@@ -57,7 +57,9 @@ class AssetRequestResponse(BaseModel):
     request_id: int
     asset_id: Optional[str] = None
     asset_type: Optional[str] = None
+    asset_name: Optional[str] = None
     requested_by: Optional[int] = None
+    requested_by_name: Optional[str] = None
     reviewed_by: Optional[int] = None
     assigned_to: Optional[int] = None
     status: str
@@ -68,6 +70,7 @@ class AssetRequestResponse(BaseModel):
     required_by_date: Optional[date] = None
     reviewed_at: Optional[datetime] = None
     assigned_at: Optional[datetime] = None
+    handed_over_at: Optional[datetime] = None
     pickup_confirmed_at: Optional[datetime] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -82,11 +85,28 @@ class AssetRequestListResponse(BaseModel):
 
 
 def _serialize_request(request: AssetRequest) -> AssetRequestResponse:
+    # Get requester name from relationship
+    requested_by_name = None
+    if request.requester:
+        if hasattr(request.requester, 'full_name') and request.requester.full_name:
+            requested_by_name = request.requester.full_name
+        elif hasattr(request.requester, 'first_name') and hasattr(request.requester, 'last_name'):
+            requested_by_name = f"{request.requester.first_name} {request.requester.last_name}".strip()
+        elif hasattr(request.requester, 'username'):
+            requested_by_name = request.requester.username
+    
+    # Get asset name from relationship
+    asset_name = None
+    if request.asset:
+        asset_name = request.asset.asset_name
+    
     return AssetRequestResponse(
         request_id=request.request_id,
         asset_id=request.asset_id,
         asset_type=request.asset_type.value if hasattr(request.asset_type, "value") else request.asset_type,
+        asset_name=asset_name,
         requested_by=request.requested_by,
+        requested_by_name=requested_by_name,
         reviewed_by=request.reviewed_by,
         assigned_to=request.assigned_to,
         status=request.status.value if hasattr(request.status, "value") else str(request.status),
@@ -97,6 +117,7 @@ def _serialize_request(request: AssetRequest) -> AssetRequestResponse:
         required_by_date=request.required_by_date,
         reviewed_at=request.reviewed_at,
         assigned_at=request.assigned_at,
+        handed_over_at=request.handed_over_at,
         pickup_confirmed_at=request.pickup_confirmed_at,
         created_at=request.created_at,
         updated_at=request.updated_at,
@@ -119,7 +140,8 @@ def _can_transition(current: RequestStatus, target: RequestStatus) -> bool:
     allowed = {
         RequestStatus.PENDING: {RequestStatus.APPROVED, RequestStatus.REJECTED, RequestStatus.CANCELLED},
         RequestStatus.APPROVED: {RequestStatus.ASSIGNED, RequestStatus.CANCELLED},
-        RequestStatus.ASSIGNED: {RequestStatus.PICKED_UP},
+        RequestStatus.ASSIGNED: {RequestStatus.READY_FOR_PICKUP},
+        RequestStatus.READY_FOR_PICKUP: {RequestStatus.PICKED_UP},
         RequestStatus.PICKED_UP: {RequestStatus.COMPLETED},
     }
     return target in allowed.get(current, set())
@@ -139,9 +161,15 @@ def create_request(
         if not asset:
             raise HTTPException(404, detail="Asset not found")
         if asset.status != AssetStatus.AVAILABLE:
-            raise HTTPException(400, detail=f"Only Available assets can be requested. Current: {asset.status.value}")
+            raise HTTPException(400, detail=f"Only Available assets can be requested. Current status: {asset.status.value}")
         if not getattr(asset, "is_active", True):
             raise HTTPException(400, detail="Asset is inactive")
+        if asset.condition.value == "Damaged":
+            raise HTTPException(400, detail="Cannot request a damaged asset")
+        if asset.status == AssetStatus.UNDER_MAINTENANCE:
+            raise HTTPException(400, detail="Cannot request an asset under maintenance")
+        if asset.current_custodian_id is not None:
+            raise HTTPException(400, detail="Asset is already assigned to a custodian")
         existing = (
             db.query(AssetRequest)
             .filter(
@@ -194,7 +222,11 @@ def list_requests(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = db.query(AssetRequest)
+    from sqlalchemy.orm import joinedload
+    query = db.query(AssetRequest).options(
+        joinedload(AssetRequest.requester),
+        joinedload(AssetRequest.asset)
+    )
     if status:
         try:
             query = query.filter(AssetRequest.status == RequestStatus(status))
@@ -222,7 +254,11 @@ def get_request(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    request = db.query(AssetRequest).filter(AssetRequest.request_id == request_id).first()
+    from sqlalchemy.orm import joinedload
+    request = db.query(AssetRequest).options(
+        joinedload(AssetRequest.requester),
+        joinedload(AssetRequest.asset)
+    ).filter(AssetRequest.request_id == request_id).first()
     if not request:
         raise HTTPException(404, detail="Request not found")
 
@@ -302,6 +338,15 @@ def reject_request(
     request.notes = body.notes
     request.reviewed_by = current_user.id
     request.reviewed_at = datetime.utcnow()
+    
+    # If asset was assigned, return it to AVAILABLE
+    if request.asset_id:
+        asset = db.query(Asset).filter(Asset.asset_id == request.asset_id).first()
+        if asset and asset.status in {AssetStatus.ASSIGNED, AssetStatus.PENDING_APPROVAL}:
+            validate_status_transition(asset.status, AssetStatus.AVAILABLE)
+            asset.status = AssetStatus.AVAILABLE
+            asset.current_custodian_id = None
+    
     _log(db, actor=current_user, action="REJECT_REQUEST", record_id=str(request.request_id), details="Rejected asset request")
     db.commit()
     db.refresh(request)
@@ -357,10 +402,114 @@ def assign_request(
             notes="Assigned from asset request",
         )
     )
-    validate_status_transition(asset.status, AssetStatus.ASSIGNED)
-    asset.status = AssetStatus.ASSIGNED
+    validate_status_transition(asset.status, AssetStatus.PENDING_APPROVAL)
+    asset.status = AssetStatus.PENDING_APPROVAL
     asset.current_custodian_id = str(custodian_id)
     _log(db, actor=current_user, action="ASSIGN_FROM_REQUEST", record_id=str(request.request_id), details="Assigned request to asset")
+    # Notify custodian of assignment
+    from app.services.notification_service import create_notification
+    create_notification(
+        db=db,
+        user_id=str(custodian_id),
+        title="Asset Assigned for Handover",
+        message=f"You have been assigned asset {asset.asset_name} ({asset.asset_id}) to hand over to the requester.",
+        notification_type="ASSET_ASSIGNED",
+        related_asset_id=asset.asset_id,
+    )
+    db.commit()
+    db.refresh(request)
+    return _serialize_request(request)
+
+
+@router.put("/{request_id}/custodian-cancel", response_model=AssetRequestResponse)
+def custodian_cancel_request(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Custodian cancels an assigned request - returns asset to AVAILABLE"""
+    request = db.query(AssetRequest).filter(AssetRequest.request_id == request_id).first()
+    if not request:
+        raise HTTPException(404, detail="Request not found")
+    if request.assigned_to != current_user.id:
+        raise HTTPException(403, detail="Only the assigned custodian can cancel this request")
+    if request.status != RequestStatus.ASSIGNED:
+        raise HTTPException(400, detail="Request must be in Assigned status for custodian cancellation")
+
+    request.status = RequestStatus.CANCELLED
+    
+    # Return asset to AVAILABLE and clear custodian
+    if request.asset_id:
+        asset = db.query(Asset).filter(Asset.asset_id == request.asset_id).first()
+        if asset and asset.status in {AssetStatus.ASSIGNED, AssetStatus.PENDING_APPROVAL}:
+            validate_status_transition(asset.status, AssetStatus.AVAILABLE)
+            asset.status = AssetStatus.AVAILABLE
+            asset.current_custodian_id = None
+            
+            # Close the active assignment
+            from app.models.assignment import Assignment, AssignmentStatus
+            existing_assignment = db.query(Assignment).filter(
+                Assignment.asset_id == asset.asset_id,
+                Assignment.status == AssignmentStatus.ACTIVE
+            ).first()
+            if existing_assignment:
+                existing_assignment.status = AssignmentStatus.RETURNED
+                existing_assignment.return_date = date.today()
+    
+    _log(db, actor=current_user, action="CUSTODIAN_CANCEL", record_id=str(request.request_id), details="Custodian cancelled assigned request")
+    # Notify requester that their request was cancelled by custodian
+    from app.services.notification_service import create_notification
+    asset_name = request.asset.asset_name if request.asset else request.asset_type
+    create_notification(
+        db=db,
+        user_id=str(request.requested_by),
+        title="Request Cancelled by Custodian",
+        message=f"Your asset request for {asset_name} has been cancelled by the custodian.",
+        notification_type="REQUEST_CANCELLED",
+        related_asset_id=request.asset_id,
+    )
+    db.commit()
+    db.refresh(request)
+    return _serialize_request(request)
+
+
+@router.put("/{request_id}/handover", response_model=AssetRequestResponse)
+def handover_request(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Custodian hands over asset to requester - changes status to READY_FOR_PICKUP and asset status to PENDING_PICKUP"""
+    request = db.query(AssetRequest).filter(AssetRequest.request_id == request_id).first()
+    if not request:
+        raise HTTPException(404, detail="Request not found")
+    if request.assigned_to != current_user.id:
+        raise HTTPException(403, detail="Only the assigned custodian can hand over the asset")
+    if request.status != RequestStatus.ASSIGNED:
+        raise HTTPException(400, detail="Request must be in Assigned status for handover")
+
+    request.status = RequestStatus.READY_FOR_PICKUP
+    request.handed_over_at = datetime.utcnow()
+    
+    # Update asset status from PENDING_APPROVAL to PENDING_PICKUP to show it's awaiting pickup
+    if request.asset_id:
+        asset = db.query(Asset).filter(Asset.asset_id == request.asset_id).first()
+        if asset:
+            validate_status_transition(asset.status, AssetStatus.PENDING_PICKUP)
+            asset.status = AssetStatus.PENDING_PICKUP
+    
+    _log(db, actor=current_user, action="HANDOVER_ASSET", record_id=str(request.request_id), details="Asset handed over to requester")
+    # Notify requester that asset is ready for pickup
+    from app.services.notification_service import create_notification
+    asset_name = request.asset.asset_name if request.asset else request.asset_type
+    create_notification(
+        db=db,
+        user_id=str(request.requested_by),
+        title="Asset Ready for Pickup",
+        message=f"Your requested asset {asset_name} is ready for pickup. Please confirm receipt.",
+        notification_type="ASSET_READY_PICKUP",
+        related_asset_id=request.asset_id,
+    )
     db.commit()
     db.refresh(request)
     return _serialize_request(request)
@@ -377,11 +526,40 @@ def pickup_request(
         raise HTTPException(404, detail="Request not found")
     if request.requested_by != current_user.id:
         raise HTTPException(403, detail="Not authorized")
-    if request.status != RequestStatus.ASSIGNED:
+    if request.status != RequestStatus.READY_FOR_PICKUP:
         raise HTTPException(400, detail="Invalid status transition")
 
     request.status = RequestStatus.PICKED_UP
     request.pickup_confirmed_at = datetime.utcnow()
+    
+    # Update asset status to ASSIGNED and change custodian to requester
+    if request.asset_id:
+        asset = db.query(Asset).filter(Asset.asset_id == request.asset_id).first()
+        if asset:
+            validate_status_transition(asset.status, AssetStatus.ASSIGNED)
+            asset.status = AssetStatus.ASSIGNED
+            asset.current_custodian_id = str(request.requested_by)
+            
+            # Update assignment record
+            from app.models.assignment import Assignment, AssignmentStatus
+            existing_assignment = db.query(Assignment).filter(
+                Assignment.asset_id == asset.asset_id,
+                Assignment.status == AssignmentStatus.ACTIVE
+            ).first()
+            if existing_assignment:
+                existing_assignment.status = AssignmentStatus.RETURNED
+                existing_assignment.return_date = date.today()
+            
+            # Create new assignment to requester
+            db.add(Assignment(
+                asset_id=asset.asset_id,
+                assigned_to=str(request.requested_by),
+                assigned_by=str(request.assigned_to),  # Custodian who handed over
+                assignment_date=date.today(),
+                status=AssignmentStatus.ACTIVE,
+                notes="Asset handed over from request",
+            ))
+    
     _log(db, actor=current_user, action="PICKUP_CONFIRMED", record_id=str(request.request_id), details="Pickup confirmed")
     db.commit()
     db.refresh(request)
@@ -430,6 +608,15 @@ def cancel_request(
         raise HTTPException(403, detail="Not authorized")
 
     request.status = RequestStatus.CANCELLED
+    
+    # If asset was assigned, return it to AVAILABLE
+    if request.asset_id:
+        asset = db.query(Asset).filter(Asset.asset_id == request.asset_id).first()
+        if asset and asset.status in {AssetStatus.ASSIGNED, AssetStatus.PENDING_APPROVAL}:
+            validate_status_transition(asset.status, AssetStatus.AVAILABLE)
+            asset.status = AssetStatus.AVAILABLE
+            asset.current_custodian_id = None
+    
     _log(db, actor=current_user, action="CANCEL_REQUEST", record_id=str(request.request_id), details="Cancelled asset request")
     db.commit()
     db.refresh(request)

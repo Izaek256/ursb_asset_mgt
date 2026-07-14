@@ -1,4 +1,5 @@
-import React from "react";
+import React, { Fragment } from "react";
+import { Tab } from "@headlessui/react";
 import { apiFetch, useAuth } from "../AuthContext";
 import { Assignment, UserRow } from "../types";
 import { ICONS } from "../utils/icons";
@@ -24,6 +25,7 @@ interface AssetOption {
 export default function Assignments() {
   const { user } = useAuth();
   const [assignments, setAssignments] = React.useState<Assignment[]>([]);
+  const [historyAssignments, setHistoryAssignments] = React.useState<Assignment[]>([]);
   const [assets, setAssets] = React.useState<AssetOption[]>([]);
   const [users, setUsers] = React.useState<UserRow[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -47,8 +49,8 @@ export default function Assignments() {
   });
 
   // Action confirmations
-  const [returnConfirm, setReturnConfirm] = React.useState<Assignment | null>(null);
   const [dirtyConfirm, setDirtyConfirm] = React.useState<{ open: boolean; onConfirm: () => void } | null>(null);
+  const [rejectReturnConfirm, setRejectReturnConfirm] = React.useState<{ open: boolean; assignment: Assignment | null; reason: string }>({ open: false, assignment: null, reason: "" });
 
   const isAdminOrManager = user?.role === "System Administrator" || user?.role === "Asset Manager";
   const isCustodian = user?.role === "Asset Custodian";
@@ -58,9 +60,19 @@ export default function Assignments() {
     setIsLoading(true);
     setError(null);
     try {
-      const endpoint = isEmployee ? `/assignments?user_id=${user?.user_id}` : "/assignments";
+      // Filter to show only final handovers to requesters (not internal custodian assignments)
+      // For employees, fetch their assignments without the final_handover filter
+      const endpoint = isEmployee 
+        ? `/assignments?user_id=${user?.user_id}` 
+        : `/assignments?assignment_type=final_handover`;
       const data = await apiFetch<{ assignments: Assignment[]; total: number }>(endpoint, {});
       setAssignments(data.assignments);
+      
+      // Fetch history assignments (returned assets) - always filter by current user
+      // History tab should only show the user's own previously owned assets
+      const historyEndpoint = `/assignments?user_id=${user?.user_id}&status=Returned`;
+      const historyData = await apiFetch<{ assignments: Assignment[]; total: number }>(historyEndpoint, {});
+      setHistoryAssignments(historyData.assignments);
     } catch (err: any) {
       setError(err.message || "Failed to load assignments.");
     } finally {
@@ -208,20 +220,107 @@ export default function Assignments() {
     }
   };
 
-  const handleReturnConfirm = async () => {
-  if (!returnConfirm) return;
-  setError(null);
-  try {
-    await apiFetch(`/assignments/${returnConfirm.assignment_id}/return`, {
-      method: "POST",
-    });
-    setSuccess(`Asset "${returnConfirm.asset_name}" return initiated successfully.`);
-    setReturnConfirm(null);
-    fetchAssignments();
-  } catch (err: any) {
-    setError(err.message || "Failed to initiate return.");
-  }
-};
+  const handleRequestReturn = async (id: number) => {
+    setError(null);
+    setSuccess(null);
+    try {
+      await apiFetch(`/assignments/${id}/request-return`, { method: "POST" });
+      setSuccess("Asset return requested successfully.");
+      fetchAssignments();
+    } catch (err: any) {
+      setError(err.message || "Failed to request return.");
+    }
+  };
+
+  const handleApproveReturn = async (id: number) => {
+    setError(null);
+    setSuccess(null);
+    try {
+      await apiFetch(`/assignments/${id}/approve-return`, { method: "POST" });
+      setSuccess("Return approved successfully.");
+      fetchAssignments();
+    } catch (err: any) {
+      setError(err.message || "Failed to approve return.");
+    }
+  };
+
+  const handleRejectReturn = async (id: number) => {
+    setRejectReturnConfirm({ open: true, assignment: assignments.find(a => a.assignment_id === id) || null, reason: "" });
+  };
+
+  const confirmRejectReturn = async () => {
+    if (!rejectReturnConfirm.assignment) return;
+    if (!rejectReturnConfirm.reason.trim()) {
+      setError("Please provide a reason for rejecting the return request.");
+      return;
+    }
+    
+    setError(null);
+    setSuccess(null);
+    try {
+      await apiFetch(`/assignments/${rejectReturnConfirm.assignment.assignment_id}/reject-return`, {
+        method: "POST",
+        body: JSON.stringify({ reason: rejectReturnConfirm.reason }),
+      });
+      setSuccess("Return rejected successfully.");
+      setRejectReturnConfirm({ open: false, assignment: null, reason: "" });
+      fetchAssignments();
+    } catch (err: any) {
+      setError(err.message || "Failed to reject return.");
+    }
+  };
+
+  const handleConfirmAssetReturn = async (id: number) => {
+    setError(null);
+    setSuccess(null);
+    try {
+      await apiFetch(`/assignments/${id}/confirm-return`, { method: "POST" });
+      setSuccess("Asset return confirmed successfully. Asset is now available.");
+      fetchAssignments();
+    } catch (err: any) {
+      setError(err.message || "Failed to confirm return.");
+    }
+  };
+
+  const historyColumns: Column<Assignment>[] = [
+    {
+      header: "Asset",
+      render: (a) => (
+        <div>
+          <div className="font-bold text-ink text-sm">{a.asset_name}</div>
+          <div className="text-[11px] text-ink-dim mt-0.5">{a.asset_id}</div>
+        </div>
+      ),
+    },
+    {
+      header: "Assigned To",
+      render: (a) => <span className="font-semibold">{a.assigned_to_name}</span>,
+    },
+    {
+      header: "Assigned By",
+      render: (a) => a.assigned_by_name || "—",
+    },
+    {
+      header: "Assignment Date",
+      render: (a) => {
+        const d = a.assignment_date || a.assigned_date;
+        return d ? new Date(d).toLocaleDateString() : "—";
+      },
+    },
+    {
+      header: "Return Date",
+      render: (a) =>
+        a.return_date ? new Date(a.return_date).toLocaleDateString() : "—",
+    },
+    {
+      header: "Status",
+      render: (a) => <StatusBadge status={a.status} />,
+    },
+    {
+      header: "Rejection Reason",
+      render: (a) => a.return_rejection_reason || "—",
+    },
+  ];
 
   const columns: Column<Assignment>[] = [
     {
@@ -277,25 +376,24 @@ export default function Assignments() {
               Confirm Handover
             </Button>
           )}
-          {isAdminOrManager && a.status === "Active" && (
-            <Button variant="outline" className="!py-1.5 !px-3 text-xs" onClick={() => setReturnConfirm(a)}>
-              Return Asset
+          {isCustodian && a.status === "Active" && (
+            <Button variant="danger-inverse" className="!py-1.5 !px-3 text-xs" onClick={() => handleRequestReturn(a.assignment_id)}>
+              Request Asset Return
             </Button>
           )}
-          {/*
-            Employee Return Asset button — renders only when ALL of:
-            1. Current user is an Employee (not admin or manager)
-            2. Current user is the assigned_to user on this assignment
-            3. Assignment status is Active
-          */}
-          {user?.role === "Employee" &&
-            String(a.assigned_to) === String(user?.user_id) &&
-            a.status === "Active" && (
-            <Button
-              variant="outline"
-              onClick={() => setReturnConfirm(a)}
-            >
-              Return Asset
+          {isEmployee && a.status === "Return Requested" && String(a.assigned_to) === String(user?.user_id) && (
+            <>
+              <Button variant="success" className="!py-1.5 !px-3 text-xs" onClick={() => handleApproveReturn(a.assignment_id)}>
+                Approve
+              </Button>
+              <Button variant="danger-outline" className="!py-1.5 !px-3 text-xs" onClick={() => handleRejectReturn(a.assignment_id)}>
+                Reject
+              </Button>
+            </>
+          )}
+          {isCustodian && a.status === "Return Approved" && (
+            <Button variant="primary" className="!py-1.5 !px-3 text-xs" onClick={() => handleConfirmAssetReturn(a.assignment_id)}>
+              Confirm Return
             </Button>
           )}
         </div>
@@ -331,24 +429,70 @@ export default function Assignments() {
         }
       />
 
-      {isLoading ? (
-        <div className="flex justify-center py-16">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ursb" />
-        </div>
-      ) : assignments.length === 0 ? (
-        <EmptyState
-          title="No assignments found"
-          description="There are no custody assignments recorded."
-          icon={<ICONS.assignments className="w-6 h-6 text-ink-icon stroke-[2.2]" />}
-        />
-      ) : (
-        <Table
-          data={assignments}
-          columns={columns}
-          rowKey={(a) => a.assignment_id}
-          emptyMessage="No assignments found."
-        />
-      )}
+      {/* Tab Navigation */}
+      <Tab.Group>
+        <Tab.List className="flex flex-wrap gap-1.5 p-1.5 bg-white border border-sky-cardBorder rounded-xl w-fit">
+          {["Active Assignments", "History"].map((tab) => (
+            <Tab key={tab} as={Fragment}>
+              {({ selected, ...tabProps }) => (
+                <Button
+                  {...tabProps}
+                  type="button"
+                  variant={selected ? "primary" : "ghost"}
+                  className={selected ? "outline-none" : "shadow-none border-transparent bg-transparent !text-[#6a94d4] hover:bg-[#f9f8f6] outline-none"}
+                  style={{ outline: "none", boxShadow: "none", WebkitTapHighlightColor: "transparent" }}
+                >
+                  {tab}
+                </Button>
+              )}
+            </Tab>
+          ))}
+        </Tab.List>
+
+        <Tab.Panels className="mt-2">
+          <Tab.Panel>
+            {isLoading ? (
+              <div className="flex justify-center py-16">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ursb" />
+              </div>
+            ) : assignments.length === 0 ? (
+              <EmptyState
+                title="No active assignments found"
+                description="There are no active custody assignments recorded."
+                icon={<ICONS.assignments className="w-6 h-6 text-ink-icon stroke-[2.2]" />}
+              />
+            ) : (
+              <Table
+                data={assignments}
+                columns={columns}
+                rowKey={(a) => a.assignment_id}
+                emptyMessage="No assignments found."
+              />
+            )}
+          </Tab.Panel>
+
+          <Tab.Panel>
+            {isLoading ? (
+              <div className="flex justify-center py-16">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ursb" />
+              </div>
+            ) : historyAssignments.length === 0 ? (
+              <EmptyState
+                title="No history found"
+                description="There are no returned assignments in the history."
+                icon={<ICONS.assignments className="w-6 h-6 text-ink-icon stroke-[2.2]" />}
+              />
+            ) : (
+              <Table
+                data={historyAssignments}
+                columns={historyColumns}
+                rowKey={(a) => a.assignment_id}
+                emptyMessage="No history found."
+              />
+            )}
+          </Tab.Panel>
+        </Tab.Panels>
+      </Tab.Group>
 
       {/* Assign Asset Modal */}
       <Modal open={showAssignModal} onClose={handleCloseModal} title="Assign Asset">
@@ -426,14 +570,42 @@ export default function Assignments() {
         }}
       />
 
-      {/* Return Asset Confirm Dialog */}
-      <ConfirmDialog 
-        open={!!returnConfirm}
-        title="Confirm Asset Return"
-        message={`Are you sure you want to mark the assignment for "${returnConfirm?.asset_name}" as returned? This will release custody of the asset.`}
-        onCancel={() => setReturnConfirm(null)}
-        onConfirm={handleReturnConfirm}
-      />
+      {/* Reject Return Reason Modal */}
+      <Modal 
+        open={rejectReturnConfirm.open} 
+        onClose={() => setRejectReturnConfirm({ open: false, assignment: null, reason: "" })}
+        title="Reject Return Request"
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-ink-dim">
+            Please provide a reason for rejecting the return request for asset "{rejectReturnConfirm.assignment?.asset_name}". This reason will be visible to the custodian and asset manager.
+          </p>
+          <FormInput
+            type="textarea"
+            variant="light"
+            label="Rejection Reason *"
+            value={rejectReturnConfirm.reason}
+            onChange={(val) => setRejectReturnConfirm(prev => ({ ...prev, reason: val }))}
+            placeholder="Explain why you cannot return this asset at this time..."
+            required
+          />
+          <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
+            <Button 
+              variant="danger-outline" 
+              onClick={() => setRejectReturnConfirm({ open: false, assignment: null, reason: "" })}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger-inverse"
+              onClick={confirmRejectReturn}
+              disabled={!rejectReturnConfirm.reason.trim()}
+            >
+              Reject Return
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -1,4 +1,5 @@
-import React from "react";
+import React, { Fragment } from "react";
+import { Tab } from "@headlessui/react";
 import { apiFetch, useAuth } from "../AuthContext";
 import { AssetRequest, UserRow } from "../types";
 import { ICONS } from "../utils/icons";
@@ -25,6 +26,7 @@ interface AssetOption {
 export default function Requests() {
   const { user } = useAuth();
   const [requests, setRequests] = React.useState<AssetRequest[]>([]);
+  const [historyRequests, setHistoryRequests] = React.useState<AssetRequest[]>([]);
   const [assets, setAssets] = React.useState<AssetOption[]>([]);
   const [users, setUsers] = React.useState<UserRow[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -40,6 +42,8 @@ export default function Requests() {
   const [showApproveModal, setShowApproveModal] = React.useState(false);
   const [showRejectModal, setShowRejectModal] = React.useState(false);
   const [showAssignModal, setShowAssignModal] = React.useState(false);
+  const [showHandoverConfirm, setShowHandoverConfirm] = React.useState<AssetRequest | null>(null);
+  const [showCustodianCancelConfirm, setShowCustodianCancelConfirm] = React.useState<AssetRequest | null>(null);
   const [selectedRequest, setSelectedRequest] = React.useState<AssetRequest | null>(null);
 
   // Form states
@@ -78,7 +82,12 @@ export default function Requests() {
     setError(null);
     try {
       const data = await apiFetch<{ requests: AssetRequest[]; total: number }>("/requests", {});
-      setRequests(data.requests);
+      // Filter for pending requests in main tab
+      setRequests(data.requests.filter(r => r.status === "Pending"));
+      // History tab shows confirmed/completed requests
+      setHistoryRequests(data.requests.filter(r => 
+        ["Approved", "Assigned", "ReadyForPickup", "PickedUp", "Completed", "Rejected", "Cancelled"].includes(r.status)
+      ));
     } catch (err: any) {
       setError(err.message || "Failed to load requests.");
     } finally {
@@ -88,7 +97,7 @@ export default function Requests() {
 
   const fetchAssetsAndUsers = React.useCallback(async () => {
     try {
-      const assetsData = await apiFetch<AssetOption[]>("/assets", {});
+      const assetsData = await apiFetch<AssetOption[]>("/assets?for_request=true", {});
       setAssets(assetsData);
       
       if (isAdminOrManager) {
@@ -317,6 +326,40 @@ export default function Requests() {
     }
   };
 
+  const handleHandOverClick = (req: AssetRequest) => {
+    setShowHandoverConfirm(req);
+  };
+
+  const handleHandOverConfirm = async () => {
+    if (!showHandoverConfirm) return;
+    setError(null);
+    try {
+      await apiFetch(`/requests/${showHandoverConfirm.request_id}/handover`, { method: "PUT" });
+      setSuccess(`Asset handed over for request #${showHandoverConfirm.request_id}. Requester has been notified.`);
+      setShowHandoverConfirm(null);
+      fetchRequests();
+    } catch (err: any) {
+      setError(err.message || "Failed to hand over asset.");
+    }
+  };
+
+  const handleCustodianCancelClick = (req: AssetRequest) => {
+    setShowCustodianCancelConfirm(req);
+  };
+
+  const handleCustodianCancelConfirm = async () => {
+    if (!showCustodianCancelConfirm) return;
+    setError(null);
+    try {
+      await apiFetch(`/requests/${showCustodianCancelConfirm.request_id}/custodian-cancel`, { method: "PUT" });
+      setSuccess(`Request #${showCustodianCancelConfirm.request_id} cancelled. Asset returned to available.`);
+      setShowCustodianCancelConfirm(null);
+      fetchRequests();
+    } catch (err: any) {
+      setError(err.message || "Failed to cancel request.");
+    }
+  };
+
   const handleCompleteConfirm = async () => {
     if (!completeConfirm) return;
     setError(null);
@@ -330,8 +373,8 @@ export default function Requests() {
     }
   };
 
-  // Client-side filtering
-  const filteredRequests = requests.filter(r => {
+  // Client-side filtering for history tab
+  const filteredHistoryRequests = historyRequests.filter(r => {
     const matchesStatus = statusFilter === "All" || r.status === statusFilter;
     const matchesRequestedBy = !requestedBySearch.trim() || 
       (r.requested_by_name && r.requested_by_name.toLowerCase().includes(requestedBySearch.toLowerCase()));
@@ -343,8 +386,14 @@ export default function Requests() {
       {user?.role === "Employee" && r.status === "Pending" && (
         <Button variant="danger-outline" onClick={() => handleCancelClick(r)}>Cancel</Button>
       )}
-      {user?.role === "Employee" && r.status === "Assigned" && (
+      {user?.role === "Employee" && r.status === "ReadyForPickup" && (
         <Button variant="outline" onClick={() => handlePickupClick(r)}>Confirm Pickup</Button>
+      )}
+      {user?.role === "Asset Custodian" && r.assigned_to === parseInt(user.user_id) && r.status === "Assigned" && (
+        <>
+          <Button onClick={() => handleHandOverClick(r)}>Hand Over</Button>
+          <Button variant="danger-outline" onClick={() => handleCustodianCancelClick(r)}>Cancel</Button>
+        </>
       )}
       {isAdminOrManager && r.status === "Pending" && (
         <>
@@ -380,7 +429,12 @@ export default function Requests() {
     },
     {
       header: "Requested By",
-      render: (r) => <span className="font-semibold">{r.requested_by_name || `User ID: ${r.requested_by}`}</span>,
+      render: (r) => (
+        <div>
+          <div className="font-semibold">{r.requested_by_name || "Unknown"}</div>
+          <div className="text-[11px] text-ink-dim mt-0.5">ID: {r.requested_by}</div>
+        </div>
+      ),
     },
     {
       header: "Priority",
@@ -388,7 +442,16 @@ export default function Requests() {
     },
     {
       header: "Status",
-      render: (r) => <StatusBadge status={r.status} />,
+      render: (r) => (
+        <div className="flex items-center gap-2">
+          <StatusBadge status={r.status} />
+          {r.status === "Completed" && (
+            <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
+              Returned
+            </span>
+          )}
+        </div>
+      ),
     },
     {
       header: "Required By",
@@ -431,10 +494,12 @@ export default function Requests() {
       label: `${a.asset_name} (${a.asset_id}) - SN: ${a.serial_number}`,
     }));
 
-  const custodianOptions = users.filter(u => u.isActive).map(u => ({
-    value: String(u.id),
-    label: `${u.name} (${u.role})`,
-  }));
+  const custodianOptions = users
+    .filter(u => u.isActive && u.role === "Asset Custodian")
+    .map(u => ({
+      value: String(u.id),
+      label: `${u.name} (${u.role})`,
+    }));
 
   return (
     <div className="w-full flex flex-col gap-6 select-none font-sans">
@@ -456,59 +521,105 @@ export default function Requests() {
         }
       />
 
-      {isAdminOrManager && (
-        <FilterBar
-          count={{ value: filteredRequests.length, label: "requests" }}
-          onClear={handleClearFilters}
-        >
-          <FilterField label="Status" htmlFor="status-filter">
-            <select
-              id="status-filter"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className={filterSelectCls}
-            >
-              <option value="All">All Statuses</option>
-              <option value="Pending">Pending</option>
-              <option value="Approved">Approved</option>
-              <option value="Rejected">Rejected</option>
-              <option value="Assigned">Assigned</option>
-              <option value="PickedUp">Picked Up</option>
-              <option value="Completed">Completed</option>
-              <option value="Cancelled">Cancelled</option>
-            </select>
-          </FilterField>
-          <FilterField label="Requested By" htmlFor="requested-by-filter">
-            <input
-              id="requested-by-filter"
-              type="text"
-              className={filterInputCls}
-              placeholder="Search by requester..."
-              value={requestedBySearch}
-              onChange={(e) => setRequestedBySearch(e.target.value)}
-            />
-          </FilterField>
-        </FilterBar>
-      )}
+      {/* Tab Navigation */}
+      <Tab.Group>
+        <Tab.List className="flex flex-wrap gap-1.5 p-1.5 bg-white border border-sky-cardBorder rounded-xl w-fit">
+          {["Pending Requests", "History"].map((tab) => (
+            <Tab key={tab} as={Fragment}>
+              {({ selected, ...tabProps }) => (
+                <Button
+                  {...tabProps}
+                  type="button"
+                  variant={selected ? "primary" : "ghost"}
+                  className={selected ? "outline-none" : "shadow-none border-transparent bg-transparent !text-[#6a94d4] hover:bg-[#f9f8f6] outline-none"}
+                  style={{ outline: "none", boxShadow: "none", WebkitTapHighlightColor: "transparent" }}
+                >
+                  {tab}
+                </Button>
+              )}
+            </Tab>
+          ))}
+        </Tab.List>
 
-      {isLoading ? (
-        <div className="flex justify-center py-16">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ursb" />
-        </div>
-      ) : filteredRequests.length === 0 ? (
-        <EmptyState
-          title="No requests found"
-          description="There are no requests matching your criteria."
-          icon={<ICONS.requests className="w-6 h-6 text-ink-icon stroke-[2.2]" />}
-        />
-      ) : (
-        <Table
-          data={filteredRequests}
-          columns={columns}
-          rowKey={(r) => r.request_id}
-          emptyMessage="No requests found."
-        />
-      )}
+        <Tab.Panels className="mt-2">
+          <Tab.Panel>
+            {isLoading ? (
+              <div className="flex justify-center py-16">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ursb" />
+              </div>
+            ) : requests.length === 0 ? (
+              <EmptyState
+                title="No pending requests found"
+                description="There are no pending requests at this time."
+                icon={<ICONS.requests className="w-6 h-6 text-ink-icon stroke-[2.2]" />}
+              />
+            ) : (
+              <Table
+                data={requests}
+                columns={columns}
+                rowKey={(r) => r.request_id}
+                emptyMessage="No requests found."
+              />
+            )}
+          </Tab.Panel>
+
+          <Tab.Panel>
+            {isAdminOrManager && (
+              <FilterBar
+                count={{ value: filteredHistoryRequests.length, label: "requests" }}
+                onClear={handleClearFilters}
+              >
+                <FilterField label="Status" htmlFor="status-filter">
+                  <select
+                    id="status-filter"
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className={filterSelectCls}
+                  >
+                    <option value="All">All Statuses</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Rejected">Rejected</option>
+                    <option value="Assigned">Assigned</option>
+                    <option value="ReadyForPickup">Ready for Pickup</option>
+                    <option value="PickedUp">Picked Up</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                </FilterField>
+                <FilterField label="Requested By" htmlFor="requested-by-filter">
+                  <input
+                    id="requested-by-filter"
+                    type="text"
+                    className={filterInputCls}
+                    placeholder="Search by requester..."
+                    value={requestedBySearch}
+                    onChange={(e) => setRequestedBySearch(e.target.value)}
+                  />
+                </FilterField>
+              </FilterBar>
+            )}
+
+            {isLoading ? (
+              <div className="flex justify-center py-16">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ursb" />
+              </div>
+            ) : filteredHistoryRequests.length === 0 ? (
+              <EmptyState
+                title="No history found"
+                description="There are no confirmed or completed requests in the history."
+                icon={<ICONS.requests className="w-6 h-6 text-ink-icon stroke-[2.2]" />}
+              />
+            ) : (
+              <Table
+                data={filteredHistoryRequests}
+                columns={columns}
+                rowKey={(r) => r.request_id}
+                emptyMessage="No history found."
+              />
+            )}
+          </Tab.Panel>
+        </Tab.Panels>
+      </Tab.Group>
 
       {/* Submit Request Modal */}
       <Modal open={showSubmitModal} onClose={handleCloseSubmitModal} title="Submit Asset Request">
@@ -520,6 +631,7 @@ export default function Requests() {
             value={submitForm.asset_id}
             onChange={(val) => setSubmitForm({ ...submitForm, asset_id: val })}
             options={[{ value: "", label: "Select an asset (optional)..." }, ...assetOptions]}
+            searchable
           />
 
           <FormInput
@@ -590,6 +702,7 @@ export default function Requests() {
               onChange={(val) => setApproveForm({ assigned_asset_id: val })}
               options={[{ value: "", label: "Select an asset to fulfill this request..." }, ...approveAssetOptions]}
               required
+              searchable
             />
           )}
 
@@ -672,6 +785,58 @@ export default function Requests() {
           </div>
         </form>
       </Modal>
+
+      {/* Hand Over Confirmation Modal */}
+      {showHandoverConfirm && (
+        <Modal
+          open={!!showHandoverConfirm}
+          onClose={() => setShowHandoverConfirm(null)}
+          title="Confirm Hand Over"
+        >
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-ink">
+              Are you sure you want to hand over the asset <strong>{showHandoverConfirm.asset_name || showHandoverConfirm.asset_type}</strong> to the requester?
+            </p>
+            <p className="text-xs text-ink-dim">
+              This will change the asset status to "Pending Pickup" and notify the requester that the asset is ready for collection.
+            </p>
+            <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
+              <Button variant="danger-outline" onClick={() => setShowHandoverConfirm(null)}>
+                Cancel
+              </Button>
+              <Button onClick={handleHandOverConfirm}>
+                Confirm Hand Over
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Custodian Cancel Confirmation Modal */}
+      {showCustodianCancelConfirm && (
+        <Modal
+          open={!!showCustodianCancelConfirm}
+          onClose={() => setShowCustodianCancelConfirm(null)}
+          title="Cancel Request"
+        >
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-ink">
+              Are you sure you want to cancel this request for <strong>{showCustodianCancelConfirm.asset_name || showCustodianCancelConfirm.asset_type}</strong>?
+            </p>
+            <p className="text-xs text-ink-dim">
+              This will return the asset to "Available" status and notify the requester that their request has been cancelled.
+            </p>
+            <div className="flex justify-end gap-2.5 border-t border-sky-page/20 pt-4 mt-2">
+              <Button variant="outline" onClick={() => setShowCustodianCancelConfirm(null)}>
+                No, Keep Request
+              </Button>
+              <Button variant="danger-outline" onClick={handleCustodianCancelConfirm}>
+                Yes, Cancel Request
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Dirty Form Close Dialog */}
       <ConfirmDialog 

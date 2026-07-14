@@ -340,7 +340,7 @@ def get_user_assignments(db: Session, user_id: int) -> List[Assignment]:
         None.
 
     Business rules:
-        Only returns assignments with status Active.
+        Returns assignments with status Active or Return Requested.
         Used by employee My Assets view.
 
     Audit log:
@@ -350,8 +350,265 @@ def get_user_assignments(db: Session, user_id: int) -> List[Assignment]:
         db.query(Assignment)
         .filter(
             Assignment.assigned_to == str(user_id),
-            Assignment.status == AssignmentStatus.ACTIVE,
+            Assignment.status.in_([AssignmentStatus.ACTIVE, AssignmentStatus.RETURN_REQUESTED]),
         )
         .order_by(Assignment.assignment_date.desc())
         .all()
     )
+
+
+def request_asset_return(db: Session, assignment_id: int, custodian_id: int) -> Assignment:
+    """
+    Custodian requests return of an asset from the employee.
+
+    Parameters:
+        db (Session): Database session.
+        assignment_id (int): ID of the assignment to request return for.
+        custodian_id (int): ID of the custodian requesting the return.
+
+    Business Rules Enforced:
+        - 404 error if the assignment is not found.
+        - 422 error if the assignment status is not 'Active'.
+        - Only custodians can request returns.
+
+    What's Written to the Audit Log:
+        - Creates an AuditLog entry with action='RETURN_REQUESTED', table_affected='assignments',
+          record_id=str(assignment_id), and details indicating the return request.
+
+    Status Transition Triggered:
+        - Assignment status is updated to 'Return Requested'.
+        - Sets return_requested_by and return_requested_at fields.
+
+    Returns:
+        Assignment: The updated assignment object.
+    """
+    assignment = db.query(Assignment).filter(Assignment.assignment_id == assignment_id).first()
+    if not assignment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Assignment not found"
+        )
+
+    if assignment.status != AssignmentStatus.ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Only assignments in 'Active' status can have return requested. Current: {assignment.status}"
+        )
+
+    assignment.status = AssignmentStatus.RETURN_REQUESTED
+    assignment.return_requested_by = str(custodian_id)
+    assignment.return_requested_at = datetime.utcnow()
+
+    audit = AuditLog(
+        user_id=str(custodian_id),
+        action="RETURN_REQUESTED",
+        table_affected="assignments",
+        record_id=str(assignment_id),
+        details=f"Return requested for assignment {assignment_id} by custodian {custodian_id}."
+    )
+    db.add(audit)
+    db.commit()
+    db.refresh(assignment)
+    return assignment
+
+
+def approve_return_request(db: Session, assignment_id: int, employee_id: int) -> Assignment:
+    """
+    Employee approves the return request, indicating they are ready to return the asset.
+
+    Parameters:
+        db (Session): Database session.
+        assignment_id (int): ID of the assignment to approve return for.
+        employee_id (int): ID of the employee approving the return.
+
+    Business Rules Enforced:
+        - 404 error if the assignment is not found.
+        - 403 error if the assignment is not assigned to the current user.
+        - 422 error if the assignment status is not 'Return Requested'.
+
+    What's Written to the Audit Log:
+        - Creates an AuditLog entry with action='RETURN_APPROVED', table_affected='assignments',
+          record_id=str(assignment_id), and details indicating approval.
+
+    Status Transition Triggered:
+        - Assignment status is updated to 'Return Approved'.
+        - Sets return_approved_by and return_approved_at fields.
+
+    Returns:
+        Assignment: The updated assignment object.
+    """
+    assignment = db.query(Assignment).filter(Assignment.assignment_id == assignment_id).first()
+    if not assignment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Assignment not found"
+        )
+
+    if assignment.assigned_to != str(employee_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to approve this return request."
+        )
+
+    if assignment.status != AssignmentStatus.RETURN_REQUESTED:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Only assignments in 'Return Requested' status can be approved. Current: {assignment.status}"
+        )
+
+    assignment.status = AssignmentStatus.RETURN_APPROVED
+    assignment.return_approved_by = str(employee_id)
+    assignment.return_approved_at = datetime.utcnow()
+
+    audit = AuditLog(
+        user_id=str(employee_id),
+        action="RETURN_APPROVED",
+        table_affected="assignments",
+        record_id=str(assignment_id),
+        details=f"Return approved for assignment {assignment_id} by employee {employee_id}."
+    )
+    db.add(audit)
+    db.commit()
+    db.refresh(assignment)
+    return assignment
+
+
+def reject_return_request(db: Session, assignment_id: int, employee_id: int, rejection_reason: str = None) -> Assignment:
+    """
+    Employee rejects the return request.
+
+    Parameters:
+        db (Session): Database session.
+        assignment_id (int): ID of the assignment to reject return for.
+        employee_id (int): ID of the employee rejecting the return.
+        rejection_reason (str): Optional reason for rejection.
+
+    Business Rules Enforced:
+        - 404 error if the assignment is not found.
+        - 403 error if the assignment is not assigned to the current user.
+        - 422 error if the assignment status is not 'Return Requested'.
+
+    What's Written to the Audit Log:
+        - Creates an AuditLog entry with action='RETURN_REJECTED', table_affected='assignments',
+          record_id=str(assignment_id), and details indicating rejection.
+
+    Status Transition Triggered:
+        - Assignment status is updated to 'Return Rejected'.
+        - Clears return workflow fields.
+        - Stores rejection reason if provided.
+
+    Returns:
+        Assignment: The updated assignment object.
+    """
+    assignment = db.query(Assignment).filter(Assignment.assignment_id == assignment_id).first()
+    if not assignment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Assignment not found"
+        )
+
+    if assignment.assigned_to != str(employee_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to reject this return request."
+        )
+
+    if assignment.status != AssignmentStatus.RETURN_REQUESTED:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Only assignments in 'Return Requested' status can be rejected. Current: {assignment.status}"
+        )
+
+    assignment.status = AssignmentStatus.RETURN_REJECTED
+    assignment.return_requested_by = None
+    assignment.return_requested_at = None
+    assignment.return_rejection_reason = rejection_reason
+
+    audit = AuditLog(
+        user_id=str(employee_id),
+        action="RETURN_REJECTED",
+        table_affected="assignments",
+        record_id=str(assignment_id),
+        details=f"Return rejected for assignment {assignment_id} by employee {employee_id}. Reason: {rejection_reason or 'Not provided'}"
+    )
+    db.add(audit)
+    db.commit()
+    db.refresh(assignment)
+    return assignment
+
+
+def confirm_asset_return(db: Session, assignment_id: int, custodian_id: int) -> Assignment:
+    """
+    Custodian confirms physical receipt of the returned asset.
+
+    Parameters:
+        db (Session): Database session.
+        assignment_id (int): ID of the assignment to confirm return for.
+        custodian_id (int): ID of the custodian confirming the return.
+
+    Business Rules Enforced:
+        - 404 error if the assignment is not found.
+        - 422 error if the assignment status is not 'Return Approved'.
+
+    What's Written to the Audit Log:
+        - Creates an AuditLog entry with action='RETURN_CONFIRMED', table_affected='assignments',
+          record_id=str(assignment_id), and details indicating the return confirmation.
+
+    Status Transition Triggered:
+        - Assignment status is updated to 'Returned'.
+        - Asset status is updated to 'Available'.
+        - Asset's current_custodian_id is cleared (set to None).
+        - Assignment return_date is set to current date.
+
+    Transaction Requirement:
+        - All database modifications (assignment status, asset status, return_date, audit log)
+          must be executed as an atomic transaction. Any error will roll back all modifications.
+
+    Returns:
+        Assignment: The updated assignment object.
+    """
+    assignment = db.query(Assignment).filter(Assignment.assignment_id == assignment_id).first()
+    if not assignment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Assignment not found"
+        )
+
+    if assignment.status != AssignmentStatus.RETURN_APPROVED:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Only assignments in 'Return Approved' status can be confirmed. Current: {assignment.status}"
+        )
+
+    asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset not found for this assignment."
+        )
+
+    try:
+        assignment.status = AssignmentStatus.RETURNED
+        assignment.return_date = date.today()
+        
+        validate_status_transition(asset.status, AssetStatus.AVAILABLE)
+        asset.status = AssetStatus.AVAILABLE
+        asset.current_custodian_id = None
+
+        audit = AuditLog(
+            user_id=str(custodian_id),
+            action="RETURN_CONFIRMED",
+            table_affected="assignments",
+            record_id=str(assignment_id),
+            details=f"Return confirmed for assignment {assignment_id} by custodian {custodian_id}. Asset {assignment.asset_id} is now Available."
+        )
+        db.add(audit)
+        db.commit()
+        db.refresh(assignment)
+        return assignment
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database transaction failed: {str(e)}"
+        )

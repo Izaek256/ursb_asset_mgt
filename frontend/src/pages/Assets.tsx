@@ -331,7 +331,7 @@ export default function Assets() {
             id="asset-search"
             type="text"
             className={filterInputCls}
-            placeholder="Search assets..."
+            placeholder="Search by name, ID, or serial..."
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);

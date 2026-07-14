@@ -44,7 +44,6 @@ export default function Settings() {
 
   const [systemToggles, setSystemToggles] = React.useState({
     dark_mode: false,
-    auto_backups: true,
   });
 
   const [systemForm, setSystemForm] = React.useState({
@@ -85,7 +84,7 @@ export default function Settings() {
           firstName: nameParts.first,
           lastName: nameParts.last,
           email: user?.email || "admin@ursb.go.ug",
-          phone: "+256700000000",
+          phone: user?.phone_number || "+256700000000",
         });
 
         if (userSettingsData) {
@@ -98,7 +97,6 @@ export default function Settings() {
           });
           setSystemToggles({
             dark_mode: userSettingsData.theme === "dark",
-            auto_backups: true,
           });
         }
 
@@ -128,6 +126,9 @@ export default function Settings() {
       await apiFetch("/settings", {
         method: "PUT",
         body: JSON.stringify({
+          first_name: profileForm.firstName,
+          last_name: profileForm.lastName,
+          phone_number: profileForm.phone,
           theme: systemToggles.dark_mode ? "dark" : "light",
           language: "en",
         }),
@@ -265,24 +266,38 @@ export default function Settings() {
             <h3 className="font-bold text-base text-ink">Profile</h3>
             <p className="text-sm text-ink-dim mt-1 mb-6">Update your personal details.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
-              {[
-                { id: "first-name", label: "First name", key: "firstName" as const },
-                { id: "last-name", label: "Last name", key: "lastName" as const },
-                { id: "email", label: "Email address", key: "email" as const },
-                { id: "phone", label: "Phone number", key: "phone" as const },
-              ].map((field) => (
-                <div key={field.id} className="flex flex-col gap-2">
-                  <label htmlFor={field.id} className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">
-                    {field.label}
-                  </label>
-                  <input
-                    id={field.id}
-                    className={filterInputCls}
-                    value={profileForm[field.key]}
-                    onChange={(e) => setProfileForm({ ...profileForm, [field.key]: e.target.value })}
-                  />
-                </div>
-              ))}
+              {["first-name", "last-name", "phone"].map((fieldId) => {
+                const fieldConfig = {
+                  "first-name": { label: "First name", key: "firstName" as const },
+                  "last-name": { label: "Last name", key: "lastName" as const },
+                  "phone": { label: "Phone number", key: "phone" as const },
+                }[fieldId];
+                return (
+                  <div key={fieldId} className="flex flex-col gap-2">
+                    <label htmlFor={fieldId} className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">
+                      {fieldConfig.label}
+                    </label>
+                    <input
+                      id={fieldId}
+                      className={filterInputCls}
+                      value={profileForm[fieldConfig.key]}
+                      onChange={(e) => setProfileForm({ ...profileForm, [fieldConfig.key]: e.target.value })}
+                    />
+                  </div>
+                );
+              })}
+              <div className="flex flex-col gap-2">
+                <label htmlFor="email" className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">
+                  Email address
+                </label>
+                <input
+                  id="email"
+                  className={filterInputCls}
+                  value={profileForm.email}
+                  disabled
+                  style={{ backgroundColor: "#f5f5f5", cursor: "not-allowed" }}
+                />
+              </div>
             </div>
             {generalError && <div className="mt-4"><ErrorMessage message={generalError} /></div>}
             <div className="flex justify-end pt-6 mt-6 border-t border-sky-page/30">
@@ -333,33 +348,8 @@ export default function Settings() {
             <h3 className="font-bold text-base text-ink">System</h3>
             <div className="mt-6">
               <ToggleRow label="Dark Mode" description="Switch the interface to a dark theme" checked={systemToggles.dark_mode} onChange={(v) => setSystemToggles({ ...systemToggles, dark_mode: v })} />
-              <ToggleRow label="Auto Backups" description="Automatically back up asset data weekly" checked={systemToggles.auto_backups} onChange={(v) => setSystemToggles({ ...systemToggles, auto_backups: v })} />
             </div>
-            {user?.role === "System Administrator" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6 mt-8 pt-6 border-t border-sky-page/30">
-                {[
-                  { label: "Organisation Name", key: "organisation_name" as const, type: "text" },
-                  { label: "Asset ID Prefix", key: "asset_id_prefix" as const, type: "text" },
-                ].map((field) => (
-                  <div key={field.key} className="flex flex-col gap-2">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">{field.label}</label>
-                    <input
-                      className={filterInputCls}
-                      value={systemForm[field.key]}
-                      onChange={(e) => setSystemForm({ ...systemForm, [field.key]: e.target.value })}
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
             {systemFormError && <div className="mt-4"><ErrorMessage message={systemFormError} /></div>}
-            {user?.role !== "System Administrator" ? (
-              <EmptyState
-                icon={<ICONS.settings className="w-6 h-6 text-ink-icon stroke-[2.2]" />}
-                title="Advanced system settings"
-                description="Organisation-level settings are only available to System Administrators."
-              />
-            ) : null}
             <div className="flex justify-end pt-6 mt-6 border-t border-sky-page/30">
               <Button onClick={handleSystemSave} isLoading={isSavingSystem}>Save Changes</Button>
             </div>

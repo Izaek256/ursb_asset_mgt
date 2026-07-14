@@ -36,6 +36,7 @@ class AssetStatus(str, enum.Enum):
     AVAILABLE = "Available"
     RESERVED = "Reserved"
     PENDING_ACCEPTANCE = "Pending Acceptance"
+    PENDING_APPROVAL = "Pending Approval"
     PENDING_PICKUP = "Pending Pickup"
     ASSIGNED = "Assigned"
     UNDER_TRANSFER = "Under Transfer"

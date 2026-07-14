@@ -29,6 +29,7 @@ type SelectProps = BaseProps & {
   options: { value: string; label: string }[];
   placeholder?: string;
   disabled?: boolean;
+  searchable?: boolean;
 };
 
 type TextareaProps = BaseProps & {
@@ -45,6 +46,7 @@ type Props = TextInputProps | SelectProps | TextareaProps;
 
 export default function FormInput(props: Props) {
   const [showPassword, setShowPassword] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState("");
   const baseId = React.useId();
   const errorId = `${baseId}-error`;
   const helperId = `${baseId}-helper`;
@@ -70,10 +72,20 @@ export default function FormInput(props: Props) {
   const renderInput = () => {
     switch (props.type) {
       case "select":
+        const isSearchable = (props as SelectProps).searchable;
+        const filteredOptions = isSearchable
+          ? props.options.filter((opt) =>
+              opt.label.toLowerCase().includes(searchQuery.toLowerCase())
+            )
+          : props.options;
+
         return (
           <Listbox
             value={props.value}
-            onChange={props.onChange}
+            onChange={(val) => {
+              props.onChange(val);
+              setSearchQuery("");
+            }}
             disabled={props.disabled}
           >
             <div className="relative w-full">
@@ -110,51 +122,73 @@ export default function FormInput(props: Props) {
                       : "bg-navy-deep/95 border border-glass-border/38"
                   }`}
                 >
-                  {props.options.map((opt) => (
-                    <Listbox.Option
-                      key={opt.value}
-                      value={opt.value}
-                      className={({ active }) =>
-                        `relative cursor-pointer select-none py-2.5 pl-10 pr-4 text-sm ${
-                          active
-                            ? isLight
-                              ? "bg-sky-page text-ursb-dark"
-                              : "bg-ursb text-white"
-                            : isLight
-                            ? "text-ink"
-                            : "text-ice"
-                        }`
-                      }
-                    >
-                      {({ selected, active }) => (
-                        <>
-                          <span
-                            className={`block truncate ${
-                              selected ? "font-bold" : "font-normal"
-                            }`}
-                          >
-                            {opt.label}
-                          </span>
-                          {selected ? (
+                  {isSearchable && (
+                    <div className="px-3 py-2 sticky top-0 bg-inherit z-10">
+                      <input
+                        type="text"
+                        placeholder="Type to filter..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        className={`w-full rounded-[6px] px-2.5 py-1.5 text-sm outline-none ${
+                          isLight
+                            ? "bg-sky-page border border-sky-cardBorder text-ink placeholder-ink-dim/40 focus:border-ursb"
+                            : "bg-navy-deep/50 border border-glass-border/38 text-white placeholder-white/30 focus:border-ice"
+                        }`}
+                      />
+                    </div>
+                  )}
+                  {filteredOptions.length === 0 ? (
+                    <div className={`py-4 text-center text-sm ${isLight ? "text-ink-dim/60" : "text-white/50"}`}>
+                      No results found
+                    </div>
+                  ) : (
+                    filteredOptions.map((opt) => (
+                      <Listbox.Option
+                        key={opt.value}
+                        value={opt.value}
+                        className={({ active }) =>
+                          `relative cursor-pointer select-none py-2.5 pl-10 pr-4 text-sm ${
+                            active
+                              ? isLight
+                                ? "bg-sky-page text-ursb-dark"
+                                : "bg-ursb text-white"
+                              : isLight
+                              ? "text-ink"
+                              : "text-ice"
+                          }`
+                        }
+                      >
+                        {({ selected, active }) => (
+                          <>
                             <span
-                              className={`absolute inset-y-0 left-0 flex items-center pl-3 ${
-                                active
-                                  ? isLight
-                                    ? "text-ursb-dark"
-                                    : "text-white"
-                                  : "text-ursb"
+                              className={`block truncate ${
+                                selected ? "font-bold" : "font-normal"
                               }`}
                             >
-                              <ICONS.checkCircle
-                                className="w-4 h-4"
-                                aria-hidden="true"
-                              />
+                              {opt.label}
                             </span>
-                          ) : null}
-                        </>
-                      )}
-                    </Listbox.Option>
-                  ))}
+                            {selected ? (
+                              <span
+                                className={`absolute inset-y-0 left-0 flex items-center pl-3 ${
+                                  active
+                                    ? isLight
+                                      ? "text-ursb-dark"
+                                      : "text-white"
+                                    : "text-ursb"
+                                }`}
+                              >
+                                <ICONS.checkCircle
+                                  className="w-4 h-4"
+                                  aria-hidden="true"
+                                />
+                              </span>
+                            ) : null}
+                          </>
+                        )}
+                      </Listbox.Option>
+                    ))
+                  )}
                 </Listbox.Options>
               </Transition>
             </div>

@@ -35,6 +35,9 @@ class UserSettingsUpdateRequest(BaseModel):
     notifications_request_updates: Optional[bool] = None
     theme: Optional[str] = None
     language: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    phone_number: Optional[str] = None
 
 
 class SystemSettingsResponse(BaseModel):
@@ -95,12 +98,18 @@ def update_user_settings(
 
     for field, value in body.__dict__.items():
         if value is not None:
-            setattr(settings, field, value)
+            # Handle profile fields (first_name, last_name, phone_number) on User model
+            if field in ("first_name", "last_name", "phone_number"):
+                setattr(current_user, field, value)
+            else:
+                setattr(settings, field, value)
 
     settings.updated_at = datetime.utcnow()
     db.add(settings)
+    db.add(current_user)
     db.commit()
     db.refresh(settings)
+    db.refresh(current_user)
 
     return UserSettingsResponse(
         notifications_email=settings.notifications_email,

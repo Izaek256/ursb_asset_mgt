@@ -17,6 +17,7 @@ class RequestStatus(str, enum.Enum):
     APPROVED = "Approved"
     REJECTED = "Rejected"
     ASSIGNED = "Assigned"
+    READY_FOR_PICKUP = "ReadyForPickup"
     PICKED_UP = "PickedUp"
     COMPLETED = "Completed"
     CANCELLED = "Cancelled"
@@ -83,6 +84,7 @@ class AssetRequest(Base):
     required_by_date = Column(Date, nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
     assigned_at = Column(DateTime, nullable=True)
+    handed_over_at = Column(DateTime, nullable=True)
     pickup_confirmed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=True, onupdate=datetime.utcnow)

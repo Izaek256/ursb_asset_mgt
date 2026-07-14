@@ -16,6 +16,7 @@ VALID_TRANSITIONS = {
         AssetStatus.DISPOSED,            # Triggered by asset disposal from storage - see S3-07
         AssetStatus.DEACTIVATED,         # Triggered by deactivating an available asset
         AssetStatus.ASSIGNED,            # Triggered by direct assignment from storage (immediate assign)
+        AssetStatus.PENDING_APPROVAL,    # Triggered by assigning asset to custodian for request handover
     },
     AssetStatus.RESERVED: {
         AssetStatus.PENDING_ACCEPTANCE,  # Triggered by employee notification of request approval - see S3-05
@@ -35,10 +36,17 @@ VALID_TRANSITIONS = {
         AssetStatus.DISPOSED,            # Triggered by disposing an asset pending pickup - see S3-07
         AssetStatus.DEACTIVATED,         # Triggered by deactivating an asset pending pickup
     },
+    AssetStatus.PENDING_APPROVAL: {
+        AssetStatus.PENDING_PICKUP,      # Triggered by custodian handing over to requester
+        AssetStatus.AVAILABLE,           # Triggered by cancellation (returns to storage)
+        AssetStatus.DISPOSED,            # Triggered by disposing an asset pending approval
+        AssetStatus.DEACTIVATED,         # Triggered by deactivating an asset pending approval
+    },
     AssetStatus.ASSIGNED: {
         AssetStatus.UNDER_TRANSFER,      # Triggered by custodian initiating a transfer to another custodian - see S3-02
         AssetStatus.RETURNED,            # Triggered by employee returning the asset - see S3-06
         AssetStatus.UNDER_MAINTENANCE,   # Triggered by sending assigned asset to maintenance (custodian requests service)
+        AssetStatus.PENDING_PICKUP,      # Triggered by custodian handing over asset to requester
         AssetStatus.DISPOSED,            # Triggered by disposing an assigned asset (must close assignment) - see S3-07
         AssetStatus.DEACTIVATED,         # Triggered by deactivating an assigned asset
         AssetStatus.AVAILABLE,           # Triggered by returning asset directly to storage (no intermediate custody change)
@@ -149,6 +157,7 @@ def list_assets(
     search: Optional[str] = None,
     department: Optional[str] = None,
     custodian_id: Optional[str] = None,
+    for_request: Optional[bool] = None,
     limit: int = 10000,
     offset: int = 0,
 ) -> Tuple[List[Asset], int]:
@@ -161,6 +170,7 @@ def list_assets(
         search: Filter by name or serial number substring (optional).
         department: Filter by department (optional).
         custodian_id: Filter by current custodian ID (optional).
+        for_request: Filter to only show assets available for requesting (optional).
         limit: Max records to return (default 100).
         offset: Records to skip for pagination (default 0).
     Returns:
@@ -168,13 +178,26 @@ def list_assets(
     Raises:
         HTTPException 400 for invalid status or asset_type values.
     Business rules:
-        Available status filter is the sole visibility gate for
-        'available to request' views — no separate flag needed.
+        When for_request=True, filters to assets that are:
+        - Status: Available
+        - Condition: Not Damaged
+        - Not under maintenance
+        - Not assigned (current_custodian_id is None)
+        - Active (is_active=True)
     Audit log:
         Does not write to audit log.
     """
     from fastapi import HTTPException
     q = db.query(Asset)
+
+    if for_request:
+        # Filter for assets that can be requested
+        q = q.filter(
+            Asset.status == AssetStatus.AVAILABLE,
+            Asset.condition != AssetCondition.DAMAGED,
+            Asset.is_active == True,
+            Asset.current_custodian_id == None
+        )
 
     if status:
         try:
@@ -192,7 +215,9 @@ def list_assets(
             raise HTTPException(400, detail=f"Invalid asset_type. Valid: {', '.join(valid)}")
     if search:
         q = q.filter(
-            Asset.asset_name.ilike(f"%{search}%") | Asset.serial_number.ilike(f"%{search}%")
+            Asset.asset_name.ilike(f"%{search}%") | 
+            Asset.serial_number.ilike(f"%{search}%") |
+            Asset.asset_id.ilike(f"%{search}%")
         )
     if department:
         q = q.filter(Asset.department == department)

@@ -55,6 +55,21 @@ async def lifespan(app: FastAPI):
             if column_name not in existing_asset_columns:
                 connection.execute(text(f"ALTER TABLE assets ADD COLUMN {definition}"))
 
+        # Add columns to assignments table for return workflow
+        existing_assignment_columns = {
+            row[1] for row in connection.execute(text("PRAGMA table_info(assignments)")).all()
+        }
+        assignment_additional_columns = {
+            "return_requested_by": "return_requested_by VARCHAR(36)",
+            "return_requested_at": "return_requested_at DATETIME",
+            "return_approved_by": "return_approved_by VARCHAR(36)",
+            "return_approved_at": "return_approved_at DATETIME",
+            "return_rejection_reason": "return_rejection_reason TEXT",
+        }
+        for column_name, definition in assignment_additional_columns.items():
+            if column_name not in existing_assignment_columns:
+                connection.execute(text(f"ALTER TABLE assignments ADD COLUMN {definition}"))
+
     default_email = os.getenv("AUTH_DEFAULT_EMAIL", "admin@ursb.go.ug").strip().lower()
     default_password = os.getenv("AUTH_DEFAULT_PASSWORD", "Admin@1234")
 

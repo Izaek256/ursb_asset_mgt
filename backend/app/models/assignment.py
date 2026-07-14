@@ -13,6 +13,9 @@ class AssignmentStatus(str, enum.Enum):
     PENDING_ACCEPTANCE = "Pending Acceptance"
     ACCEPTED = "Accepted"
     DECLINED = "Declined"
+    RETURN_REQUESTED = "Return Requested"
+    RETURN_APPROVED = "Return Approved"
+    RETURN_REJECTED = "Return Rejected"
 
 
 class Assignment(Base):
@@ -45,6 +48,19 @@ class Assignment(Base):
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    return_requested_by: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    return_requested_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    return_approved_by: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    return_approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    return_rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationships
     asset = relationship("Asset", back_populates="assignments")

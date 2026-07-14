@@ -36,6 +36,10 @@ class AssignmentCreateRequest(BaseModel):
     notes: Optional[str] = None
 
 
+class ReturnRejectRequest(BaseModel):
+    reason: str
+
+
 class AssignmentResponse(BaseModel):
     assignment_id: int
     asset_id: str
@@ -49,6 +53,11 @@ class AssignmentResponse(BaseModel):
     status: str
     notes: Optional[str] = None
     acknowledged_at: Optional[datetime] = None
+    return_requested_by: Optional[str] = None
+    return_requested_at: Optional[datetime] = None
+    return_approved_by: Optional[str] = None
+    return_approved_at: Optional[datetime] = None
+    return_rejection_reason: Optional[str] = None
 
 
     class Config:
@@ -77,6 +86,11 @@ def _serialize_assignment(assignment: Assignment, db: Session) -> AssignmentResp
         status=assignment.status.value if hasattr(assignment.status, "value") else str(assignment.status),
         notes=assignment.notes,
         acknowledged_at=assignment.acknowledged_at,
+        return_requested_by=assignment.return_requested_by,
+        return_requested_at=assignment.return_requested_at,
+        return_approved_by=assignment.return_approved_by,
+        return_approved_at=assignment.return_approved_at,
+        return_rejection_reason=assignment.return_rejection_reason,
     )
 
 
@@ -116,51 +130,58 @@ def create_assignment(
     
     return _serialize_assignment(assignment, db)
 
-@router.post("/{assignment_id}/return", response_model=AssignmentResponse)
-def return_assignment(
-    assignment_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
-):
-    assignment = db.query(Assignment).filter(Assignment.assignment_id == assignment_id).first()
-    if not assignment:
-        raise HTTPException(404, detail="Assignment not found")
-    if assignment.status != AssignmentStatus.ACTIVE:
-        raise HTTPException(400, detail="Assignment is not active")
-
-    assignment.status = AssignmentStatus.RETURNED
-    assignment.return_date = assignment.return_date or date.today()
-    asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
-    if asset:
-        validate_status_transition(asset.status, AssetStatus.AVAILABLE)
-        asset.status = AssetStatus.AVAILABLE
-        asset.current_custodian_id = None
-    _log(db, actor=current_user, action="RETURN_ASSET", record_id=str(assignment.assignment_id), details="Returned asset")
-    db.commit()
-    db.refresh(assignment)
-    return _serialize_assignment(assignment, db)
-
-
 @router.get("", response_model=AssignmentListResponse)
 def list_assignments(
     asset_id: Optional[str] = None,
     user_id: Optional[int] = None,
     status: Optional[str] = None,
+    assignment_type: Optional[str] = None,  # "final_handover" to show only handovers to requesters
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR)),
+    current_user: User = Depends(get_current_user),
 ):
-    """List assignments with optional filters. All authenticated roles. SRS AM-A04."""
+    """List assignments with optional filters. All authenticated roles can view their own assignments. Admins/managers/custodians can view all. SRS AM-A04."""
+    # Roles that can view all assignments
+    can_view_all = current_user.role in {
+        UserRole.SUPER_SYSTEM_ADMINISTRATOR,
+        UserRole.SYSTEM_ADMINISTRATOR,
+        UserRole.ASSET_MANAGER,
+        UserRole.ASSET_CUSTODIAN
+    }
+    
+    # Employees can only view their own assignments
+    if current_user.role == UserRole.EMPLOYEE:
+        user_id = int(current_user.id)
+    elif user_id is not None and not can_view_all:
+        # Non-admin users cannot filter by other user IDs
+        raise HTTPException(403, detail="Not authorized to view other users' assignments")
+    
     if asset_id:
         assignments = assignment_service.get_assignment_history(db, asset_id)
     elif user_id is not None:
-        assignments = assignment_service.get_user_assignments(db, user_id)
+        # When user_id is provided, optionally filter by status
+        if status:
+            # Custom query to filter by both user_id and status
+            query = db.query(Assignment).filter(Assignment.assigned_to == str(user_id))
+            try:
+                query = query.filter(Assignment.status == AssignmentStatus(status))
+            except ValueError:
+                raise HTTPException(400, detail="Invalid status")
+            assignments = query.order_by(Assignment.assignment_date.desc()).all()
+        else:
+            assignments = assignment_service.get_user_assignments(db, user_id)
     else:
+        # Only admins/managers/custodians can view all assignments without filters
+        if not can_view_all:
+            raise HTTPException(403, detail="Not authorized to view all assignments")
         query = db.query(Assignment)
         if status:
             try:
                 query = query.filter(Assignment.status == AssignmentStatus(status))
             except ValueError:
                 raise HTTPException(400, detail="Invalid status")
+        # Filter to show only final handovers to requesters (not internal custodian assignments)
+        if assignment_type == "final_handover":
+            query = query.filter(Assignment.notes.like("%Asset handed over from request%"))
         assignments = query.order_by(Assignment.assignment_date.desc()).all()
 
     return AssignmentListResponse(
@@ -179,26 +200,8 @@ def get_assignment(
         raise HTTPException(404, detail="Assignment not found")
     return _serialize_assignment(assignment, db)
 
-@router.post("/{assignment_id}/initiate-return", response_model=AssignmentResponse)
-def initiate_return(
-    assignment_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("Employee")),
-):
-    """Step 1 of 2: Employee initiates asset return. Employee only. SRS §7 — Asset Returns."""
-    assignment = assignment_service.initiate_return(db, assignment_id, current_user.user_id)
-    return _serialize_assignment(assignment, db)
 
 
-@router.post("/{assignment_id}/confirm-return", response_model=AssignmentResponse)
-def confirm_return(
-    assignment_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("Asset Custodian")),
-):
-    """Step 2 of 2: Custodian confirms physical receipt of returned asset. Custodian only. SRS §7 — Asset Returns."""
-    assignment = assignment_service.confirm_return(db, assignment_id, current_user.user_id)
-    return _serialize_assignment(assignment, db)
 
 
 @router.post("/{assignment_id}/accept", response_model=AssignmentResponse)
@@ -234,6 +237,115 @@ def confirm_handover_route(
     """Step 2 of 2: Custodian confirms physical handover. Custodian only. SRS §3 — Handover Workflows."""
     from app.services.assignment_service import confirm_handover as service_confirm
     assignment = service_confirm(db, assignment_id, current_user.id)
+    return _serialize_assignment(assignment, db)
+
+
+@router.post("/{assignment_id}/request-return", response_model=AssignmentResponse)
+def request_return_route(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ASSET_CUSTODIAN)),
+):
+    """Custodian requests return of asset from employee. Custodian only."""
+    from app.services.assignment_service import request_asset_return
+    from app.services.notification_service import create_notification
+    
+    assignment = request_asset_return(db, assignment_id, current_user.user_id)
+    
+    # Notify employee of return request
+    asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
+    if asset:
+        create_notification(
+            db=db,
+            user_id=str(assignment.assigned_to),
+            title="Asset Return Requested",
+            message=f"The custodian has requested return of asset '{asset.asset_name}'. Please approve or reject this request.",
+            notification_type="RETURN_REQUESTED",
+            related_asset_id=asset.asset_id,
+        )
+    
+    return _serialize_assignment(assignment, db)
+
+
+@router.post("/{assignment_id}/approve-return", response_model=AssignmentResponse)
+def approve_return_route(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.EMPLOYEE)),
+):
+    """Employee approves return request. Employee only."""
+    from app.services.assignment_service import approve_return_request
+    from app.services.notification_service import create_notification
+    
+    assignment = approve_return_request(db, assignment_id, current_user.user_id)
+    
+    # Notify custodian that return is approved
+    asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
+    if asset and assignment.return_requested_by:
+        create_notification(
+            db=db,
+            user_id=str(assignment.return_requested_by),
+            title="Asset Return Approved",
+            message=f"Employee has approved return of asset '{asset.asset_name}'. Please confirm receipt to complete the return.",
+            notification_type="RETURN_APPROVED",
+            related_asset_id=asset.asset_id,
+        )
+    
+    return _serialize_assignment(assignment, db)
+
+
+@router.post("/{assignment_id}/reject-return", response_model=AssignmentResponse)
+def reject_return_route(
+    assignment_id: int,
+    body: ReturnRejectRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.EMPLOYEE)),
+):
+    """Employee rejects return request. Employee only."""
+    from app.services.assignment_service import reject_return_request
+    from app.services.notification_service import create_notification
+    
+    assignment = reject_return_request(db, assignment_id, current_user.user_id, body.reason)
+    
+    # Notify custodian that return is rejected
+    asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
+    if asset and assignment.return_requested_by:
+        create_notification(
+            db=db,
+            user_id=str(assignment.return_requested_by),
+            title="Asset Return Rejected",
+            message=f"Employee has rejected the return request for asset '{asset.asset_name}'. Reason: {body.reason}",
+            notification_type="RETURN_REJECTED",
+            related_asset_id=asset.asset_id,
+        )
+    
+    return _serialize_assignment(assignment, db)
+
+
+@router.post("/{assignment_id}/confirm-return", response_model=AssignmentResponse)
+def confirm_return_route(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ASSET_CUSTODIAN)),
+):
+    """Custodian confirms physical receipt of returned asset. Custodian only."""
+    from app.services.assignment_service import confirm_asset_return
+    from app.services.notification_service import create_notification
+    
+    assignment = confirm_asset_return(db, assignment_id, current_user.user_id)
+    
+    # Notify asset manager that return is complete
+    asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
+    if asset:
+        create_notification(
+            db=db,
+            user_id="Asset Manager",
+            title="Asset Return Completed",
+            message=f"Asset '{asset.asset_name}' has been returned to custody and is now Available.",
+            notification_type="RETURN_COMPLETED",
+            related_asset_id=asset.asset_id,
+        )
+    
     return _serialize_assignment(assignment, db)
 
 
