@@ -20,7 +20,7 @@ from app.models.asset import Asset, AssetStatus
 from app.models.assignment import Assignment, AssignmentStatus
 from app.models.user import User
 from app.models.audit_log import AuditLog
-from app.api.v1.auth import get_current_user, require_role
+from app.api.v1.auth import get_current_user, require_role, require_roles
 from app.models.user import UserRole
 from app.services.asset_service import validate_status_transition
 

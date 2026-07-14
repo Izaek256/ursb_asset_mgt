@@ -37,6 +37,7 @@ import {
   Upload,
   File,
   Download,
+  File as Document,
 } from "lucide-react";
 import exportCsvIcon from "../assets/icons8-export-excel-50.png";
 import exportPdfIcon from "../assets/icons8-export-pdf-50.png";
@@ -84,6 +85,7 @@ export const ICONS = {
   upload: Upload,
   file: File,
   download: Download,
+  document: Document,
 
   // Keep string mappings of emojis just in case any unmigrated files access them, 
   // though we will migrate all dashboard pages in this pass.

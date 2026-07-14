@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models.asset import Asset, AssetCondition, AssetStatus, AssetType, SourceType
 from app.models.audit_log import AuditLog
-from app.api.v1.auth import get_current_user, require_role
+from app.api.v1.auth import get_current_user, require_role, require_roles
 from app.models.user import UserRole
 from app.services.asset_service import VALID_TRANSITIONS, validate_status_transition, get_asset, list_assets, create_asset, update_asset, export_assets_csv
 
@@ -423,7 +423,6 @@ def update_asset(
     db: Session = Depends(get_db),
     current_user=Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.ASSET_CUSTODIAN)),
 ):
-<<<<<<< HEAD
     """
     Update an asset. Only Asset Manager, Super System Administrator, and Asset Custodian may call this endpoint.
     Validates status transitions and checks if asset is active and not disposed.
@@ -452,12 +451,7 @@ def update_asset(
     # Validate status transition if status is being updated
     if body.status is not None:
         current_status = asset.status.value if hasattr(asset.status, "value") else str(asset.status)
-        allowed_transitions = VALID_STATUS_TRANSITIONS.get(current_status, [])
-        if body.status not in allowed_transitions:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid status transition from {current_status} to {body.status}. Allowed: {', '.join(allowed_transitions) or 'none'}"
-            )
+        validate_status_transition(current_status, body.status)
 
     # Update only provided fields
     if body.asset_name is not None:
@@ -567,12 +561,6 @@ def deactivate_asset(
     return {"message": "Asset deactivated successfully"}
 
 
-=======
-    """Update an asset. Asset Manager and System Administrator only. SRS AM-R03."""
-    update_asset(db, asset_id, body, current_user.user_id)
-    return get_asset_detail(asset_id, db, current_user)
-
->>>>>>> origin/feature/s3-service-layer
 @router.patch("/{asset_id}/reactivate")
 def reactivate_asset(
     asset_id: str,
@@ -582,8 +570,9 @@ def reactivate_asset(
     """
     Reactivate an asset. Sets is_active = True.
     """
-    asset = get_asset(db, asset_id).filter(Asset.asset_id == asset_id).first()
-       # Check if already active
+    asset = db.query(Asset).filter(Asset.asset_id == asset_id).first()
+    
+    # Check if already active
     if asset.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

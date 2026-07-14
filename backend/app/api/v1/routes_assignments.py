@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.api.v1.auth import get_current_user, require_role
+from app.api.v1.auth import get_current_user, require_role, require_roles
 from app.models.user import UserRole
 from app.models.asset import Asset, AssetStatus
 from app.models.assignment import Assignment, AssignmentStatus
@@ -23,8 +23,6 @@ from app.models.audit_log import AuditLog
 from app.models.user import User
 from app.services import assignment_service
 from app.services.asset_service import validate_status_transition
-
-require_role = require_roles
 
 router = APIRouter(prefix="/api/v1/assignments", tags=["assignments"])
 

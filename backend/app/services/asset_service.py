@@ -112,10 +112,10 @@ def validate_status_transition(current_status: str | AssetStatus, new_status: st
         )
 
 _STATUS_MAP = {
-    "Active": AssetStatus.ACTIVE,
+    "Active": AssetStatus.ASSIGNED,
     "Available": AssetStatus.AVAILABLE,
-    "In Store": AssetStatus.IN_STORAGE,
-    "In Storage": AssetStatus.IN_STORAGE,
+    "In Store": AssetStatus.AVAILABLE,
+    "In Storage": AssetStatus.AVAILABLE,
 }
 
 

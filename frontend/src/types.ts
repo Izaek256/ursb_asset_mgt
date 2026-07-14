@@ -461,21 +461,6 @@ export interface MaintenanceListResponse {
 // ── Cleanup & Deduplication Types (S3-12) ───────────────────────────────────────────
 
 /**
- * Union type representing valid asset status values.
- * Mirrors the AssetStatus enum in backend/app/models/asset.py.
- * NOTE: These values must stay in sync with backend/app/models/asset.py
- * and backend/app/schemas/asset.py (if applicable).
- */
-export type AssetStatus =
-  | "Active"
-  | "In Storage"
-  | "Under Maintenance"
-  | "Disposed"
-  | "Pending Pickup"
-  | "Available"
-  | "Assigned";
-
-/**
  * Represents a system in-app notification.
  * Mirrors the Notification ORM model in backend/app/models/notification.py.
  */
