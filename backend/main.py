@@ -55,11 +55,11 @@ async def lifespan(app: FastAPI):
             if column_name not in existing_asset_columns:
                 connection.execute(text(f"ALTER TABLE assets ADD COLUMN {definition}"))
 
-    default_email = os.getenv("AUTH_DEFAULT_EMAIL", "admin@ursb.local").strip().lower()
-    default_password = os.getenv("AUTH_DEFAULT_PASSWORD", "Admin123!")
+    default_email = os.getenv("AUTH_DEFAULT_EMAIL", "admin@ursb.go.ug").strip().lower()
+    default_password = os.getenv("AUTH_DEFAULT_PASSWORD", "Admin@1234")
 
     with SessionLocal() as db:
-        if db.query(User).count() == 0:
+        if not db.query(User).filter(User.email == default_email).first():
             salt, password_hash = create_password_hash(default_password)
             db.add(
                 User(
@@ -106,6 +106,7 @@ from app.api.v1.routes_storage import router as storage_router
 from app.api.v1.routes_maintenance import router as maintenance_router
 from app.api.v1.routes_settings import router as settings_router
 from app.api.v1.routes_disposals import router as disposals_router
+from app.api.v1.routes_notifications import router as notifications_router
 from app.middleware.auth_middleware import AuthMiddleware
 
 app.include_router(auth_router, prefix="/api/v1")
@@ -119,6 +120,7 @@ app.include_router(storage_router)
 app.include_router(maintenance_router)
 app.include_router(settings_router)    # prefix: /api/v1/settings
 app.include_router(disposals_router)   # prefix: /api/v1/disposals
+app.include_router(notifications_router)
 app.add_middleware(AuthMiddleware)
 
 

@@ -1,7 +1,7 @@
 import enum
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import Date, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import Date, Enum, ForeignKey, Integer, String, Text, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -10,6 +10,9 @@ from app.db import Base
 class AssignmentStatus(str, enum.Enum):
     ACTIVE = "Active"
     RETURNED = "Returned"
+    PENDING_ACCEPTANCE = "Pending Acceptance"
+    ACCEPTED = "Accepted"
+    DECLINED = "Declined"
 
 
 class Assignment(Base):
@@ -41,6 +44,7 @@ class Assignment(Base):
         default=AssignmentStatus.ACTIVE,
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Relationships
     asset = relationship("Asset", back_populates="assignments")

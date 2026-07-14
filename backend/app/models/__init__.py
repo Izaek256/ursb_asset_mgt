@@ -16,6 +16,7 @@ from app.models.audit_log import AuditLog
 from app.models.asset_request import AssetRequest, RequestPriority, RequestStatus
 from app.models.user_settings import UserSettings
 from app.models.system_settings import SystemSettings
+from app.models.notification import Notification
 
 __all__ = [
     "Base",
@@ -39,4 +40,5 @@ __all__ = [
     "RequestStatus",
     "UserSettings",
     "SystemSettings",
+    "Notification",
 ]

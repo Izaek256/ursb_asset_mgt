@@ -122,10 +122,12 @@ export interface Assignment {
   assigned_to_name: string;
   assigned_by: number;
   assigned_by_name: string;
-  assigned_date: string;
+  assigned_date?: string;
+  assignment_date?: string;
   return_date: string | null;
   status: string;
   notes: string | null;
+  acknowledged_at?: string | null;
 }
 
 export interface AssignmentListResponse {
@@ -408,10 +410,12 @@ export interface Assignment {
   assigned_to_name: string;
   assigned_by: number;
   assigned_by_name: string;
-  assigned_date: string;
+  assigned_date?: string;
+  assignment_date?: string;
   return_date: string | null;
   status: string;
   notes: string | null;
+  acknowledged_at?: string | null;
 }
 
 export interface AssignmentListResponse {
@@ -437,4 +441,66 @@ export interface MaintenanceRecord {
 export interface MaintenanceListResponse {
   records: MaintenanceRecord[];
   total: number;
+}
+
+// ── Cleanup & Deduplication Types (S3-12) ───────────────────────────────────────────
+
+/**
+ * Union type representing valid asset status values.
+ * Mirrors the AssetStatus enum in backend/app/models/asset.py.
+ * NOTE: These values must stay in sync with backend/app/models/asset.py
+ * and backend/app/schemas/asset.py (if applicable).
+ */
+export type AssetStatus =
+  | "Active"
+  | "In Storage"
+  | "Under Maintenance"
+  | "Disposed"
+  | "Pending Pickup"
+  | "Available"
+  | "Assigned";
+
+/**
+ * Represents a system in-app notification.
+ * Mirrors the Notification ORM model in backend/app/models/notification.py.
+ */
+export interface Notification {
+  notification_id: string;
+  user_id: string;
+  title: string;
+  message: string;
+  notification_type: string;
+  is_read: boolean;
+  created_at: string;
+  related_asset_id: string | null;
+}
+
+/**
+ * Represents an inventory category.
+ * NOTE: No corresponding backend model or schema file exists because categories
+ * are represented as plain strings in the database and API payloads (e.g. Asset.category).
+ */
+export interface InventoryCategory {
+  category_id?: string;
+  name: string;
+  description?: string;
+}
+
+/**
+ * Lightweight summary representation of an asset used in list views.
+ * Mirrors the AssetOut schema in backend/app/api/v1/routes_assets.py.
+ */
+export interface AssetStub {
+  asset_id: string;
+  asset_name: string;
+  asset_type: string;
+  category: string;
+  serial_number: string;
+  condition: string;
+  status: string;
+  cost: number;
+  acquisition_date: string;
+  supplier: string;
+  department: string | null;
+  created_at: string;
 }

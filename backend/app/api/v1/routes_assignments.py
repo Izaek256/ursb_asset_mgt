@@ -7,7 +7,7 @@ Access Control Rules:
 - GET /api/assignments/{assignment_id} — Asset Manager, Super System Administrator, System Administrator (read-only)
 """
 
-from datetime import date
+from datetime import date, datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -22,6 +22,8 @@ from app.models.assignment import Assignment, AssignmentStatus
 from app.models.audit_log import AuditLog
 from app.models.user import User
 
+require_role = require_roles
+
 router = APIRouter(prefix="/api/v1/assignments", tags=["assignments"])
 
 
@@ -30,6 +32,7 @@ class AssignmentCreateRequest(BaseModel):
     assigned_to: int
     assignment_date: Optional[date] = None
     return_date: Optional[date] = None
+    expected_return_date: Optional[date] = None
     notes: Optional[str] = None
 
 
@@ -45,6 +48,8 @@ class AssignmentResponse(BaseModel):
     return_date: Optional[date] = None
     status: str
     notes: Optional[str] = None
+    acknowledged_at: Optional[datetime] = None
+
 
     class Config:
         from_attributes = True
@@ -64,13 +69,14 @@ def _serialize_assignment(assignment: Assignment, db: Session) -> AssignmentResp
         asset_id=assignment.asset_id,
         asset_name=asset.asset_name if asset else None,
         assigned_to=int(assignment.assigned_to),
-        assigned_to_name=assigned_to_user.full_name if assigned_to_user and hasattr(assigned_to_user, "full_name") else None,
+        assigned_to_name=assigned_to_user.full_name or f"{assigned_to_user.first_name or ''} {assigned_to_user.last_name or ''}".strip() or assigned_to_user.email if assigned_to_user else None,
         assigned_by=int(assignment.assigned_by),
-        assigned_by_name=assigned_by_user.full_name if assigned_by_user and hasattr(assigned_by_user, "full_name") else None,
+        assigned_by_name=assigned_by_user.full_name or f"{assigned_by_user.first_name or ''} {assigned_by_user.last_name or ''}".strip() or assigned_by_user.email if assigned_by_user else None,
         assignment_date=assignment.assignment_date,
         return_date=assignment.return_date,
         status=assignment.status.value if hasattr(assignment.status, "value") else str(assignment.status),
         notes=assignment.notes,
+        acknowledged_at=assignment.acknowledged_at,
     )
 
 
@@ -95,8 +101,9 @@ def create_assignment(
     asset = db.query(Asset).filter(Asset.asset_id == body.asset_id).first()
     if not asset:
         raise HTTPException(404, detail="Asset not found")
-    if asset.status != AssetStatus.ACTIVE:
-        raise HTTPException(400, detail=f"Only Active assets can be assigned. Current: {asset.status.value}")
+    # For pending assignments, asset must be AVAILABLE. Let's support Active/Available status checks.
+    if asset.status not in (AssetStatus.ACTIVE, AssetStatus.AVAILABLE):
+        raise HTTPException(400, detail=f"Only Available assets can be assigned. Current: {asset.status.value}")
     if not getattr(asset, "is_active", True):
         raise HTTPException(400, detail="Asset is inactive")
 
@@ -114,19 +121,29 @@ def create_assignment(
     if not target_user.is_active:
         raise HTTPException(400, detail="Assigned user is inactive")
 
+    r_date = body.return_date or body.expected_return_date
     assignment = Assignment(
         asset_id=asset.asset_id,
         assigned_to=str(body.assigned_to),
         assigned_by=str(current_user.id),
         assignment_date=body.assignment_date or date.today(),
-        return_date=body.return_date,
-        status=AssignmentStatus.ACTIVE,
+        return_date=r_date,
+        status=AssignmentStatus.PENDING_ACCEPTANCE,
         notes=body.notes,
     )
     db.add(assignment)
-    asset.current_custodian_id = str(body.assigned_to)
-    asset.status = AssetStatus.ACTIVE
-    _log(db, actor=current_user, action="ASSIGN_ASSET", record_id=asset.asset_id, details="Assigned asset")
+    asset.status = AssetStatus.AVAILABLE
+    _log(db, actor=current_user, action="ASSIGN_ASSET", record_id=asset.asset_id, details="Assigned asset (pending acceptance)")
+    # S3-08: Notify employee of assignment
+    from app.services.notification_service import create_notification
+    create_notification(
+        db=db,
+        user_id=str(assignment.assigned_to),
+        title="New Asset Custody Assignment",
+        message=f"You have been assigned the asset '{asset.asset_name}'. Please accept or decline custody of this asset.",
+        notification_type="ASSIGNMENT_SENT",
+        related_asset_id=asset.asset_id,
+    )
     db.commit()
     db.refresh(assignment)
     return _serialize_assignment(assignment, db)
@@ -186,6 +203,42 @@ def get_assignment(
     assignment = db.query(Assignment).filter(Assignment.assignment_id == assignment_id).first()
     if not assignment:
         raise HTTPException(404, detail="Assignment not found")
+    return _serialize_assignment(assignment, db)
+
+
+@router.post("/{assignment_id}/accept", response_model=AssignmentResponse)
+def accept_assignment_route(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("Employee")),
+):
+    """Step 1 of 2: Employee accepts assignment offer. Employee only. SRS §3 — Assignment Workflows."""
+    from app.services.assignment_service import accept_assignment as service_accept
+    assignment = service_accept(db, assignment_id, current_user.id)
+    return _serialize_assignment(assignment, db)
+
+
+@router.post("/{assignment_id}/decline", response_model=AssignmentResponse)
+def decline_assignment_route(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("Employee")),
+):
+    """Step 1 of 2: Employee declines assignment offer. Employee only. SRS §3 — Assignment Workflows."""
+    from app.services.assignment_service import decline_assignment as service_decline
+    assignment = service_decline(db, assignment_id, current_user.id)
+    return _serialize_assignment(assignment, db)
+
+
+@router.post("/{assignment_id}/confirm-handover", response_model=AssignmentResponse)
+def confirm_handover_route(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("Asset Custodian")),
+):
+    """Step 2 of 2: Custodian confirms physical handover. Custodian only. SRS §3 — Handover Workflows."""
+    from app.services.assignment_service import confirm_handover as service_confirm
+    assignment = service_confirm(db, assignment_id, current_user.id)
     return _serialize_assignment(assignment, db)
 
 
