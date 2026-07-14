@@ -30,7 +30,7 @@ const NAV_ITEMS = [
   { id: "maintenance", label: "Maintenance", icon: ICONS.maintenance, path: "/maintenance", roles: ["System Administrator", "Asset Manager"] },
   { id: "users", label: "User Management", icon: ICONS.users, path: "/admin/users", roles: ["System Administrator", "Asset Manager"] },
   { id: "audit", label: "Audit Logs", icon: ICONS.audit, path: "/admin/audit-logs", roles: ["System Administrator", "Asset Manager"] },
-  { id: "credentials", label: "Credentials", icon: ICONS.settings, path: "/credentials", roles: ["System Administrator"] },
+  { id: "credentials", label: "Credentials", icon: ICONS.credentials, path: "/credentials", roles: ["System Administrator"] },
   { id: "settings", label: "Settings", icon: ICONS.settings, path: "/settings", roles: ALL_ROLES },
 ];
 

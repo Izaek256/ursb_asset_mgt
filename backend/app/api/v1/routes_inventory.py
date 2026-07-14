@@ -18,6 +18,7 @@ router = APIRouter(prefix="/api/v1/inventory", tags=["inventory"])
 class AssetStub(BaseModel):
     """Minimal asset information for expandable detail view."""
     asset_id: str
+    asset_name: str
     status: str
     serial_number: str
     current_custodian_id: Optional[str]
@@ -203,6 +204,7 @@ def get_inventory_categories(
             
             asset_stubs.append(AssetStub(
                 asset_id=asset.asset_id,
+                asset_name=asset.asset_name,
                 status=display_status,
                 serial_number=asset.serial_number,
                 current_custodian_id=str(asset.current_custodian_id) if asset.current_custodian_id else None,

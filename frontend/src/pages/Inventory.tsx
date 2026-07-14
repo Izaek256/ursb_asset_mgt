@@ -17,6 +17,7 @@ import { ICONS } from "../utils/icons";
 
 interface AssetStub {
   asset_id: string;
+  asset_name: string;
   status: string;
   serial_number: string;
   current_custodian_id: string | null;
@@ -109,8 +110,8 @@ export default function Inventory() {
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
-  const toggleCategory = (assetType: string, category: string) => {
-    const key = `${assetType}|${category}`;
+  const toggleCategory = (assetType: string, category: string, index: number) => {
+    const key = `${assetType}|${category}|${index}`;
     setExpandedCategories((prev) => {
       const next = new Set(prev);
       if (next.has(key)) {
@@ -219,8 +220,8 @@ export default function Inventory() {
               </tr>
             </thead>
             <tbody className="divide-y divide-sky-page/30">
-              {data.categories.map((category) => {
-                const key = `${category.asset_type}|${category.category}`;
+              {data.categories.map((category, index) => {
+                const key = `${category.asset_type}|${category.category}|${index}`;
                 const isExpanded = expandedCategories.has(key);
                 return (
                   <React.Fragment key={key}>
@@ -246,7 +247,7 @@ export default function Inventory() {
                       </td>
                       <td className="px-4 sm:px-5 py-4 align-middle">
                         <button
-                          onClick={() => toggleCategory(category.asset_type, category.category)}
+                          onClick={() => toggleCategory(category.asset_type, category.category, index)}
                           className="p-2 outline-none border-0 bg-transparent"
                         >
                           <ICONS.chevronDown
@@ -264,6 +265,7 @@ export default function Inventory() {
                             <table className="w-full border-collapse text-left text-xs text-ink">
                               <thead className="bg-sky-topbar/50">
                                 <tr>
+                                  <th className="px-3 py-2 text-left font-semibold text-ink-dim text-[10px] uppercase tracking-wider">Asset Name</th>
                                   <th className="px-3 py-2 text-left font-semibold text-ink-dim text-[10px] uppercase tracking-wider">Asset ID</th>
                                   <th className="px-3 py-2 text-left font-semibold text-ink-dim text-[10px] uppercase tracking-wider">Serial Number</th>
                                   <th className="px-3 py-2 text-left font-semibold text-ink-dim text-[10px] uppercase tracking-wider">Status</th>
@@ -274,7 +276,8 @@ export default function Inventory() {
                               <tbody className="divide-y divide-sky-page/20">
                                 {category.assets.map((asset) => (
                                   <tr key={asset.asset_id} className="hover:bg-sky-page/40 transition-colors">
-                                    <td className="px-3 py-2 font-medium text-ink text-xs">{asset.asset_id}</td>
+                                    <td className="px-3 py-2 font-medium text-ink text-xs">{asset.asset_name}</td>
+                                    <td className="px-3 py-2 text-ink-dim text-xs">{asset.asset_id}</td>
                                     <td className="px-3 py-2 text-ink-dim text-xs">{asset.serial_number}</td>
                                     <td className="px-3 py-2">
                                       <StatusBadge status={asset.status} />
@@ -285,7 +288,7 @@ export default function Inventory() {
                                 ))}
                                 {category.assets.length === 0 && (
                                   <tr>
-                                    <td colSpan={5} className="px-3 py-4 text-center text-ink-dim text-xs">
+                                    <td colSpan={6} className="px-3 py-4 text-center text-ink-dim text-xs">
                                       No assets in this category
                                     </td>
                                   </tr>

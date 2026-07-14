@@ -1,9 +1,9 @@
 """Dashboard routes: aggregated stats for the main dashboard view."""
 
 from datetime import datetime, date
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -86,10 +86,22 @@ _MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
 # ── Endpoint ─────────────────────────────────────────────────────────────────────
 @router.get("/stats", response_model=DashboardData)
 def get_dashboard_stats(
+    year: Optional[int] = Query(None),
+    month: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return aggregated dashboard statistics."""
+    """Return aggregated dashboard statistics.
+    
+    Query parameters:
+    - year: Filter monthly acquisitions by year (default: current year)
+    - month: Filter monthly acquisitions by month (1-12, optional)
+    """
+
+    # Use provided year or default to current year
+    current_year = datetime.now().year
+    filter_year = year if year is not None else current_year
+    filter_month = month if month is not None else None
 
     # --- Stat cards ---
     total_assets = db.query(func.count(Asset.asset_id)).scalar() or 0
@@ -154,22 +166,28 @@ def get_dashboard_stats(
         ))
     categories.sort(key=lambda c: c.pct, reverse=True)
 
-    # --- Monthly acquisitions (current year) ---
-    current_year = datetime.now().year
-    month_rows = (
-        db.query(
-            func.extract("month", Asset.acquisition_date).label("m"),
-            func.count(Asset.asset_id),
-        )
-        .filter(func.extract("year", Asset.acquisition_date) == current_year)
-        .group_by(func.extract("month", Asset.acquisition_date))
-        .all()
+    # --- Monthly acquisitions (filtered by year/month) ---
+    month_query = db.query(
+        func.extract("month", Asset.acquisition_date).label("m"),
+        func.count(Asset.asset_id),
     )
+    month_query = month_query.filter(func.extract("year", Asset.acquisition_date) == filter_year)
+    if filter_month:
+        month_query = month_query.filter(func.extract("month", Asset.acquisition_date) == filter_month)
+    
+    month_rows = month_query.group_by(func.extract("month", Asset.acquisition_date)).all()
     month_map = {int(r[0]): r[1] for r in month_rows if r[0]}
-    monthly_acquisitions = [
-        MonthlyAcquisition(month=_MONTH_NAMES[i - 1], count=month_map.get(i, 0))
-        for i in range(1, 13)
-    ]
+    
+    # If month is specified, only show that month, otherwise show all 12 months
+    if filter_month:
+        monthly_acquisitions = [
+            MonthlyAcquisition(month=_MONTH_NAMES[filter_month - 1], count=month_map.get(filter_month, 0))
+        ]
+    else:
+        monthly_acquisitions = [
+            MonthlyAcquisition(month=_MONTH_NAMES[i - 1], count=month_map.get(i, 0))
+            for i in range(1, 13)
+        ]
 
     # --- Department allocation ---
     dept_rows = (

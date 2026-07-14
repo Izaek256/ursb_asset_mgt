@@ -101,17 +101,21 @@ export default function KebabMenu({
         disabled={disabled}
         onClick={(e) => { e.stopPropagation(); setOpen((p) => !p); }}
         title="More actions"
+        style={{
+          border: "none",
+          outline: "none",
+        }}
         className={[
-          "inline-flex items-center justify-center w-8 h-8 rounded-lg cursor-pointer",
+          "inline-flex items-center justify-center w-10 h-10 rounded-lg cursor-pointer",
           "transition-all duration-150 focus:outline-none",
-          "focus-visible:ring-2 focus-visible:ring-ursb/30 focus-visible:ring-offset-1",
+          "!border-0 !outline-none",
           "disabled:opacity-40 disabled:cursor-not-allowed",
           open
             ? "bg-ink/8 text-ink shadow-sm"
             : "text-ink-dim hover:text-ink hover:bg-ink/6",
         ].join(" ")}
       >
-        <ICONS.kebab className="w-[15px] h-[15px]" />
+        <ICONS.kebab className="w-[18px] h-[18px] stroke-[2.5]" />
       </button>
 
       {/* ── Panel ───────────────────────────────────────────────────────────── */}
@@ -123,13 +127,16 @@ export default function KebabMenu({
           onKeyDown={handlePanelKey}
           onClick={(e) => e.stopPropagation()}
           style={{
-            background: "linear-gradient(160deg, #ffffff 0%, #f6f9fd 100%)",
-            boxShadow: "0 8px 32px rgba(21,58,99,0.13), 0 2px 8px rgba(21,58,99,0.07)",
+            background: "#ffffff",
+            boxShadow: "none",
+            border: "none",
+            outline: "none",
           }}
           className={[
             "absolute top-[calc(100%+6px)] z-50",
             align === "right" ? "right-0" : "left-0",
-            "rounded-2xl overflow-hidden",
+            "!rounded-none !overflow-hidden",
+            "!border-0 !outline-none",
             "min-w-[192px] py-1.5",
             "animate-in fade-in zoom-in-95 duration-150 origin-top-right",
           ].join(" ")}
@@ -140,7 +147,7 @@ export default function KebabMenu({
                 <div
                   key={`sep-${idx}`}
                   className="mx-3 my-1.5 h-px"
-                  style={{ background: "linear-gradient(90deg, transparent, rgba(21,58,99,0.10), transparent)" }}
+                  style={{ background: "rgba(21,58,99,0.10)" }}
                 />
               );
             }
@@ -155,16 +162,21 @@ export default function KebabMenu({
                 role="menuitem"
                 disabled={entry.disabled}
                 onClick={() => { setOpen(false); entry.onClick(); }}
+                style={{
+                  border: "none",
+                  outline: "none",
+                }}
                 className={[
                   "group flex items-center gap-3 w-full text-left",
-                  "mx-1 w-[calc(100%-8px)] rounded-xl",
+                  "mx-1 w-[calc(100%-8px)] !rounded-none",
                   "px-3 py-2.5 text-sm font-medium",
-                  "transition-all duration-120",
+                  "transition-none",
                   "focus:outline-none",
                   "disabled:opacity-40 disabled:cursor-not-allowed",
+                  "!border-0 !outline-none",
                   isDanger
-                    ? "text-red-500 hover:bg-red-50/80 hover:text-red-600"
-                    : "text-ink hover:bg-[#edf4fe] hover:text-ursb",
+                    ? "text-red-500"
+                    : "text-ink",
                 ].join(" ")}
               >
                 {/* Image icon takes priority over Lucide icon */}
@@ -174,15 +186,17 @@ export default function KebabMenu({
                     alt=""
                     aria-hidden="true"
                     className="w-5 h-5 flex-shrink-0 object-contain"
+                    style={{ border: "none", outline: "none" }}
                   />
                 ) : Icon ? (
                   <span className={[
-                    "flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-lg",
+                    "flex-shrink-0 flex items-center justify-center w-7 h-7 !rounded-none",
                     isDanger
-                      ? "bg-red-50 text-red-400 group-hover:bg-red-100"
-                      : "bg-sky-page/70 text-ink-icon group-hover:bg-ursb/10 group-hover:text-ursb",
-                    "transition-colors duration-120",
-                  ].join(" ")}>
+                      ? "bg-red-50 text-red-400"
+                      : "bg-sky-page/70 text-ink-icon",
+                    "transition-none",
+                    "!border-0 !outline-none",
+                  ].join(" ")} style={{ border: "none", outline: "none" }}>
                     <Icon className="w-3.5 h-3.5" />
                   </span>
                 ) : null}

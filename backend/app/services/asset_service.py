@@ -149,7 +149,7 @@ def list_assets(
     search: Optional[str] = None,
     department: Optional[str] = None,
     custodian_id: Optional[str] = None,
-    limit: int = 100,
+    limit: int = 10000,
     offset: int = 0,
 ) -> Tuple[List[Asset], int]:
     """

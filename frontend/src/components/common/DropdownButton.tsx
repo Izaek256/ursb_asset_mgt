@@ -157,14 +157,17 @@ export default function DropdownButton({
           onKeyDown={handlePanelKey}
           onClick={(e) => e.stopPropagation()}
           style={{
-            background: "linear-gradient(160deg, #ffffff 0%, #f6f9fd 100%)",
-            boxShadow: "0 12px 40px rgba(21,58,99,0.15), 0 3px 10px rgba(21,58,99,0.08)",
+            background: "#ffffff",
+            boxShadow: "none",
+            border: "none",
+            outline: "none",
           }}
           className={[
             "absolute z-[60]",
             panelPositionCls,
             panelAlignCls,
-            "rounded-2xl overflow-hidden",
+            "!rounded-none !overflow-hidden",
+            "!border-0 !outline-none",
             "min-w-[200px] py-1.5",
             entranceAnimation,
           ].join(" ")}
@@ -175,7 +178,7 @@ export default function DropdownButton({
                 <div
                   key={`sep-${idx}`}
                   className="mx-3 my-1.5 h-px"
-                  style={{ background: "linear-gradient(90deg, transparent, rgba(21,58,99,0.10), transparent)" }}
+                  style={{ background: "rgba(21,58,99,0.10)" }}
                 />
               );
             }
@@ -191,16 +194,22 @@ export default function DropdownButton({
                 role="menuitem"
                 disabled={entry.disabled}
                 onClick={() => { setOpen(false); entry.onClick(); }}
+                style={{
+                  border: "none",
+                  outline: "none",
+                }}
                 className={[
                   "group flex items-center gap-3 w-full text-left",
-                  "mx-1 w-[calc(100%-8px)] rounded-xl",
+                  "mx-1 w-[calc(100%-8px)] !rounded-none",
                   "px-3 py-2.5",
-                  "transition-all duration-120",
+                  "transition-none",
                   "focus:outline-none",
                   "disabled:opacity-40 disabled:cursor-not-allowed",
+                  "!border-0 !outline-none",
+                  "justify-center",
                   isDanger
-                    ? "hover:bg-red-50/80"
-                    : "hover:bg-[#edf4fe]",
+                    ? "text-red-500"
+                    : "text-ink",
                 ].join(" ")}
               >
                 {/* Real image icon (e.g. PDF/Excel assets) */}
@@ -209,17 +218,19 @@ export default function DropdownButton({
                     src={entry.imgSrc}
                     alt=""
                     aria-hidden="true"
-                    className="w-8 h-8 flex-shrink-0 object-contain drop-shadow-sm"
+                    className="w-8 h-8 flex-shrink-0 object-contain"
+                    style={{ border: "none", outline: "none" }}
                   />
                 ) : Icon ? (
                   /* Lucide icon in a chip */
                   <span className={[
-                    "flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-xl",
+                    "flex-shrink-0 flex items-center justify-center w-8 h-8 !rounded-none",
                     isDanger
-                      ? "bg-red-50 text-red-400 group-hover:bg-red-100"
-                      : "bg-sky-page/80 text-ink-icon group-hover:bg-ursb/10 group-hover:text-ursb",
-                    "transition-colors duration-120",
-                  ].join(" ")}>
+                      ? "bg-red-50 text-red-400"
+                      : "bg-sky-page/80 text-ink-icon",
+                    "transition-none",
+                    "!border-0 !outline-none",
+                  ].join(" ")} style={{ border: "none", outline: "none" }}>
                     <Icon className="w-4 h-4" />
                   </span>
                 ) : null}
@@ -229,8 +240,8 @@ export default function DropdownButton({
                   <span className={[
                     "text-sm font-semibold leading-tight truncate",
                     isDanger
-                      ? "text-red-500 group-hover:text-red-600"
-                      : "text-ink group-hover:text-ursb",
+                      ? "text-red-500"
+                      : "text-ink",
                   ].join(" ")}>
                     {entry.label}
                   </span>

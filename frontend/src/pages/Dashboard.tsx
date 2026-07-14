@@ -2,6 +2,7 @@ import React from "react";
 import { apiFetch } from "../AuthContext";
 import { ICONS } from "../utils/icons";
 import Button from "../components/common/Button";
+import { Dropdown } from "../components/common/Dropdown";
 import { CHART, DEPT_BAR_CLASSES, DOT_CLASSES } from "../theme/chartColors";
 import {
   BarChart,
@@ -118,14 +119,37 @@ const getStatConfig = (label: string) => {
 export default function Dashboard({ onNavigate }: { onNavigate: (path: string) => void }) {
   const [data, setData] = React.useState<DashboardData | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [selectedYear, setSelectedYear] = React.useState(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = React.useState<number | null>(null);
+
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 10 }, (_, i) => currentYear - i);
+  const months = [
+    { value: 1, label: "January" },
+    { value: 2, label: "February" },
+    { value: 3, label: "March" },
+    { value: 4, label: "April" },
+    { value: 5, label: "May" },
+    { value: 6, label: "June" },
+    { value: 7, label: "July" },
+    { value: 8, label: "August" },
+    { value: 9, label: "September" },
+    { value: 10, label: "October" },
+    { value: 11, label: "November" },
+    { value: 12, label: "December" },
+  ];
 
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const result = await apiFetch<DashboardData>("/dashboard/stats", {});
+        const params = new URLSearchParams();
+        if (selectedYear) params.set("year", selectedYear.toString());
+        if (selectedMonth) params.set("month", selectedMonth.toString());
+        const result = await apiFetch<DashboardData>(`/dashboard/stats?${params.toString()}`, {});
         if (!cancelled) setData(result);
-      } catch {
+      } catch (err) {
+        console.error("Dashboard fetch error:", err);
         if (!cancelled) setData(MOCK);
       } finally {
         if (!cancelled) setLoading(false);
@@ -134,7 +158,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (path: string) =
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedYear, selectedMonth]);
 
   if (loading || !data) {
     return (
@@ -213,9 +237,47 @@ export default function Dashboard({ onNavigate }: { onNavigate: (path: string) =
                 <ICONS.clock className="w-4 h-4 stroke-[2.2] text-ink-icon" />
                 Asset Acquisitions
               </h3>
-              <span className="text-[11px] font-bold text-ink-dim bg-sky-topbar px-2 py-0.5 rounded-lg border border-sky-border/30">
-                {new Date().getFullYear()}
-              </span>
+              <div className="flex items-center gap-2">
+                <Dropdown.Root>
+                  <Dropdown.Trigger
+                    label={selectedYear.toString()}
+                    variant="outline"
+                    className="text-xs py-1.5 px-3"
+                  />
+                  <Dropdown.Panel align="right" minWidth="120px" className="!border-0 !rounded-none !shadow-none !bg-white !p-0 !text-center">
+                    {years.map((year) => (
+                      <Dropdown.Item
+                        key={year}
+                        label={year.toString()}
+                        onClick={() => setSelectedYear(year)}
+                        className="!rounded-none !border-0 !px-0 !py-2 !justify-center !text-center !text-left !text-xs !text-ink !hover:text-ink !hover:bg-transparent !focus:outline-none !focus:bg-transparent"
+                      />
+                    ))}
+                  </Dropdown.Panel>
+                </Dropdown.Root>
+                <Dropdown.Root>
+                  <Dropdown.Trigger
+                    label={selectedMonth ? months.find(m => m.value === selectedMonth)?.label || "Month" : "All Months"}
+                    variant="outline"
+                    className="text-xs py-1.5 px-3"
+                  />
+                  <Dropdown.Panel align="right" minWidth="140px" className="!border-0 !rounded-none !shadow-none !bg-white !p-0 !text-center">
+                    <Dropdown.Item
+                      label="All Months"
+                      onClick={() => setSelectedMonth(null)}
+                      className="!rounded-none !border-0 !px-0 !py-2 !justify-center !text-center !text-left !text-xs !text-ink !hover:text-ink !hover:bg-transparent !focus:outline-none !focus:bg-transparent"
+                    />
+                    {months.map((month) => (
+                      <Dropdown.Item
+                        key={month.value}
+                        label={month.label}
+                        onClick={() => setSelectedMonth(month.value)}
+                        className="!rounded-none !border-0 !px-0 !py-2 !justify-center !text-center !text-left !text-xs !text-ink !hover:text-ink !hover:bg-transparent !focus:outline-none !focus:bg-transparent"
+                      />
+                    ))}
+                  </Dropdown.Panel>
+                </Dropdown.Root>
+              </div>
             </div>
             <div className="h-48 w-full">
               <ResponsiveContainer width="100%" height="100%">

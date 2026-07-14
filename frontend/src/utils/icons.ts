@@ -38,6 +38,7 @@ import {
   File,
   Download,
   File as Document,
+  Lock,
 } from "lucide-react";
 import exportCsvIcon from "../assets/icons8-export-excel-50.png";
 import exportPdfIcon from "../assets/icons8-export-pdf-50.png";
@@ -54,7 +55,12 @@ export const ICONS = {
   maintenance: Wrench,
   users: Users,
   audit: History,
+  credentials: Lock,
   settings: Settings,
+  
+  // File icons
+  filePdf: FileText,
+  fileXlsx: FileSpreadsheet,
 
   // UI Utilities
   bell: Bell,
