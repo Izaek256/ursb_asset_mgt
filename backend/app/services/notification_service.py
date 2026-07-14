@@ -71,3 +71,69 @@ def create_notification(
             # The context manager automatically commits or rolls back the nested transaction savepoint.
     except Exception as e:
         logger.error(f"Notification creation failed (silently caught): {e}", exc_info=True)
+
+
+def get_user_notifications(
+    db: Session,
+    user_id: str,
+    limit: int = 50
+):
+    """
+    Retrieves notifications for a user, unread first.
+    """
+    notifications = (
+        db.query(Notification)
+        .filter(Notification.user_id == user_id)
+        .order_by(Notification.is_read.asc(), Notification.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return notifications
+
+
+def get_unread_count(
+    db: Session,
+    user_id: str
+) -> int:
+    """
+    Returns the count of unread notifications for a user.
+    """
+    count = (
+        db.query(Notification)
+        .filter(Notification.user_id == user_id, Notification.is_read == False)
+        .count()
+    )
+    return count
+
+
+def mark_as_read(
+    db: Session,
+    notification_id: str,
+    user_id: str
+) -> Optional[Notification]:
+    """
+    Marks a single notification as read.
+    """
+    notification = db.query(Notification).filter(Notification.notification_id == notification_id).first()
+    if not notification:
+        return None
+    if notification.user_id != user_id:
+        return None
+    notification.is_read = True
+    db.commit()
+    db.refresh(notification)
+    return notification
+
+
+def mark_all_as_read(
+    db: Session,
+    user_id: str
+) -> None:
+    """
+    Marks all of a user's notifications as read.
+    """
+    db.query(Notification).filter(
+        Notification.user_id == user_id,
+        Notification.is_read == False
+    ).update({Notification.is_read: True}, synchronize_session=False)
+    db.commit()
