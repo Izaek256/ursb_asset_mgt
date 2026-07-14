@@ -2,7 +2,7 @@
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session
@@ -44,8 +44,19 @@ class InventoryCategoryResponse(BaseModel):
         from_attributes = True
 
 
-@router.get("/categories", response_model=List[InventoryCategoryResponse])
+class PaginatedInventoryResponse(BaseModel):
+    """Paginated response for inventory categories."""
+    categories: List[InventoryCategoryResponse]
+    total_categories: int
+    page: int
+    page_size: int
+    total_assets: int
+
+
+@router.get("/categories", response_model=PaginatedInventoryResponse)
 def get_inventory_categories(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
     _user=Depends(get_current_user),
 ):
@@ -65,12 +76,12 @@ def get_inventory_categories(
     - Returns individual asset details in the assets array for each group
     
     Status mapping:
-    - Available: Assets with status 'Active' and no active assignment
-    - Assigned: Assets with status 'Active' and an active assignment
+    - Available: Assets with status 'Available' and no active assignment
+    - Assigned: Assets with status 'Available' and an active assignment
     - Reserved: Currently 0 (no reserved status in current data model)
     - Under Maintenance: Assets with status 'Under Maintenance'
     - Disposed: Assets with status 'Disposed'
-    - Other: Assets with status 'In Storage' or any other status not listed above
+    - Other: Currently 0 (no other statuses in use)
     
     The endpoint performs all aggregation at the database level using SQLAlchemy's
     grouping functions for efficiency and to avoid loading all assets into Python memory.
@@ -107,10 +118,10 @@ def get_inventory_categories(
             func.count(Asset.asset_id).label("total"),
             func.sum(
                 case(
-                    (Asset.status == AssetStatus.ACTIVE, 1),
+                    (Asset.status == AssetStatus.AVAILABLE, 1),
                     else_=0
                 )
-            ).label("active_count"),
+            ).label("available_count"),
             func.sum(
                 case(
                     (active_assignment_subquery, 1),
@@ -129,18 +140,21 @@ def get_inventory_categories(
                     else_=0
                 )
             ).label("disposed_count"),
-            func.sum(
-                case(
-                    (Asset.status == AssetStatus.IN_STORAGE, 1),
-                    else_=0
-                )
-            ).label("in_storage_count"),
         )
         .group_by(Asset.asset_type, Asset.category, Asset.asset_name)
         .order_by(Asset.asset_type, Asset.category, Asset.asset_name)
     )
     
-    grouped_results = query.all()
+    # Get total count for pagination
+    total_categories = db.query(func.count(func.distinct(
+        func.concat(Asset.asset_type, '|', Asset.category, '|', Asset.asset_name)
+    ))).scalar() or 0
+    
+    # Get total assets count
+    total_assets = db.query(func.count(Asset.asset_id)).scalar() or 0
+    
+    # Apply pagination
+    grouped_results = query.offset((page - 1) * page_size).limit(page_size).all()
     
     # Build response with individual asset details for each group
     response = []
@@ -150,18 +164,17 @@ def get_inventory_categories(
         model_name = group.model_name
         
         # Compute status counts from aggregated values
-        active_count = group.active_count or 0
+        available_count = group.available_count or 0
         assigned_count = group.assigned_count or 0
         under_maintenance_count = group.under_maintenance_count or 0
         disposed_count = group.disposed_count or 0
-        in_storage_count = group.in_storage_count or 0
         
-        available = active_count - assigned_count
+        available = available_count - assigned_count
         assigned = assigned_count
         reserved = 0  # No reserved status in current data model
         under_maintenance = under_maintenance_count
         disposed = disposed_count
-        other = in_storage_count  # In Storage and any other statuses
+        other = 0  # No "other" statuses currently in use
         total = available + assigned + reserved + under_maintenance + disposed + other
         
         # Query individual assets for this group
@@ -183,9 +196,9 @@ def get_inventory_categories(
             ).first() is not None
             
             display_status = asset.status.value if hasattr(asset.status, "value") else str(asset.status)
-            if asset.status == AssetStatus.ACTIVE and has_active_assignment:
+            if asset.status == AssetStatus.AVAILABLE and has_active_assignment:
                 display_status = "Assigned"
-            elif asset.status == AssetStatus.ACTIVE:
+            elif asset.status == AssetStatus.AVAILABLE:
                 display_status = "Available"
             
             asset_stubs.append(AssetStub(
@@ -209,4 +222,10 @@ def get_inventory_categories(
             assets=asset_stubs,
         ))
     
-    return response
+    return PaginatedInventoryResponse(
+        categories=response,
+        total_categories=total_categories,
+        page=page,
+        page_size=page_size,
+        total_assets=total_assets,
+    )

@@ -280,7 +280,7 @@ def create_asset(
     )
 
 @router.get("", response_model=List[AssetOut])
-def list_assets(
+def list_assets_endpoint(
     status: Optional[str] = Query(None),
     asset_type: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
