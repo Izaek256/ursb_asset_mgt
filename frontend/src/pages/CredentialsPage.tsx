@@ -227,8 +227,10 @@ export default function CredentialsPage() {
         return;
       }
 
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const ws = new WebSocket(`${protocol}//${window.location.host}/api/v1/users/bulk-import-ws`);
+      const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const backendPort = import.meta.env.VITE_BACKEND_PORT || "8001";
+      const wsHost = `${window.location.hostname}:${backendPort}`;
+      const ws = new WebSocket(`${wsProtocol}//${wsHost}/api/v1/users/bulk-import-ws`);
       wsRef.current = ws;
 
       ws.onopen = () => {
