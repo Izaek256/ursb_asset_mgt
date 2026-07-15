@@ -215,13 +215,7 @@ def login(
     request: Request,
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
-    print(f"DEBUG: Login attempt for email: {payload.email}")
-    print(f"DEBUG: Received password: '{payload.password}'")
     user = get_user_by_email(db, payload.email)
-    print(f"DEBUG: User found: {user is not None}")
-    if user:
-        print(f"DEBUG: User ID: {user.user_id}, Email: {user.email}, Is active: {user.is_active}")
-        print(f"DEBUG: Password salt: {user.password_salt[:20]}... Hash: {user.password_hash[:20]}...")
     if user and is_account_locked(user):
         raise HTTPException(
             status_code=status.HTTP_423_LOCKED,
@@ -232,7 +226,6 @@ def login(
         )
 
     if not user or not verify_password(payload.password, user.password_salt, user.password_hash):
-        print(f"DEBUG: Password verification failed. User exists: {user is not None}")
         if user:
             register_failed_login_attempt(db, user)
         raise HTTPException(
@@ -240,7 +233,6 @@ def login(
             detail="Invalid email or password",
         )
 
-    print(f"DEBUG: Password verification successful")
     reset_failed_login_attempts(db, user)
     session = create_session(db, user)
     response.set_cookie(

@@ -21,7 +21,6 @@ interface RecentAccount {
   role: string;
   department: string | null;
   created_at: string;
-  password: string | null;
   password_revoked: boolean;
 }
 
@@ -160,7 +159,7 @@ export default function CredentialsPage() {
         "Role": a.role,
         "Department": a.department || "N/A",
         "Created At": new Date(a.created_at).toLocaleString(),
-        "Password Status": a.password_revoked ? "Changed by user" : (a.password || "Not stored")
+        "Password Status": a.password_revoked ? "Changed by user" : "One-time reveal"
       }));
       const ws = XLSX.utils.json_to_sheet(exportData);
       const wb = XLSX.utils.book_new();
@@ -174,15 +173,15 @@ export default function CredentialsPage() {
           doc.text("URSB Recent Account Credentials", 14, 15);
           doc.setFontSize(10);
           doc.text(`Generated on ${new Date().toLocaleString()}`, 14, 22);
-          
+
           autoTable(doc, {
             startY: 28,
-            head: [["Full Name", "Email", "Role", "Password"]],
+            head: [["Full Name", "Email", "Role", "Password Status"]],
             body: accounts.map(a => [
               a.full_name,
               a.email,
               a.role,
-              a.password_revoked ? "Changed by user" : (a.password || "N/A")
+              a.password_revoked ? "Changed by user" : "One-time reveal"
             ]),
             theme: 'grid',
             headStyles: { fillColor: [59, 106, 191] },
@@ -387,40 +386,31 @@ export default function CredentialsPage() {
       render: (a) => new Date(a.created_at).toLocaleString(),
     },
     {
-      header: "Password",
+      header: "Password Status",
       render: (a) => (
         <div className="text-ink-dim text-sm">
           {a.password_revoked ? (
-            /* Password has been changed by user — show struck-through, no copy */
+            /* Password has been changed by user */
             <div className="flex items-center gap-2">
-              <code
-                className="font-mono text-xs bg-sky-page/30 px-2 py-1 rounded line-through text-ink-dim/60 select-all"
+              <span
+                className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-100 whitespace-nowrap"
                 title="User has changed their password"
               >
-                {a.password ?? "••••••••••••"}
-              </code>
-              <span
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-rose-50 text-rose-500 border border-rose-100 whitespace-nowrap"
-                title="This generated password is no longer active"
-              >
                 <span className="w-1.5 h-1.5 rounded-full bg-rose-400 inline-block" />
-                Changed
+                Changed by User
               </span>
             </div>
-          ) : a.password ? (
-            /* Active generated/temp password — show with copy button */
-            <div className="flex items-center gap-2">
-              <code className="font-mono text-xs bg-sky-page/50 px-2 py-1 rounded text-ink">{a.password}</code>
-              <Button variant="ghost" size="sm" onClick={() => copyToClipboard(a.password!)} className="p-1" title="Copy password">
-                <ICONS.copy className="w-4 h-4" />
-              </Button>
-            </div>
           ) : (
-            /* No stored temp password */
-            <span className="inline-flex items-center gap-1 text-ink-dim/60">
-              <span className="line-through">••••••••••••</span>
-              <span className="text-[10px] no-underline">(not stored)</span>
-            </span>
+            /* Active generated/temp password — but not stored, only shown once at creation */
+            <div className="flex items-center gap-2">
+              <span
+                className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-sky-50 text-sky-600 border border-sky-100 whitespace-nowrap"
+                title="Password was shown once at creation. Use regenerate if needed."
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-400 inline-block" />
+                One-time Reveal
+              </span>
+            </div>
           )}
         </div>
       ),
@@ -755,7 +745,7 @@ export default function CredentialsPage() {
 
       <PageHeader
         title="Credentials"
-        subtitle="Create user accounts and review credentials for recently created accounts (last 7 days)"
+        subtitle="Create user accounts and regenerate passwords. Passwords are shown once at creation and never stored."
       />
 
       {/* Regenerate error inline */}
