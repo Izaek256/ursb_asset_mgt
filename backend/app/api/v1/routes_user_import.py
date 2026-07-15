@@ -7,7 +7,7 @@ import string
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -21,43 +21,7 @@ from app.services.auth import create_password_hash, validate_ursb_email, get_ses
 router = APIRouter(prefix="/api/v1/users", tags=["user-import"])
 
 
-def generate_secure_password() -> str:
-    """
-    Generate a cryptographically random secure password.
-
-    Requirements:
-    - Minimum 12 characters
-    - At least one uppercase letter (A-Z)
-    - At least one lowercase letter (a-z)
-    - At least one digit (0-9)
-    - At least one special character from !@#$%^&*
-
-    Uses Python's secrets module for cryptographic randomness.
-    The generated value is returned once and never stored.
-    """
-    uppercase = string.ascii_uppercase
-    lowercase = string.ascii_lowercase
-    digits = string.digits
-    special = "!@#$%^&*"
-
-    # Ensure at least one character from each required set
-    password = [
-        secrets.choice(uppercase),
-        secrets.choice(lowercase),
-        secrets.choice(digits),
-        secrets.choice(special),
-    ]
-
-    # Fill the rest with random characters from all sets
-    all_chars = uppercase + lowercase + digits + special
-    for _ in range(8):  # 8 more characters to reach minimum 12
-        password.append(secrets.choice(all_chars))
-
-    # Shuffle to avoid predictable pattern
-    secrets.SystemRandom().shuffle(password)
-
-    return ''.join(password)
-
+# ── Schemas ───────────────────────────────────────────────────────────────────
 
 class BulkImportError(BaseModel):
     row: int
@@ -80,6 +44,93 @@ class BulkImportResponse(BaseModel):
     accounts: List[BulkImportAccount]
 
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def generate_secure_password() -> str:
+    """
+    Generate a cryptographically random secure password.
+
+    Requirements:
+    - Minimum 12 characters
+    - At least one uppercase letter (A-Z)
+    - At least one lowercase letter (a-z)
+    - At least one digit (0-9)
+    - At least one special character from !@#$%^&*
+
+    Uses Python's secrets module for cryptographic randomness.
+    """
+    uppercase = string.ascii_uppercase
+    lowercase = string.ascii_lowercase
+    digits = string.digits
+    special = "!@#$%^&*"
+
+    password = [
+        secrets.choice(uppercase),
+        secrets.choice(lowercase),
+        secrets.choice(digits),
+        secrets.choice(special),
+    ]
+
+    all_chars = uppercase + lowercase + digits + special
+    for _ in range(8):
+        password.append(secrets.choice(all_chars))
+
+    secrets.SystemRandom().shuffle(password)
+    return ''.join(password)
+
+
+def _validate_rows(rows: list, db: Session) -> tuple[list, list]:
+    """
+    Validate all rows and return (accounts_to_create, errors).
+    accounts_to_create is a list of dicts with validated fields.
+    errors is a list of dicts with row, email, reason.
+    """
+    errors = []
+    accounts_to_create = []
+
+    for idx, row in enumerate(rows, start=2):
+        email = str(row.get('email', '')).strip()
+        full_name = str(row.get('full_name', '')).strip()
+        role = str(row.get('role', '')).strip()
+        department = str(row.get('department', '')).strip() if row.get('department') else ''
+
+        if not email or not full_name or not role:
+            errors.append({"row": idx, "email": email or None, "reason": "Missing required field (full_name, email, or role)"})
+            continue
+
+        if '@' not in email or '.' not in email:
+            errors.append({"row": idx, "email": email, "reason": "Invalid email format"})
+            continue
+
+        try:
+            validate_ursb_email(email)
+        except HTTPException:
+            errors.append({"row": idx, "email": email, "reason": "Invalid email domain (must be @ursb.go.ug)"})
+            continue
+
+        existing = db.query(User).filter(User.email == email).first()
+        if existing:
+            errors.append({"row": idx, "email": email, "reason": "Email already exists"})
+            continue
+
+        try:
+            UserRole(role)
+        except ValueError:
+            errors.append({"row": idx, "email": email, "reason": f"Invalid role: {role}"})
+            continue
+
+        accounts_to_create.append({
+            'full_name': full_name,
+            'email': email.strip().lower(),
+            'role': role,
+            'department': department or None,
+        })
+
+    return accounts_to_create, errors
+
+
+# ── HTTP bulk import (non-streaming) ─────────────────────────────────────────
+
 @router.post("/bulk-import", response_model=BulkImportResponse)
 async def bulk_import_users(
     file: UploadFile = File(...),
@@ -89,135 +140,49 @@ async def bulk_import_users(
     """
     Bulk import users from CSV or XLSX file.
 
-    Per-row validation order:
-    1. Email format validation
-    2. Duplicate email check
-    3. Role validity check
-
     All valid rows are inserted in a single transaction. If the transaction fails,
-    no rows are inserted.
-
-    The accounts array in the response contains credentials for all successfully
-    created accounts. This is the only time these passwords are available.
+    no rows are inserted. The accounts array contains credentials for all
+    successfully created accounts — this is the only time these passwords are shown.
     """
-    # Validate file type
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
-    
+
     file_ext = file.filename.lower().split('.')[-1]
     if file_ext not in ['csv', 'xlsx']:
         raise HTTPException(status_code=400, detail="Only .csv and .xlsx files are accepted")
-    
-    # Validate file size (2 MB max)
-    MAX_SIZE = 2 * 1024 * 1024  # 2 MB
+
+    MAX_SIZE = 2 * 1024 * 1024
     content = await file.read()
     if len(content) > MAX_SIZE:
         raise HTTPException(status_code=400, detail="File size exceeds 2 MB limit")
-    
-    # Parse file based on extension
+
     rows = []
     if file_ext == 'csv':
-        import io
-        import csv
-        csv_file = io.StringIO(content.decode('utf-8'))
-        reader = csv.DictReader(csv_file)
+        import io, csv
+        reader = csv.DictReader(io.StringIO(content.decode('utf-8')))
         rows = list(reader)
-    else:  # xlsx
-        import io
-        import openpyxl
-        xlsx_file = io.BytesIO(content)
-        workbook = openpyxl.load_workbook(xlsx_file)
+    else:
+        import io, openpyxl
+        workbook = openpyxl.load_workbook(io.BytesIO(content))
         sheet = workbook.active
         headers = [cell.value for cell in sheet[1]]
-        rows = []
         for row in sheet.iter_rows(min_row=2, values_only=True):
             if any(cell is not None for cell in row):
                 rows.append(dict(zip(headers, row)))
-    
+
     total_rows = len(rows)
-    errors = []
-    accounts_to_create = []
-    
-    # Per-row validation
-    for idx, row in enumerate(rows, start=2):  # Start at 2 (1-based index after header)
-        email = row.get('email', '').strip()
-        full_name = row.get('full_name', '').strip()
-        role = row.get('role', '').strip()
-        department = row.get('department', '').strip()
-        
-        # Skip if required fields missing
-        if not email or not full_name or not role:
-            errors.append(BulkImportError(
-                row=idx,
-                email=email or None,
-                reason="Missing required field (full_name, email, or role)"
-            ))
-            continue
-        
-        # Validate email format
-        if '@' not in email or '.' not in email:
-            errors.append(BulkImportError(
-                row=idx,
-                email=email,
-                reason="Invalid email format"
-            ))
-            continue
-        
-        # Validate email domain (URSB)
-        try:
-            validate_ursb_email(email)
-        except HTTPException:
-            errors.append(BulkImportError(
-                row=idx,
-                email=email,
-                reason="Invalid email domain (must be @ursb.go.ug)"
-            ))
-            continue
-        
-        # Check for duplicate email
-        existing = db.query(User).filter(User.email == email).first()
-        if existing:
-            errors.append(BulkImportError(
-                row=idx,
-                email=email,
-                reason="Email already exists"
-            ))
-            continue
-        
-        # Validate role
-        try:
-            UserRole(role)
-        except ValueError:
-            errors.append(BulkImportError(
-                row=idx,
-                email=email,
-                reason=f"Invalid role: {role}"
-            ))
-            continue
-        
-        # Row is valid, add to creation list
-        accounts_to_create.append({
-            'full_name': full_name,
-            'email': email.strip().lower(),
-            'role': role,
-            'department': department or None,
-        })
+    accounts_to_create, errors = _validate_rows(rows, db)
 
     created_accounts = []
-    
     try:
         for account_data in accounts_to_create:
             password = generate_secure_password()
             salt, password_hash = create_password_hash(password)
-            
-            # Parse first and last name
+
             name_parts = account_data['full_name'].split(' ', 1)
-            first_name = name_parts[0]
-            last_name = name_parts[1] if len(name_parts) > 1 else ''
-            
             new_user = User(
-                first_name=first_name,
-                last_name=last_name,
+                first_name=name_parts[0],
+                last_name=name_parts[1] if len(name_parts) > 1 else '',
                 full_name=account_data['full_name'],
                 email=account_data['email'],
                 username=account_data['email'].split('@')[0],
@@ -229,46 +194,45 @@ async def bulk_import_users(
             )
             db.add(new_user)
             db.flush()
-            
-            temp_pw = TemporaryPassword(
+
+            db.add(TemporaryPassword(
                 user_id=new_user.user_id,
                 password=password,
                 expires_at=datetime.utcnow() + timedelta(days=7),
-            )
-            db.add(temp_pw)
-            
+            ))
+
             created_accounts.append(BulkImportAccount(
                 full_name=account_data['full_name'],
                 email=account_data['email'],
                 role=account_data['role'],
                 generated_password=password,
             ))
-        
-        # Write single audit log for the entire batch
+
         if created_accounts:
-            audit = AuditLog(
+            db.add(AuditLog(
                 user_id=current_user.user_id,
                 action="BULK_USER_IMPORT",
                 table_affected="users",
                 record_id="bulk",
                 details=f"Bulk import created {len(created_accounts)} user accounts by admin {current_user.email}",
                 timestamp=datetime.utcnow(),
-            )
-            db.add(audit)
-        
+            ))
+
         db.commit()
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Transaction failed: {str(e)}")
-    
+
     return BulkImportResponse(
         total_rows=total_rows,
         created=len(created_accounts),
         skipped=len(errors),
-        errors=errors,
-        accounts=created_accounts
+        errors=[BulkImportError(**e) for e in errors],
+        accounts=created_accounts,
     )
 
+
+# ── WebSocket bulk import (streaming progress) ────────────────────────────────
 
 @router.websocket("/bulk-import-ws")
 async def bulk_import_ws(websocket: WebSocket):
@@ -278,13 +242,13 @@ async def bulk_import_ws(websocket: WebSocket):
     Protocol:
     - Client connects and sends a JSON array of row objects.
     - Server validates each row, then creates accounts one at a time.
-    - After each row is processed, server sends: {"type": "progress", "progress": <0-100>, "processed": <n>, "total": <n>}
-    - On completion: {"type": "complete", "total_rows": n, "created": n, "skipped": n, "errors": [...], "accounts": [...]}
-    - If client disconnects mid-import (cancel), the DB transaction is rolled back.
+    - Progress: {"type": "progress", "progress": 0-100, "processed": n, "total": n}
+    - Complete: {"type": "complete", "total_rows": n, "created": n, "skipped": n, "errors": [...], "accounts": [...]}
+    - On client disconnect mid-import, the DB transaction is rolled back.
     """
     await websocket.accept()
 
-    # ── Authenticate via session cookie ──────────────────────────────────────────
+    # Authenticate via session cookie
     session_token = websocket.cookies.get(SESSION_COOKIE_NAME)
     if not session_token:
         await websocket.close(code=4001, reason="Not authenticated")
@@ -301,7 +265,7 @@ async def bulk_import_ws(websocket: WebSocket):
         admin_user_id = session.user.user_id
         admin_email = session.user.email
 
-    # ── Receive rows payload from client ─────────────────────────────────────────
+    # Receive rows payload
     try:
         raw = await websocket.receive_text()
         rows = json.loads(raw)
@@ -310,69 +274,25 @@ async def bulk_import_ws(websocket: WebSocket):
         return
 
     total_rows = len(rows)
-    errors = []
-    accounts_to_create = []
 
-    # ── Validate all rows first ───────────────────────────────────────────────────
     with SessionLocal() as db:
-        for idx, row in enumerate(rows, start=2):
-            email = str(row.get('email', '')).strip()
-            full_name = str(row.get('full_name', '')).strip()
-            role = str(row.get('role', '')).strip()
-            department = str(row.get('department', '')).strip() if row.get('department') else ''
+        accounts_to_create, errors = _validate_rows(rows, db)
 
-            if not email or not full_name or not role:
-                errors.append({"row": idx, "email": email or None, "reason": "Missing required field (full_name, email, or role)"})
-                continue
-
-            if '@' not in email or '.' not in email:
-                errors.append({"row": idx, "email": email, "reason": "Invalid email format"})
-                continue
-
-            try:
-                validate_ursb_email(email)
-            except HTTPException:
-                errors.append({"row": idx, "email": email, "reason": "Invalid email domain (must be @ursb.go.ug)"})
-                continue
-
-            existing = db.query(User).filter(User.email == email).first()
-            if existing:
-                errors.append({"row": idx, "email": email, "reason": "Email already exists"})
-                continue
-
-            try:
-                UserRole(role)
-            except ValueError:
-                errors.append({"row": idx, "email": email, "reason": f"Invalid role: {role}"})
-                continue
-
-            accounts_to_create.append({
-                'full_name': full_name,
-                'email': email.strip().lower(),
-                'role': role,
-                'department': department or None,
-            })
-
-    # ── Create accounts one-by-one with progress pushes ──────────────────────────
-    created_accounts = []
     total_to_create = len(accounts_to_create)
+    created_accounts = []
 
     with SessionLocal() as db:
         try:
             for i, account_data in enumerate(accounts_to_create):
-                # Check if client is still connected before each row
-                await asyncio.sleep(0)  # yield to event loop to detect disconnects
+                await asyncio.sleep(0)  # yield to detect disconnects
 
                 password = generate_secure_password()
                 salt, password_hash = create_password_hash(password)
 
                 name_parts = account_data['full_name'].split(' ', 1)
-                first_name = name_parts[0]
-                last_name = name_parts[1] if len(name_parts) > 1 else ''
-
                 new_user = User(
-                    first_name=first_name,
-                    last_name=last_name,
+                    first_name=name_parts[0],
+                    last_name=name_parts[1] if len(name_parts) > 1 else '',
                     full_name=account_data['full_name'],
                     email=account_data['email'],
                     username=account_data['email'].split('@')[0],
@@ -385,12 +305,11 @@ async def bulk_import_ws(websocket: WebSocket):
                 db.add(new_user)
                 db.flush()
 
-                temp_pw = TemporaryPassword(
+                db.add(TemporaryPassword(
                     user_id=new_user.user_id,
                     password=password,
                     expires_at=datetime.utcnow() + timedelta(days=7),
-                )
-                db.add(temp_pw)
+                ))
 
                 created_accounts.append({
                     'full_name': account_data['full_name'],
@@ -399,7 +318,6 @@ async def bulk_import_ws(websocket: WebSocket):
                     'generated_password': password,
                 })
 
-                # Send real progress — percentage of VALID rows that have been created
                 progress = round(((i + 1) / total_to_create) * 100) if total_to_create > 0 else 100
                 await websocket.send_json({
                     "type": "progress",
@@ -407,24 +325,20 @@ async def bulk_import_ws(websocket: WebSocket):
                     "processed": i + 1,
                     "total": total_to_create,
                 })
-                # Small sleep so the client can render updates smoothly
                 await asyncio.sleep(0.05)
 
-            # Audit log
             if created_accounts:
-                audit = AuditLog(
+                db.add(AuditLog(
                     user_id=admin_user_id,
                     action="BULK_USER_IMPORT",
                     table_affected="users",
                     record_id="bulk",
                     details=f"Bulk import created {len(created_accounts)} user accounts by admin {admin_email}",
                     timestamp=datetime.utcnow(),
-                )
-                db.add(audit)
+                ))
 
             db.commit()
 
-            # Send completion message
             await websocket.send_json({
                 "type": "complete",
                 "total_rows": total_rows,
@@ -435,7 +349,6 @@ async def bulk_import_ws(websocket: WebSocket):
             })
 
         except WebSocketDisconnect:
-            # Client cancelled — roll back everything
             db.rollback()
             return
         except Exception as e:
@@ -447,248 +360,3 @@ async def bulk_import_ws(websocket: WebSocket):
             return
 
     await websocket.close()
-
-
-
-def generate_secure_password() -> str:
-    """
-    Generate a cryptographically random secure password.
-
-    Requirements:
-    - Minimum 12 characters
-    - At least one uppercase letter (A-Z)
-    - At least one lowercase letter (a-z)
-    - At least one digit (0-9)
-    - At least one special character from !@#$%^&*
-
-    Uses Python's secrets module for cryptographic randomness.
-    The generated value is returned once and never stored.
-    """
-    uppercase = string.ascii_uppercase
-    lowercase = string.ascii_lowercase
-    digits = string.digits
-    special = "!@#$%^&*"
-
-    # Ensure at least one character from each required set
-    password = [
-        secrets.choice(uppercase),
-        secrets.choice(lowercase),
-        secrets.choice(digits),
-        secrets.choice(special),
-    ]
-
-    # Fill the rest with random characters from all sets
-    all_chars = uppercase + lowercase + digits + special
-    for _ in range(8):  # 8 more characters to reach minimum 12
-        password.append(secrets.choice(all_chars))
-
-    # Shuffle to avoid predictable pattern
-    secrets.SystemRandom().shuffle(password)
-
-    return ''.join(password)
-
-
-class BulkImportError(BaseModel):
-    row: int
-    email: Optional[str]
-    reason: str
-
-
-class BulkImportAccount(BaseModel):
-    full_name: str
-    email: str
-    role: str
-    generated_password: str
-
-
-class BulkImportResponse(BaseModel):
-    total_rows: int
-    created: int
-    skipped: int
-    errors: List[BulkImportError]
-    accounts: List[BulkImportAccount]
-
-
-@router.post("/bulk-import", response_model=BulkImportResponse)
-async def bulk_import_users(
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("System Administrator")),
-):
-    """
-    Bulk import users from CSV or XLSX file.
-
-    Per-row validation order:
-    1. Email format validation
-    2. Duplicate email check
-    3. Role validity check
-
-    All valid rows are inserted in a single transaction. If the transaction fails,
-    no rows are inserted.
-
-    The accounts array in the response contains credentials for all successfully
-    created accounts. This is the only time these passwords are available.
-    """
-    # Validate file type
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="No file provided")
-    
-    file_ext = file.filename.lower().split('.')[-1]
-    if file_ext not in ['csv', 'xlsx']:
-        raise HTTPException(status_code=400, detail="Only .csv and .xlsx files are accepted")
-    
-    # Validate file size (2 MB max)
-    MAX_SIZE = 2 * 1024 * 1024  # 2 MB
-    content = await file.read()
-    if len(content) > MAX_SIZE:
-        raise HTTPException(status_code=400, detail="File size exceeds 2 MB limit")
-    
-    # Parse file based on extension
-    rows = []
-    if file_ext == 'csv':
-        import io
-        import csv
-        csv_file = io.StringIO(content.decode('utf-8'))
-        reader = csv.DictReader(csv_file)
-        rows = list(reader)
-    else:  # xlsx
-        import io
-        import openpyxl
-        xlsx_file = io.BytesIO(content)
-        workbook = openpyxl.load_workbook(xlsx_file)
-        sheet = workbook.active
-        headers = [cell.value for cell in sheet[1]]
-        rows = []
-        for row in sheet.iter_rows(min_row=2, values_only=True):
-            if any(cell is not None for cell in row):
-                rows.append(dict(zip(headers, row)))
-    
-    total_rows = len(rows)
-    errors = []
-    accounts_to_create = []
-    
-    # Per-row validation
-    for idx, row in enumerate(rows, start=2):  # Start at 2 (1-based index after header)
-        email = row.get('email', '').strip()
-        full_name = row.get('full_name', '').strip()
-        role = row.get('role', '').strip()
-        department = row.get('department', '').strip()
-        
-        # Skip if required fields missing
-        if not email or not full_name or not role:
-            errors.append(BulkImportError(
-                row=idx,
-                email=email or None,
-                reason="Missing required field (full_name, email, or role)"
-            ))
-            continue
-        
-        # Validate email format
-        if '@' not in email or '.' not in email:
-            errors.append(BulkImportError(
-                row=idx,
-                email=email,
-                reason="Invalid email format"
-            ))
-            continue
-        
-        # Validate email domain (URSB)
-        try:
-            validate_ursb_email(email)
-        except HTTPException:
-            errors.append(BulkImportError(
-                row=idx,
-                email=email,
-                reason="Invalid email domain (must be @ursb.go.ug)"
-            ))
-            continue
-        
-        # Check for duplicate email
-        existing = db.query(User).filter(User.email == email).first()
-        if existing:
-            errors.append(BulkImportError(
-                row=idx,
-                email=email,
-                reason="Email already exists"
-            ))
-            continue
-        
-        # Validate role
-        try:
-            UserRole(role)
-        except ValueError:
-            errors.append(BulkImportError(
-                row=idx,
-                email=email,
-                reason=f"Invalid role: {role}"
-            ))
-            continue
-        
-        # Row is valid, add to creation list
-        accounts_to_create.append({
-            'full_name': full_name,
-            'email': email.strip().lower(),
-            'role': role,
-            'department': department,
-            'row_idx': idx
-        })
-    
-    # Insert valid rows in a single transaction
-    created_accounts = []
-    try:
-        for account_data in accounts_to_create:
-            generated_password = generate_secure_password()
-            salt, p_hash = create_password_hash(generated_password)
-
-            new_user = User(
-                full_name=account_data['full_name'],
-                email=account_data['email'],
-                password_hash=p_hash,
-                password_salt=salt,
-                role=UserRole(account_data['role']),
-                department=account_data['department'] or None,
-                is_active=True,
-            )
-            db.add(new_user)
-            db.flush()  # Get the user_id before creating temp password
-
-            # Store temporary password for admin viewing (expires in 7 days)
-            temp_password = TemporaryPassword(
-                user_id=new_user.user_id,
-                password=generated_password,
-                created_at=datetime.utcnow(),
-                expires_at=datetime.utcnow() + timedelta(days=7),
-            )
-            db.add(temp_password)
-
-            created_accounts.append(BulkImportAccount(
-                full_name=account_data['full_name'],
-                email=account_data['email'],
-                role=account_data['role'],
-                generated_password=generated_password
-            ))
-        
-        # Write single audit log for the entire batch
-        if created_accounts:
-            audit = AuditLog(
-                user_id=current_user.user_id,
-                action="BULK_USER_IMPORT",
-                table_affected="users",
-                record_id="bulk",
-                details=f"Bulk import created {len(created_accounts)} user accounts by admin {current_user.email}",
-                timestamp=datetime.utcnow(),
-            )
-            db.add(audit)
-        
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Transaction failed: {str(e)}")
-    
-    return BulkImportResponse(
-        total_rows=total_rows,
-        created=len(created_accounts),
-        skipped=len(errors),
-        errors=errors,
-        accounts=created_accounts
-    )
