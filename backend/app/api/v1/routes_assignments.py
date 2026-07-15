@@ -94,16 +94,21 @@ def _serialize_assignment(assignment: Assignment, db: Session) -> AssignmentResp
     )
 
 
-def _log(db: Session, *, actor: User, action: str, record_id: str, details: str) -> None:
-    db.add(
-        AuditLog(
-            user_id=actor.user_id,
-            action=action,
-            table_affected="assignments",
-            record_id=record_id,
-            details=details,
-        )
+def _log(db: Session, *, actor: User, action: str, record_id: str, details: str, workflow_step: str = None) -> None:
+    """Enhanced audit logging with workflow step tracking for accountability."""
+    log_entry = AuditLog(
+        user_id=actor.user_id,
+        action=action,
+        table_affected="assignments",
+        record_id=record_id,
+        details=details,
     )
+    
+    # Add workflow step information if provided
+    if workflow_step:
+        log_entry.details = f"[{workflow_step}] {details}"
+    
+    db.add(log_entry)
 
 
 @router.post("", response_model=AssignmentResponse, status_code=status.HTTP_201_CREATED)
@@ -113,7 +118,15 @@ def create_assignment(
     current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
 ):
     """Assign an asset to a custodian. Asset Manager and System Administrator only. SRS AM-A01."""
+    # Prevent self-assignment for accountability
+    if int(body.assigned_to) == int(current_user.id):
+        raise HTTPException(status_code=403, detail="Cannot assign assets to yourself for accountability reasons. Use transfer workflow instead.")
+    
     assignment = assignment_service.assign_asset(db, body.asset_id, body, current_user.user_id)
+    
+    # Enhanced audit log with workflow step
+    _log(db, actor=current_user, action="CREATE_ASSIGNMENT", record_id=str(assignment.assignment_id), 
+          details=f"Asset {body.asset_id} assigned to user {body.assigned_to}", workflow_step="INITIATION")
     
     # S3-08: Notify employee of assignment
     from app.services.notification_service import create_notification
@@ -208,11 +221,16 @@ def get_assignment(
 def accept_assignment_route(
     assignment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("Employee")),
+    current_user: User = Depends(require_role(UserRole.EMPLOYEE)),
 ):
     """Step 1 of 2: Employee accepts assignment offer. Employee only. SRS §3 — Assignment Workflows."""
     from app.services.assignment_service import accept_assignment as service_accept
     assignment = service_accept(db, assignment_id, current_user.id)
+    
+    # Enhanced audit log with workflow step
+    _log(db, actor=current_user, action="ACCEPT_ASSIGNMENT", record_id=str(assignment_id), 
+          details=f"Assignment {assignment_id} accepted by user {current_user.id}", workflow_step="USER_CONFIRMATION")
+    
     return _serialize_assignment(assignment, db)
 
 
@@ -220,7 +238,7 @@ def accept_assignment_route(
 def decline_assignment_route(
     assignment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("Employee")),
+    current_user: User = Depends(require_role(UserRole.EMPLOYEE)),
 ):
     """Step 1 of 2: Employee declines assignment offer. Employee only. SRS §3 — Assignment Workflows."""
     from app.services.assignment_service import decline_assignment as service_decline
@@ -232,11 +250,16 @@ def decline_assignment_route(
 def confirm_handover_route(
     assignment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("Asset Custodian")),
+    current_user: User = Depends(require_role(UserRole.ASSET_CUSTODIAN)),
 ):
     """Step 2 of 2: Custodian confirms physical handover. Custodian only. SRS §3 — Handover Workflows."""
     from app.services.assignment_service import confirm_handover as service_confirm
     assignment = service_confirm(db, assignment_id, current_user.id)
+    
+    # Enhanced audit log with workflow step
+    _log(db, actor=current_user, action="CONFIRM_HANDOVER", record_id=str(assignment_id), 
+          details=f"Physical handover confirmed by custodian {current_user.id}", workflow_step="CUSTODIAN_CONFIRMATION")
+    
     return _serialize_assignment(assignment, db)
 
 
@@ -251,6 +274,10 @@ def request_return_route(
     from app.services.notification_service import create_notification
     
     assignment = request_asset_return(db, assignment_id, current_user.user_id)
+    
+    # Enhanced audit log with workflow step
+    _log(db, actor=current_user, action="REQUEST_RETURN", record_id=str(assignment_id), 
+          details=f"Return requested by custodian {current_user.id}", workflow_step="RETURN_INITIATION")
     
     # Notify employee of return request
     asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
@@ -278,6 +305,10 @@ def approve_return_route(
     from app.services.notification_service import create_notification
     
     assignment = approve_return_request(db, assignment_id, current_user.user_id)
+    
+    # Enhanced audit log with workflow step
+    _log(db, actor=current_user, action="APPROVE_RETURN", record_id=str(assignment_id), 
+          details=f"Return approved by employee {current_user.id}", workflow_step="RETURN_APPROVAL")
     
     # Notify custodian that return is approved
     asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
@@ -307,6 +338,10 @@ def reject_return_route(
     
     assignment = reject_return_request(db, assignment_id, current_user.user_id, body.reason)
     
+    # Enhanced audit log with workflow step
+    _log(db, actor=current_user, action="REJECT_RETURN", record_id=str(assignment_id), 
+          details=f"Return rejected by employee {current_user.id}. Reason: {body.reason}", workflow_step="RETURN_REJECTION")
+    
     # Notify custodian that return is rejected
     asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
     if asset and assignment.return_requested_by:
@@ -333,6 +368,10 @@ def confirm_return_route(
     from app.services.notification_service import create_notification
     
     assignment = confirm_asset_return(db, assignment_id, current_user.user_id)
+    
+    # Enhanced audit log with workflow step
+    _log(db, actor=current_user, action="CONFIRM_RETURN", record_id=str(assignment_id), 
+          details=f"Physical return confirmed by custodian {current_user.id}", workflow_step="RETURN_COMPLETION")
     
     # Notify asset manager that return is complete
     asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()

@@ -14,7 +14,7 @@ from app.models.user import User, UserRole
 from app.models.audit_log import AuditLog
 from app.models.session import Session
 from app.models.temporary_password import TemporaryPassword
-from app.api.v1.auth import get_current_user, require_roles
+from app.api.v1.auth import get_current_user, require_role
 from app.services.auth import create_password_hash, validate_ursb_email
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
@@ -224,7 +224,7 @@ def _log_to_out(log: AuditLog, db: Session) -> AuditLogOut:
 def list_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(
-        require_roles("System Administrator", "Asset Manager")
+        require_role(UserRole.SYSTEM_ADMINISTRATOR, UserRole.ASSET_MANAGER)
     ),
 ):
     """List all users. Accessible by System Administrator and Asset Manager."""
@@ -236,7 +236,7 @@ def list_users(
 def create_user(
     body: UserCreateAutoRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("System Administrator")),
+    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
 ):
     """Create a new user account with auto-generated password. Admin only."""
     # Validate email domain - only @ursb.go.ug addresses are permitted
@@ -303,7 +303,7 @@ def update_user(
     user_id: str,
     body: UpdateUserRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("System Administrator")),
+    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
 ):
     """Update user details. Admin only."""
     target = db.query(User).filter(User.user_id == user_id).first()
@@ -359,7 +359,7 @@ def update_user_role(
     user_id: str,
     body: RoleUpdateRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("System Administrator")),
+    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
 ):
     """Change a user's role. Only System Administrators can do this."""
     target = db.query(User).filter(User.user_id == user_id).first()
@@ -405,7 +405,7 @@ def update_user_role(
 def deactivate_user(
     user_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("System Administrator")),
+    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
 ):
     """Deactivate a user without deleting them. Admin only."""
     target = db.query(User).filter(User.user_id == user_id).first()
@@ -438,7 +438,7 @@ def deactivate_user(
 def reactivate_user(
     user_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("System Administrator")),
+    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
 ):
     """Reactivate a previously deactivated user. Admin only."""
     target = db.query(User).filter(User.user_id == user_id).first()
@@ -473,7 +473,7 @@ def list_audit_logs(
     to_date: Optional[date] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(
-        require_roles("System Administrator", "Asset Manager")
+        require_role(UserRole.SYSTEM_ADMINISTRATOR, UserRole.ASSET_MANAGER)
     ),
 ):
     

@@ -276,7 +276,7 @@ def approve_request(
     request_id: int,
     body: AssetRequestApprove,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
+    current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR)),
     _guard: None = Depends(require_not_self_approval),
 ):
     request = db.query(AssetRequest).filter(AssetRequest.request_id == request_id).first()
@@ -323,7 +323,7 @@ def reject_request(
     request_id: int,
     body: AssetRequestReject,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
+    current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR)),
     _guard: None = Depends(require_not_self_approval),
 ):
     request = db.query(AssetRequest).filter(AssetRequest.request_id == request_id).first()
@@ -358,7 +358,7 @@ def assign_request(
     request_id: int,
     body: AssetRequestAssign,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
+    current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR)),
 ):
     request = db.query(AssetRequest).filter(AssetRequest.request_id == request_id).first()
     if not request:
@@ -570,7 +570,7 @@ def pickup_request(
 def complete_request(
     request_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
+    current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR)),
 ):
     request = db.query(AssetRequest).filter(AssetRequest.request_id == request_id).first()
     if not request:

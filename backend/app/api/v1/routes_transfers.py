@@ -134,6 +134,10 @@ def create_transfer(
 
     if str(body.to_user_id) == str(from_user_id):
         raise HTTPException(status_code=400, detail="Cannot transfer to the current custodian")
+    
+    # Prevent self-transfer for accountability
+    if str(body.to_user_id) == str(current_user.user_id):
+        raise HTTPException(status_code=403, detail="Cannot transfer assets to yourself for accountability reasons. Use assignment workflow instead.")
 
     # Guard: Do not transfer if there is a pending request for this asset. This prevents orphaning that request.
     pending_exists = False
@@ -192,13 +196,13 @@ def create_transfer(
     db.add(asset)
     db.commit()
 
-    # Write audit log
+    # Write audit log with workflow step
     audit = AuditLog(
         user_id=current_user.user_id,
         action="TRANSFER_ASSET",
         table_affected="transfers",
         record_id=str(transfer.transfer_id),
-        details=f"Asset {asset.asset_id} transferred from user {from_user_id} to user {body.to_user_id}. Reason: {body.reason}",
+        details=f"[TRANSFER_INITIATION] Asset {asset.asset_id} transferred from user {from_user_id} to user {body.to_user_id}. Reason: {body.reason}",
     )
     db.add(audit)
     db.commit()
@@ -243,6 +247,19 @@ def acknowledge_transfer(
     transfer.acknowledged_at = datetime.utcnow()
     db.add(transfer)
     db.commit()
+    
+    # Notify sender that transfer was acknowledged
+    from app.services.notification_service import create_notification
+    asset = db.query(Asset).filter(Asset.asset_id == transfer.asset_id).first()
+    if asset:
+        create_notification(
+            db=db,
+            user_id=str(transfer.from_user_id),
+            title="Transfer Acknowledged",
+            message=f"Transfer of asset '{asset.asset_name}' to {transfer.to_user_id} has been acknowledged.",
+            notification_type="TRANSFER_ACKNOWLEDGED",
+            related_asset_id=asset.asset_id,
+        )
 
     # Transition asset status from Under Transfer to Assigned upon acknowledgment
     asset = db.query(Asset).filter(Asset.asset_id == transfer.asset_id).first()
@@ -252,13 +269,13 @@ def acknowledge_transfer(
         db.add(asset)
         db.commit()
 
-    # Audit
+    # Audit with workflow step
     audit = AuditLog(
         user_id=current_user.user_id,
         action="ACKNOWLEDGE_TRANSFER",
         table_affected="transfers",
         record_id=str(transfer.transfer_id),
-        details=f"Transfer {transfer.transfer_id} acknowledged by user {current_user.user_id}",
+        details=f"[TRANSFER_ACKNOWLEDGMENT] Transfer {transfer.transfer_id} acknowledged by user {current_user.user_id}",
     )
     db.add(audit)
     db.commit()

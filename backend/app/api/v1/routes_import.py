@@ -15,7 +15,8 @@ from sqlalchemy.orm import Session
 from app.db import get_db, SessionLocal
 from app.models.asset import Asset, AssetCondition, AssetStatus, AssetType, SourceType
 from app.models.audit_log import AuditLog
-from app.api.v1.auth import get_current_user, require_roles
+from app.models.user import UserRole
+from app.api.v1.auth import get_current_user, require_role
 
 router = APIRouter(prefix="/api/v1/assets", tags=["assets", "import"])
 
@@ -49,7 +50,7 @@ async def bulk_import_assets(
     request: Request,
     file: UploadFile = File(...),
     import_mode: str = Form("add"),
-    current_user=Depends(require_roles("Asset Manager", "System Administrator", "Asset Custodian"))
+    current_user=Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SYSTEM_ADMINISTRATOR, UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.ASSET_CUSTODIAN))
 ):
     """
     Bulk import assets from a CSV or XLSX file.

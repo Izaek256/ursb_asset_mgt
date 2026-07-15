@@ -8,11 +8,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.api.v1.auth import get_current_user, require_roles
+from app.api.v1.auth import get_current_user, require_role
 from app.models.asset import Asset, AssetStatus, AssetType
 from app.models.assignment import Assignment, AssignmentStatus
 from app.models.audit_log import AuditLog
 from app.models.user import User
+from app.models.user import UserRole
 from app.services.asset_service import validate_status_transition
 
 router = APIRouter(prefix="/api/v1/storage", tags=["storage"])
@@ -110,7 +111,7 @@ def assign_from_storage(
     asset_id: str,
     body: StorageAssignRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("System Administrator", "Asset Manager")),
+    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR, UserRole.ASSET_MANAGER)),
 ):
     asset = db.query(Asset).filter(Asset.asset_id == asset_id).first()
     if not asset:
@@ -163,7 +164,7 @@ def assign_from_storage(
 def return_to_storage(
     asset_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("System Administrator", "Asset Manager")),
+    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR, UserRole.ASSET_MANAGER)),
 ):
     asset = db.query(Asset).filter(Asset.asset_id == asset_id).first()
     if not asset:

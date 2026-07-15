@@ -67,6 +67,10 @@ export async function apiFetch<T>(
     // If we get 401, clear local user session
     // Only reload/redirect to login if not already on the login page
     if (window.location.pathname !== "/login") {
+      // Show toast notification
+      if ((window as any).toast) {
+        (window as any).toast.error("Session Expired", "Please log in again to continue.");
+      }
       window.location.pathname = "/login";
     }
     throw new Error("Unauthorized");
@@ -78,15 +82,27 @@ export async function apiFetch<T>(
     if (body.detail === "Account is deactivated. Contact your administrator.") {
       // Clear user state and redirect to login with deactivation message
       if (window.location.pathname !== "/login") {
+        if ((window as any).toast) {
+          (window as any).toast.error("Account Deactivated", "Your account has been deactivated. Please contact your administrator.");
+        }
         window.location.pathname = "/login?deactivated=true";
       }
       throw new Error("Account deactivated");
+    }
+    // Show permission error toast
+    if ((window as any).toast) {
+      (window as any).toast.error("Access Denied", body.detail || "You don't have permission to perform this action.");
     }
     throw new Error(body.detail || `Request failed (${res.status})`);
   }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
+    // Show error toast for other errors
+    if ((window as any).toast) {
+      const errorMessage = body.detail || `Request failed (${res.status})`;
+      (window as any).toast.error("Error", errorMessage);
+    }
     throw new Error(body.detail || `Request failed (${res.status})`);
   }
   return res.json();

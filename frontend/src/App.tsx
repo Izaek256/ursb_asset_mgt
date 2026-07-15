@@ -1,6 +1,8 @@
 import React from "react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import AppLayout from "./components/AppLayout";
+import RoleGuard from "./components/RoleGuard";
+import ToastContainer from "./components/Toast";
 import UserManagement from "./pages/UserManagement";
 import AuditLogs from "./pages/AuditLogs";
 import Assets from "./pages/Assets";
@@ -16,6 +18,7 @@ import Settings from "./pages/Settings";
 import Storage from "./pages/Storage";
 import Transfers from "./pages/Transfers";
 import CredentialsPage from "./pages/CredentialsPage";
+import { hasPageAccess, getDefaultPathForRole } from "./utils/rbac";
 
 const NAV_LABELS: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -44,9 +47,26 @@ function AppShell() {
   }, []);
 
   const navigate = (to: string) => {
+    // Check if user has access to the target page
+    if (!hasPageAccess(user?.role, to)) {
+      // Redirect to default page for their role if they don't have access
+      const defaultPath = getDefaultPathForRole(user?.role);
+      window.history.pushState({}, "", defaultPath);
+      setPath(defaultPath);
+      return;
+    }
     window.history.pushState({}, "", to);
     setPath(to);
   };
+
+  // Redirect to default path if current path is not accessible
+  React.useEffect(() => {
+    if (user && !hasPageAccess(user.role, path)) {
+      const defaultPath = getDefaultPathForRole(user.role);
+      window.history.pushState({}, "", defaultPath);
+      setPath(defaultPath);
+    }
+  }, [user, path]);
 
   const getRequestsLabel = () =>
     ["System Administrator", "Asset Manager"].includes(user!.role) ? "Requests" : "My Requests";
@@ -61,7 +81,11 @@ function AppShell() {
 
   const renderContent = (): React.ReactNode => {
     if (path.startsWith("/assets/") && path !== "/assets" && path !== "/assets/register") {
-      return <AssetDetail />;
+      return (
+        <RoleGuard requiredPath="/assets">
+          <AssetDetail />
+        </RoleGuard>
+      );
     }
 
     switch (path) {
@@ -70,27 +94,59 @@ function AppShell() {
       case "/requests":
         return <Requests />;
       case "/assets":
-        return <Assets />;
+        return (
+          <RoleGuard requiredPath="/assets">
+            <Assets />
+          </RoleGuard>
+        );
       case "/assets/register":
-        return <AssetRegistration />;
+        return (
+          <RoleGuard requiredPath="/assets/register">
+            <AssetRegistration />
+          </RoleGuard>
+        );
       case "/inventory":
         return <Inventory />;
       case "/assignments":
         return <Assignments />;
       case "/storage":
-        return <Storage />;
+        return (
+          <RoleGuard requiredPath="/storage">
+            <Storage />
+          </RoleGuard>
+        );
       case "/transfers":
-        return <Transfers />;
+        return (
+          <RoleGuard requiredPath="/transfers">
+            <Transfers />
+          </RoleGuard>
+        );
       case "/maintenance":
-        return <Maintenance />;
+        return (
+          <RoleGuard requiredPath="/maintenance">
+            <Maintenance />
+          </RoleGuard>
+        );
       case "/admin/audit-logs":
-        return <AuditLogs />;
+        return (
+          <RoleGuard requiredPath="/admin/audit-logs">
+            <AuditLogs />
+          </RoleGuard>
+        );
       case "/admin/users":
-        return <UserManagement />;
+        return (
+          <RoleGuard requiredPath="/admin/users">
+            <UserManagement />
+          </RoleGuard>
+        );
       case "/settings":
         return <Settings />;
       case "/credentials":
-        return <CredentialsPage />;
+        return (
+          <RoleGuard requiredPath="/credentials">
+            <CredentialsPage />
+          </RoleGuard>
+        );
       default:
         return <Dashboard onNavigate={navigate} />;
     }
@@ -98,6 +154,7 @@ function AppShell() {
 
   return (
     <div className="h-screen overflow-hidden">
+      <ToastContainer />
       <AppLayout pageTitle={getPageTitle()} activePath={path} onNavigate={navigate}>
         {renderContent()}
       </AppLayout>

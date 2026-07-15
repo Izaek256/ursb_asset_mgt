@@ -15,7 +15,7 @@ from app.db import get_db, SessionLocal
 from app.models.user import User, UserRole
 from app.models.audit_log import AuditLog
 from app.models.temporary_password import TemporaryPassword
-from app.api.v1.auth import get_current_user, require_roles
+from app.api.v1.auth import get_current_user, require_role
 from app.services.auth import create_password_hash, validate_ursb_email, get_session, SESSION_COOKIE_NAME
 
 router = APIRouter(prefix="/api/v1/users", tags=["user-import"])
@@ -135,7 +135,7 @@ def _validate_rows(rows: list, db: Session) -> tuple[list, list]:
 async def bulk_import_users(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("System Administrator")),
+    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
 ):
     """
     Bulk import users from CSV or XLSX file.

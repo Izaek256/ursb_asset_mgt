@@ -17,7 +17,7 @@ from app.models.asset import Asset, AssetStatus
 from app.models.disposal_record import DisposalRecord, DisposalMethod
 from app.models.assignment import Assignment, AssignmentStatus
 from app.models.audit_log import AuditLog
-from app.api.v1.auth import get_current_user, require_role, require_roles
+from app.api.v1.auth import get_current_user, require_role
 from app.models.user import UserRole
 from app.services.asset_service import validate_status_transition
 
@@ -204,7 +204,7 @@ def recommend_disposal(
     asset_id: str,
     body: RecommendDisposalRequest,
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles("Asset Custodian")),
+    current_user=Depends(require_role(UserRole.ASSET_CUSTODIAN)),
 ):
     """Step 1 of 2: Custodian recommends asset for disposal. Custodian only. SRS AM-D01."""
     # Fetch asset
@@ -260,7 +260,7 @@ def approve_disposal(
     disposal_id: int,
     body: ApproveDisposalRequest,
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles("Asset Manager", "System Administrator")),
+    current_user=Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SYSTEM_ADMINISTRATOR)),
 ):
     """Step 2a of 2: Asset Manager approves disposal recommendation. Asset Manager/Admin only. SRS AM-D01."""
 
@@ -318,7 +318,7 @@ def reject_disposal(
     disposal_id: int,
     body: RejectDisposalRequest,
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles("Asset Manager", "System Administrator")),
+    current_user=Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SYSTEM_ADMINISTRATOR)),
 ):
     """Step 2b of 2: Asset Manager rejects disposal recommendation. Asset Manager/Admin only. SRS AM-D01."""
     # Fetch disposal record

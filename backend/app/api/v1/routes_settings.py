@@ -12,7 +12,8 @@ from app.models.user import User
 from app.models.user_settings import UserSettings
 from app.models.system_settings import SystemSettings
 from app.models.audit_log import AuditLog
-from app.api.v1.auth import get_current_user, require_roles
+from app.models.user import UserRole
+from app.api.v1.auth import get_current_user, require_role
 
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
@@ -125,7 +126,7 @@ def update_user_settings(
 @router.get("/system", response_model=SystemSettingsResponse)
 def get_system_settings(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("System Administrator", "Asset Manager")),
+    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR, UserRole.ASSET_MANAGER)),
 ):
     settings = db.query(SystemSettings).first()
     if not settings:
@@ -148,7 +149,7 @@ def get_system_settings(
 def update_system_settings(
     body: SystemSettingsUpdateRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("System Administrator")),
+    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
 ):
     settings = db.query(SystemSettings).first()
     if not settings:

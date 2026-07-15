@@ -1,5 +1,6 @@
 import { useAuth } from "../AuthContext";
 import { ICONS } from "../utils/icons";
+import { getAccessiblePages } from "../utils/rbac";
 import Button from "./common/Button";
 import logoImg from "../assets/logo 1.jpeg";
 
@@ -12,26 +13,19 @@ interface SidebarProps {
   className?: string;
 }
 
-const ALL_ROLES = [
-  "System Administrator",
-  "Asset Manager",
-  "Asset Custodian",
-  "Employee",
-];
-
 const NAV_ITEMS = [
-  { id: "dashboard", label: "Dashboard", icon: ICONS.dashboard, path: "/dashboard", roles: ALL_ROLES },
-  { id: "requests", label: "Requests", icon: ICONS.requests, path: "/requests", roles: ALL_ROLES },
-  { id: "assets", label: "Assets", icon: ICONS.assets, path: "/assets", roles: ["System Administrator", "Asset Manager", "Asset Custodian"] },
-  { id: "inventory", label: "Inventory", icon: ICONS.inventory, path: "/inventory", roles: ALL_ROLES },
-  { id: "assignments", label: "Assignments", icon: ICONS.assignments, path: "/assignments", roles: ALL_ROLES },
-  { id: "storage", label: "Storage", icon: ICONS.storage, path: "/storage", roles: ["System Administrator", "Asset Manager"] },
-  { id: "transfers", label: "Transfers", icon: ICONS.transfers, path: "/transfers", roles: ["System Administrator", "Asset Manager"] },
-  { id: "maintenance", label: "Maintenance", icon: ICONS.maintenance, path: "/maintenance", roles: ["System Administrator", "Asset Manager"] },
-  { id: "users", label: "User Management", icon: ICONS.users, path: "/admin/users", roles: ["System Administrator", "Asset Manager"] },
-  { id: "audit", label: "Audit Logs", icon: ICONS.audit, path: "/admin/audit-logs", roles: ["System Administrator", "Asset Manager"] },
-  { id: "credentials", label: "Credentials", icon: ICONS.credentials, path: "/credentials", roles: ["System Administrator"] },
-  { id: "settings", label: "Settings", icon: ICONS.settings, path: "/settings", roles: ALL_ROLES },
+  { id: "dashboard", label: "Dashboard", icon: ICONS.dashboard, path: "/dashboard" },
+  { id: "requests", label: "Requests", icon: ICONS.requests, path: "/requests" },
+  { id: "assets", label: "Assets", icon: ICONS.assets, path: "/assets" },
+  { id: "inventory", label: "Inventory", icon: ICONS.inventory, path: "/inventory" },
+  { id: "assignments", label: "Assignments", icon: ICONS.assignments, path: "/assignments" },
+  { id: "storage", label: "Storage", icon: ICONS.storage, path: "/storage" },
+  { id: "transfers", label: "Transfers", icon: ICONS.transfers, path: "/transfers" },
+  { id: "maintenance", label: "Maintenance", icon: ICONS.maintenance, path: "/maintenance" },
+  { id: "users", label: "User Management", icon: ICONS.users, path: "/admin/users" },
+  { id: "audit", label: "Audit Logs", icon: ICONS.audit, path: "/admin/audit-logs" },
+  { id: "credentials", label: "Credentials", icon: ICONS.credentials, path: "/credentials" },
+  { id: "settings", label: "Settings", icon: ICONS.settings, path: "/settings" },
 ];
 
 export default function Sidebar({
@@ -53,9 +47,10 @@ export default function Sidebar({
         .slice(0, 2)
     : "RS";
 
-  const visibleNav = NAV_ITEMS.filter((n) =>
-    n.roles.some((r) => user?.role?.toLowerCase().includes(r.toLowerCase()))
-  );
+  const accessiblePages = getAccessiblePages(user?.role);
+  const accessiblePaths = new Set(accessiblePages.map(p => p.path));
+  
+  const visibleNav = NAV_ITEMS.filter((n) => accessiblePaths.has(n.path));
 
   const pinClasses =
     pinned === "overlay"

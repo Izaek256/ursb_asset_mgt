@@ -256,28 +256,6 @@ def create_asset(
     )
 
 
-@router.post("", response_model=AssetOut, status_code=status.HTTP_201_CREATED)
-def create_asset(
-    body: AssetCreate,
-    db: Session = Depends(get_db),
-    current_user=Depends(require_roles("Asset Manager")),
-):
-    """Register a new asset. Asset Manager only. SRS AM-R01."""
-    asset = create_asset(db, body, current_user.user_id)
-    return AssetOut(
-        asset_id=asset.asset_id,
-        asset_name=asset.asset_name,
-        asset_type=asset.asset_type.value if hasattr(asset.asset_type, "value") else str(asset.asset_type),
-        category=asset.category,
-        serial_number=asset.serial_number,
-        condition=asset.condition.value if hasattr(asset.condition, "value") else str(asset.condition),
-        status=asset.status.value if hasattr(asset.status, "value") else str(asset.status),
-        cost=float(asset.cost),
-        acquisition_date=str(asset.acquisition_date),
-        supplier=asset.supplier,
-        department=asset.department,
-        created_at=str(asset.created_at),
-    )
 
 @router.get("", response_model=List[AssetOut])
 def list_assets_endpoint(

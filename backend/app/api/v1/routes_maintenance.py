@@ -22,7 +22,8 @@ from app.models.asset import Asset, AssetStatus
 from app.models.audit_log import AuditLog
 from app.models.maintenance_record import MaintenanceRecord
 from app.models.user import User
-from app.api.v1.auth import get_current_user, require_roles
+from app.models.user import UserRole
+from app.api.v1.auth import get_current_user, require_role
 from app.services.asset_service import validate_status_transition
 
 router = APIRouter(prefix="/api/v1/maintenance", tags=["maintenance"])
@@ -96,7 +97,7 @@ def log_maintenance(
     body: MaintenanceCreateRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(
-        require_roles("System Administrator", "Asset Manager")
+        require_role(UserRole.SYSTEM_ADMINISTRATOR, UserRole.ASSET_MANAGER)
     ),
 ):
     """Log a maintenance record and transition asset to Under Maintenance."""
@@ -150,7 +151,7 @@ def complete_maintenance(
     maintenance_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(
-        require_roles("System Administrator", "Asset Manager")
+        require_role(UserRole.SYSTEM_ADMINISTRATOR, UserRole.ASSET_MANAGER)
     ),
 ):
     """Mark maintenance as complete and return asset to Active."""
@@ -184,7 +185,7 @@ def schedule_maintenance(
     body: ScheduleRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(
-        require_roles("System Administrator", "Asset Manager")
+        require_role(UserRole.SYSTEM_ADMINISTRATOR, UserRole.ASSET_MANAGER)
     ),
 ):
     """Schedule the next maintenance date."""

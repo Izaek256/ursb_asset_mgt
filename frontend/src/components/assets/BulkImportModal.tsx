@@ -110,7 +110,13 @@ export default function BulkImportModal({ isOpen, onClose, onImportSuccess }: Bu
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
         let msg = "An error occurred during import.";
-        if (response.status === 400 || response.status === 413 || response.status === 500) {
+        if (response.status === 403) {
+          msg = errorData?.detail || "You don't have permission to perform bulk import. Contact your administrator.";
+          // Show toast notification for permission error
+          if ((window as any).toast) {
+            (window as any).toast.error("Access Denied", msg);
+          }
+        } else if (response.status === 400 || response.status === 413 || response.status === 500) {
           msg = errorData?.detail || `HTTP ${response.status} error`;
         }
         throw new Error(msg);

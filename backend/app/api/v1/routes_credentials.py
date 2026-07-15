@@ -11,8 +11,9 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models.user import User
+from app.models.user import UserRole
 from app.models.temporary_password import TemporaryPassword
-from app.api.v1.auth import get_current_user, require_roles
+from app.api.v1.auth import get_current_user, require_role
 from app.services.auth import create_password_hash, verify_password
 
 router = APIRouter(prefix="/api/v1/credentials", tags=["credentials"])
@@ -63,7 +64,7 @@ def get_recent_accounts(
     search: Optional[str] = None,
     x_admin_password: Optional[str] = Header(None, alias="X-Admin-Password"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("System Administrator")),
+    current_user: User = Depends(require_role(UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR, UserRole.ASSET_MANAGER)),
 ):
     """
     Get users created in the last 7 days.
@@ -163,7 +164,7 @@ def regenerate_password(
     user_id: int,
     x_admin_password: Optional[str] = Header(None, alias="X-Admin-Password"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("System Administrator")),
+    current_user: User = Depends(require_role(UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR, UserRole.ASSET_MANAGER)),
 ):
     """
     Regenerate a temporary password for a user.

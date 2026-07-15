@@ -3,7 +3,7 @@ import { Menu, MenuButton, MenuItem, MenuItems, Transition } from "@headlessui/r
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
-import { apiFetch } from "../AuthContext";
+import { apiFetch, useAuth } from "../AuthContext";
 import Table, { Column } from "../components/common/Table";
 import FilterBar, { FilterField, filterInputCls, filterSelectCls } from "../components/common/FilterBar";
 import StatusBadge from "../components/common/badges/StatusBadge";
@@ -15,6 +15,7 @@ import { CHART } from "../theme/chartColors";
 import excelIcon from "../assets/icons8-export-excel-50.png";
 import pdfIcon from "../assets/icons8-export-pdf-50.png";
 import BulkImportModal from "../components/assets/BulkImportModal";
+import { hasActionPermission } from "../utils/rbac";
 
 interface AssetRow {
   asset_id: string;
@@ -126,6 +127,7 @@ function exportAssetsExcel(rows: AssetRow[]) {
 }
 
 export default function Assets() {
+  const { user } = useAuth();
   const [assets, setAssets] = React.useState<AssetRow[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isExporting, setIsExporting] = React.useState(false);
@@ -135,6 +137,9 @@ export default function Assets() {
   const [isImportModalOpen, setIsImportModalOpen] = React.useState(false);
   const [page, setPage] = React.useState(1);
   const pageSize = 50;
+
+  // Check if user has permission to bulk import assets
+  const canBulkImport = user && hasActionPermission(user.role, "bulkImportAssets");
 
   React.useEffect(() => {
     setPage(1);
@@ -313,10 +318,12 @@ export default function Assets() {
                 </>
               )}
             </Menu>
-            <Button variant="outline" onClick={() => setIsImportModalOpen(true)}>
-              <ICONS.upload className="w-4 h-4 mr-1.5 stroke-[2.4]" />
-              Bulk Import
-            </Button>
+            {canBulkImport && (
+              <Button variant="outline" onClick={() => setIsImportModalOpen(true)}>
+                <ICONS.upload className="w-4 h-4 mr-1.5 stroke-[2.4]" />
+                Bulk Import
+              </Button>
+            )}
             <Button onClick={navigateToRegister}>
               <ICONS.plus className="w-4 h-4 mr-1.5 stroke-[2.4]" />
               Add Asset
