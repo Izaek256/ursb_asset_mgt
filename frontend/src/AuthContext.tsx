@@ -118,7 +118,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const data = await apiFetch<{ authenticated: boolean } & AuthUser>("/auth/check");
       setUser(data);
-    } catch {
+    } catch (err: any) {
+      // Don't redirect on auth check failure - just clear user state
+      // The apiFetch function already handles 401 redirects
+      console.error("Auth check failed:", err.message);
       setUser(null);
     } finally {
       setIsInitialLoading(false);

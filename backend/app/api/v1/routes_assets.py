@@ -117,45 +117,6 @@ class AssetUpdateRequest(BaseModel):
 # Note: Valid status transitions are defined in app.services.asset_service.VALID_TRANSITIONS
 
 
-# Map display-friendly status labels → model enum
-_STATUS_MAP = {
-    "Active": AssetStatus.AVAILABLE,
-    "Available": AssetStatus.AVAILABLE,
-    "Assigned": AssetStatus.ASSIGNED,
-    "In Store": AssetStatus.AVAILABLE,
-    "In Storage": AssetStatus.AVAILABLE,
-    "Under Maintenance": AssetStatus.UNDER_MAINTENANCE,
-    "Disposed": AssetStatus.DISPOSED,
-}
-
-
-def _resolve_status_enum(status_str: str) -> AssetStatus:
-    """Resolve status string to AssetStatus enum. Handles display labels and direct enum keys/values."""
-    if status_str in _STATUS_MAP:
-        return _STATUS_MAP[status_str]
-    try:
-        return AssetStatus(status_str)
-    except ValueError:
-        pass
-    try:
-        return AssetStatus[status_str.upper().replace(" ", "_")]
-    except KeyError:
-        raise ValueError(f"Invalid status value: {status_str}")
-
-
-def _resolve_asset_type_enum(type_str: str) -> AssetType:
-    """Resolve asset type string to AssetType enum."""
-    try:
-        return AssetType(type_str)
-    except ValueError:
-        pass
-    try:
-        return AssetType[type_str.upper().replace(" ", "_")]
-    except KeyError:
-        raise ValueError(f"Invalid asset type: {type_str}")
-
-
-
 @router.post("", response_model=AssetOut, status_code=status.HTTP_201_CREATED)
 def create_asset(
     body: AssetCreate,
@@ -164,15 +125,7 @@ def create_asset(
 ):
     """Register a new asset. Only Asset Managers may call this endpoint."""
 
-    # ── Validate status ─────────────────────────────────────────────────────────
-    if body.status not in _STATUS_MAP:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid status '{body.status}'. Allowed: Active, In Store.",
-        )
-    asset_status = _STATUS_MAP[body.status]
-
-    # ── Validate asset_type enum ────────────────────────────────────────────────
+    # ── Validate enums ─────────────────────────────────────────────────────────
     try:
         asset_type_enum = AssetType(body.asset_type)
     except ValueError:
@@ -181,7 +134,6 @@ def create_asset(
             detail=f"Invalid asset type '{body.asset_type}'.",
         )
 
-    # ── Validate condition enum ─────────────────────────────────────────────────
     try:
         condition_enum = AssetCondition(body.condition)
     except ValueError:
@@ -190,7 +142,14 @@ def create_asset(
             detail=f"Invalid condition '{body.condition}'.",
         )
 
-    # ── Validate source_type enum ───────────────────────────────────────────────
+    try:
+        asset_status = AssetStatus(body.status)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid status '{body.status}'.",
+        )
+
     try:
         source_type_enum = SourceType(body.source_type)
     except ValueError:
@@ -266,7 +225,7 @@ def list_assets_endpoint(
     _user=Depends(get_current_user),
 ):
     """List assets with optional filters. All authenticated roles. SRS AM-P03."""
-    assets, _ = list_assets(db, status=status, asset_type=asset_type, search=search, department=department, for_request=for_request)
+    assets, total = list_assets(db, status=status, asset_type=asset_type, search=search, department=department, for_request=for_request)
     return [
         AssetOut(
             asset_id=a.asset_id,
@@ -427,8 +386,7 @@ def update_asset(
 
     # Validate status transition if status is being updated
     if body.status is not None:
-        current_status = asset.status.value if hasattr(asset.status, "value") else str(asset.status)
-        validate_status_transition(current_status, body.status)
+        validate_status_transition(asset.status, body.status)
 
     # Update only provided fields
     if body.asset_name is not None:

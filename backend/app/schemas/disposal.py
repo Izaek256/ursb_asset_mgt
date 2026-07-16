@@ -2,7 +2,7 @@ from datetime import date
 
 from pydantic import BaseModel, Field
 
-from app.models.disposal_record import DisposalMethod
+from app.models.disposal_record import DisposalMethod, DisposalStatus
 
 
 class DisposalCreate(BaseModel):
@@ -11,7 +11,7 @@ class DisposalCreate(BaseModel):
     Used by: POST /api/assets/{asset_id}/dispose
     Permitted roles: Asset Manager, System Administrator
     Auto-generated fields: disposal_id (excluded from this schema)
-    Caller-provided fields: asset_id, disposal_date, disposal_method, reason, authorised_by
+    Caller-provided fields: asset_id, disposal_date, disposal_method, reason, authorised_by, status
     Validation rules: disposal_date cannot be in the future
     """
     asset_id: str = Field(min_length=1, max_length=100)
@@ -19,6 +19,7 @@ class DisposalCreate(BaseModel):
     disposal_method: DisposalMethod
     reason: str = Field(min_length=1)
     authorised_by: str = Field(min_length=1, max_length=36)
+    status: DisposalStatus = DisposalStatus.APPROVED
 
 
 class DisposalResponse(BaseModel):
@@ -36,5 +37,6 @@ class DisposalResponse(BaseModel):
     disposal_method: DisposalMethod
     reason: str
     authorised_by: str
+    status: DisposalStatus
 
     model_config = {"from_attributes": True}

@@ -163,7 +163,6 @@ async def bulk_import_users(
 
             db.add(TemporaryPassword(
                 user_id=new_user.user_id,
-                password=password,
                 expires_at=datetime.utcnow() + timedelta(days=7),
             ))
 
@@ -273,7 +272,6 @@ async def bulk_import_ws(websocket: WebSocket):
 
                 db.add(TemporaryPassword(
                     user_id=new_user.user_id,
-                    password=password,
                     expires_at=datetime.utcnow() + timedelta(days=7),
                 ))
 

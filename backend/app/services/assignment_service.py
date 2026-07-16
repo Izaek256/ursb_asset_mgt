@@ -3,6 +3,8 @@ Assignment business logic service.
 Routers call these functions — no business logic lives in route handlers.
 """
 
+print("===== ASSIGNMENT_SERVICE.PY MODULE LOADED =====")
+
 from datetime import datetime, date
 from typing import List
 
@@ -36,6 +38,8 @@ def assign_asset(db: Session, asset_id: str, data, assigned_by_id: int) -> Assig
 
     Business rules:
         Asset must be in Available status before assignment.
+        If custodian_id is provided, asset goes to custodian first (Pending Acceptance).
+        If no custodian_id, asset goes directly to final recipient (Pending Acceptance).
         Sets asset status to Pending Acceptance after assignment —
         this removes it from Available views automatically since
         list_assets(status="Available") filters by status only.
@@ -46,54 +50,102 @@ def assign_asset(db: Session, asset_id: str, data, assigned_by_id: int) -> Assig
     Audit log:
         Writes action=ASSIGN_ASSET on success.
     """
+    # Debug logging
+    print(f"===== ASSIGNMENT SERVICE CALLED =====")
+    print(f"[DEBUG] assign_asset called with: asset_id={asset_id}, assigned_to={data.assigned_to}, custodian_id={getattr(data, 'custodian_id', 'None')}, assigned_by_id={assigned_by_id}")
+    
     asset = db.query(Asset).filter(Asset.asset_id == asset_id).first()
     if not asset:
+        print(f"[DEBUG] Asset not found: {asset_id}")
         raise HTTPException(404, detail="Asset not found")
 
+    print(f"[DEBUG] Asset found: {asset.asset_id}, status={asset.status.value}, is_active={getattr(asset, 'is_active', 'N/A')}")
+
     # Asset must be Available — 422 for any other status including Disposed
-    validate_status_transition(asset.status, AssetStatus.PENDING_ACCEPTANCE)
+    try:
+        validate_status_transition(asset.status, AssetStatus.PENDING_ACCEPTANCE)
+    except HTTPException as e:
+        print(f"[DEBUG] Status transition failed: current={asset.status.value}, target=PENDING_ACCEPTANCE")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Asset must be in Available status to assign. Current status: {asset.status.value}"
+        )
 
     target_user = db.query(User).filter(User.id == data.assigned_to).first()
     if not target_user:
+        print(f"[DEBUG] Target user not found: {data.assigned_to}")
         raise HTTPException(404, detail="User not found")
     if not target_user.is_active:
+        print(f"[DEBUG] Target user inactive: {data.assigned_to}")
         raise HTTPException(400, detail="Assigned user is inactive")
 
-    assignment = Assignment(
-        asset_id=asset_id,
-        assigned_to=str(data.assigned_to),
-        assigned_by=str(assigned_by_id),
-        assignment_date=data.assignment_date or date.today(),
-        return_date=data.return_date,
-        status=AssignmentStatus.ACTIVE,
-        notes=data.notes,
-    )
+    # If custodian is specified, assign to final recipient first with custodian info stored
+    custodian_id = data.custodian_id if hasattr(data, 'custodian_id') and data.custodian_id else None
+    final_recipient_id = str(data.assigned_to)
+    
+    if custodian_id:
+        # Assignment with custodian workflow - assign to final recipient first
+        print(f"[DEBUG] Assignment with custodian: custodian_id={custodian_id}, final_recipient={final_recipient_id}")
+        custodian = db.query(User).filter(User.id == custodian_id).first()
+        if not custodian or not custodian.is_active:
+            print(f"[DEBUG] Custodian invalid or inactive: {custodian_id}")
+            raise HTTPException(400, detail="Custodian is invalid or inactive")
+        
+        # Store custodian info in notes for later workflow steps
+        assignment = Assignment(
+            asset_id=asset_id,
+            assigned_to=final_recipient_id,
+            assigned_by=str(assigned_by_id),
+            assignment_date=data.assignment_date or date.today(),
+            return_date=data.return_date,
+            status=AssignmentStatus.PENDING_ACCEPTANCE,
+            notes=f"{data.notes or ''} [Custodian: {custodian_id}:{custodian.email}]",
+        )
+        asset.current_custodian_id = str(custodian_id)  # Asset with custodian for pickup
+        
+        audit_details = f"Asset {asset_id} assigned to final recipient {data.assigned_to} with custodian {custodian_id} for pickup, status set to Pending Acceptance"
+    else:
+        # Direct assignment to employee without custodian
+        print(f"[DEBUG] Direct assignment to employee: {final_recipient_id}")
+        assignment = Assignment(
+            asset_id=asset_id,
+            assigned_to=final_recipient_id,
+            assigned_by=str(assigned_by_id),
+            assignment_date=data.assignment_date or date.today(),
+            return_date=data.return_date,
+            status=AssignmentStatus.PENDING_ACCEPTANCE,
+            notes=data.notes,
+        )
+        asset.current_custodian_id = final_recipient_id
+        
+        audit_details = f"Asset {asset_id} assigned directly to employee {data.assigned_to}, status set to Pending Acceptance"
+    
     db.add(assignment)
 
     # Set status to Pending Acceptance — asset no longer appears in Available views
     asset.status = AssetStatus.PENDING_ACCEPTANCE
-    asset.current_custodian_id = str(data.assigned_to)
 
     db.add(AuditLog(
         user_id=assigned_by_id,
         action="ASSIGN_ASSET",
         table_affected="assignments",
         record_id=asset_id,
-        details=f"Asset {asset_id} assigned to user {data.assigned_to}, status set to Pending Acceptance",
+        details=audit_details,
     ))
     db.commit()
     db.refresh(assignment)
+    print(f"[DEBUG] Assignment created successfully: assignment_id={assignment.assignment_id}")
     return assignment
 
 
 def accept_assignment(db: Session, assignment_id: int, current_user_id: int) -> Assignment:
     """
-    Accepts an assignment offer for an employee.
+    Accepts an assignment offer for an employee/custodian.
 
     Parameters:
         db (Session): Database session.
         assignment_id (int): ID of the assignment to accept.
-        current_user_id (int): ID of the employee accepting the assignment.
+        current_user_id (int): ID of the employee/custodian accepting the assignment.
 
     Business Rules Enforced:
         - 404 error if the assignment is not found.
@@ -107,6 +159,7 @@ def accept_assignment(db: Session, assignment_id: int, current_user_id: int) -> 
     Status Transition Triggered:
         - Assignment status is updated to 'Accepted'.
         - Asset status is updated to 'Pending Pickup'.
+        - If custodian is specified in notes, they will be notified to handle pickup.
 
     Returns:
         Assignment: The updated assignment object.
@@ -149,6 +202,44 @@ def accept_assignment(db: Session, assignment_id: int, current_user_id: int) -> 
         details=f"Assignment {assignment_id} for asset {assignment.asset_id} was accepted by user {current_user_id}."
     )
     db.add(audit)
+    
+    # Notify custodian if specified in notes (new workflow)
+    if assignment.notes and "[Custodian:" in assignment.notes:
+        from app.services.notification_service import create_notification
+        import re
+        match = re.search(r'\[Custodian: (\d+):([^\]]+)\]', assignment.notes)
+        if match:
+            custodian_id = int(match.group(1))
+            custodian_email = match.group(2)
+            custodian = db.query(User).filter(User.id == custodian_id).first()
+            if custodian:
+                create_notification(
+                    db=db,
+                    user_id=str(custodian_id),
+                    title="Asset Approved for Pickup",
+                    message=f"Asset '{asset.asset_name}' has been approved by the recipient. Please handle pickup and handover.",
+                    notification_type="ASSET_APPROVED_PICKUP",
+                    related_asset_id=asset.asset_id,
+                )
+    elif assignment.notes and "[Final recipient:" in assignment.notes:
+        # Handle old format for backward compatibility
+        from app.services.notification_service import create_notification
+        import re
+        match = re.search(r'\[Final recipient: ([^\]]+)\]', assignment.notes)
+        if match:
+            final_recipient_email = match.group(1)
+            final_recipient = db.query(User).filter(User.email == final_recipient_email).first()
+            if final_recipient:
+                # In old format, assignment was to custodian, so notify custodian that recipient approved
+                create_notification(
+                    db=db,
+                    user_id=assignment.assigned_to,
+                    title="Asset Approved for Pickup",
+                    message=f"Asset '{asset.asset_name}' has been approved by {final_recipient.email}. Please handle pickup and handover.",
+                    notification_type="ASSET_APPROVED_PICKUP",
+                    related_asset_id=asset.asset_id,
+                )
+    
     db.commit()
     db.refresh(assignment)
     return assignment
@@ -242,9 +333,9 @@ def confirm_handover(db: Session, assignment_id: int, custodian_id: int) -> Assi
           record_id=str(assignment_id), and details indicating the handover.
 
     Status Transition Triggered:
-        - Assignment status is updated to 'Active'.
-        - Asset status is updated to 'Assigned'.
+        - Assignment status is updated to 'Active' and asset status to 'Assigned'
         - Assignment acknowledged_at timestamp is set to current UTC time.
+        - Final recipient is notified that asset is ready for pickup.
 
     Transaction Requirement:
         - All database modifications (assignment status, asset status, acknowledged_at, audit log)
@@ -274,6 +365,7 @@ def confirm_handover(db: Session, assignment_id: int, custodian_id: int) -> Assi
         )
 
     try:
+        # Custodian confirms handover - asset ready for final recipient pickup
         assignment.status = AssignmentStatus.ACTIVE
         assignment.acknowledged_at = datetime.utcnow()
         asset.status = AssetStatus.ASSIGNED
@@ -283,9 +375,21 @@ def confirm_handover(db: Session, assignment_id: int, custodian_id: int) -> Assi
             action="HANDOVER_CONFIRMED",
             table_affected="assignments",
             record_id=str(assignment_id),
-            details=f"Handover confirmed for assignment {assignment_id} by custodian {custodian_id}."
+            details=f"Handover confirmed by custodian {custodian_id}. Asset ready for final recipient pickup."
         )
         db.add(audit)
+        
+        # Notify final recipient that asset is ready for pickup
+        from app.services.notification_service import create_notification
+        create_notification(
+            db=db,
+            user_id=assignment.assigned_to,
+            title="Asset Ready for Pickup",
+            message=f"Asset '{asset.asset_name}' has been prepared by custodian and is ready for pickup. Please confirm receipt.",
+            notification_type="ASSET_READY_PICKUP",
+            related_asset_id=asset.asset_id,
+        )
+        
         db.commit()
         db.refresh(assignment)
         return assignment

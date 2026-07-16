@@ -39,6 +39,7 @@ export default function Assignments() {
   const [form, setForm] = React.useState({
     asset_id: "",
     assigned_to: "",
+    custodian_id: "",
     assignment_date: new Date().toISOString().substring(0, 10),
     return_date: "",
     notes: "",
@@ -52,25 +53,50 @@ export default function Assignments() {
   const [dirtyConfirm, setDirtyConfirm] = React.useState<{ open: boolean; onConfirm: () => void } | null>(null);
   const [rejectReturnConfirm, setRejectReturnConfirm] = React.useState<{ open: boolean; assignment: Assignment | null; reason: string }>({ open: false, assignment: null, reason: "" });
 
-  const isAdminOrManager = user?.role === "System Administrator" || user?.role === "Asset Manager";
-  const isCustodian = user?.role === "Asset Custodian";
-  const isEmployee = user?.role === "Employee";
+  const isAdminOrManager = user?.role === "Asset Manager" || user?.role === "SUPER_SYSTEM_ADMINISTRATOR" || user?.role === "ASSET_MANAGER";
+  const isCustodian = user?.role === "Asset Custodian" || user?.role === "ASSET_CUSTODIAN";
+  const isEmployee = user?.role === "Employee" || user?.role === "EMPLOYEE";
 
   const fetchAssignments = React.useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      // Filter to show only final handovers to requesters (not internal custodian assignments)
-      // For employees, fetch their assignments without the final_handover filter
-      const endpoint = isEmployee 
-        ? `/assignments?user_id=${user?.user_id}` 
-        : `/assignments?assignment_type=final_handover`;
-      const data = await apiFetch<{ assignments: Assignment[]; total: number }>(endpoint, {});
-      setAssignments(data.assignments);
+      // Main tab: Show Active and Pending Acceptance assignments
+      let activeAssignments: Assignment[] = [];
+      let pendingAssignments: Assignment[] = [];
       
-      // Fetch history assignments (returned assets) - always filter by current user
-      // History tab should only show the user's own previously owned assets
-      const historyEndpoint = `/assignments?user_id=${user?.user_id}&status=Returned`;
+      if (isEmployee || isCustodian) {
+        // Fetch Active assignments
+        const activeEndpoint = `/assignments?user_id=${user?.user_id}&status=Active`;
+        const activeData = await apiFetch<{ assignments: Assignment[]; total: number }>(activeEndpoint, {});
+        activeAssignments = activeData.assignments;
+        
+        // Fetch Pending Acceptance assignments
+        const pendingEndpoint = `/assignments?user_id=${user?.user_id}&status=Pending Acceptance`;
+        const pendingData = await apiFetch<{ assignments: Assignment[]; total: number }>(pendingEndpoint, {});
+        pendingAssignments = pendingData.assignments;
+      } else {
+        // Admin/Manager view
+        const activeEndpoint = `/assignments?status=Active`;
+        const activeData = await apiFetch<{ assignments: Assignment[]; total: number }>(activeEndpoint, {});
+        activeAssignments = activeData.assignments;
+        
+        const pendingEndpoint = `/assignments?status=Pending Acceptance`;
+        const pendingData = await apiFetch<{ assignments: Assignment[]; total: number }>(pendingEndpoint, {});
+        pendingAssignments = pendingData.assignments;
+      }
+      
+      // Combine without duplicates
+      const allAssignments = [...activeAssignments, ...pendingAssignments];
+      const uniqueAssignments = allAssignments.filter((assignment, index, self) =>
+        index === self.findIndex(a => a.assignment_id === assignment.assignment_id)
+      );
+      setAssignments(uniqueAssignments);
+      
+      // History tab: Show Returned assignments
+      const historyEndpoint = isEmployee
+        ? `/assignments?user_id=${user?.user_id}&status=Returned`
+        : `/assignments?status=Returned`;
       const historyData = await apiFetch<{ assignments: Assignment[]; total: number }>(historyEndpoint, {});
       setHistoryAssignments(historyData.assignments);
     } catch (err: any) {
@@ -78,11 +104,11 @@ export default function Assignments() {
     } finally {
       setIsLoading(false);
     }
-  }, [isEmployee, user]);
+  }, [isEmployee, isCustodian, user]);
 
   const fetchAssetsAndUsers = React.useCallback(async () => {
     try {
-      const assetsData = await apiFetch<AssetOption[]>("/assets", {});
+      const assetsData = await apiFetch<AssetOption[]>("/assets?status=Available", {});
       setAssets(assetsData);
       
       const usersData = await apiFetch<UserRow[]>("/admin/users", {});
@@ -102,6 +128,11 @@ export default function Assignments() {
     } catch (err: any) {
       setError(err.message || "Failed to accept assignment.");
     }
+  };
+
+  const handleOpenAssignModal = () => {
+    fetchAssetsAndUsers(); // Refresh assets to get current status
+    setShowAssignModal(true);
   };
 
   const handleDecline = async (id: number) => {
@@ -136,7 +167,7 @@ export default function Assignments() {
   }, [fetchAssignments, fetchAssetsAndUsers, isAdminOrManager]);
 
   // Form dirty checks
-  const isFormDirty = form.asset_id || form.assigned_to || form.notes || form.return_date;
+  const isFormDirty = form.asset_id || form.assigned_to || form.custodian_id || form.notes || form.return_date;
 
   const handleCloseModal = () => {
     if (isFormDirty) {
@@ -147,6 +178,7 @@ export default function Assignments() {
           setForm({
             asset_id: "",
             assigned_to: "",
+            custodian_id: "",
             assignment_date: new Date().toISOString().substring(0, 10),
             return_date: "",
             notes: "",
@@ -197,24 +229,31 @@ export default function Assignments() {
         body: JSON.stringify({
           asset_id: form.asset_id,
           assigned_to: parseInt(form.assigned_to, 10),
+          custodian_id: form.custodian_id ? parseInt(form.custodian_id, 10) : null,
           assignment_date: form.assignment_date,
           return_date: form.return_date || null,
           expected_return_date: form.return_date || null,
           notes: form.notes,
         }),
       });
-      setSuccess("Asset successfully assigned.");
+      setSuccess("Asset successfully assigned. Custodian will need to accept the assignment.");
       setShowAssignModal(false);
       setForm({
         asset_id: "",
         assigned_to: "",
+        custodian_id: "",
         assignment_date: new Date().toISOString().substring(0, 10),
         return_date: "",
         notes: "",
       });
       fetchAssignments();
     } catch (err: any) {
-      setError(err.message || "Failed to create assignment.");
+      // Provide more specific error message for asset status issues
+      if (err.message && err.message.includes("Available status")) {
+        setError("Asset is not available for assignment. It may be assigned, under maintenance, or in another status.");
+      } else {
+        setError(err.message || "Failed to create assignment.");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -411,6 +450,11 @@ export default function Assignments() {
     label: `${u.name} (${u.role})`,
   }));
 
+  const custodianOptions = users.filter(u => u.isActive && (u.role === "Asset Custodian" || u.role === "ASSET_CUSTODIAN")).map(u => ({
+    value: String(u.id),
+    label: `${u.name} (${u.role})`,
+  }));
+
   return (
     <div className="w-full flex flex-col gap-6 select-none font-sans">
       {success && <SuccessBanner message={success} onDismiss={() => setSuccess(null)} />}
@@ -421,7 +465,7 @@ export default function Assignments() {
         subtitle="Track custody of assets allocated to employees"
         actions={
           isAdminOrManager && (
-            <Button onClick={() => setShowAssignModal(true)}>
+            <Button onClick={handleOpenAssignModal}>
               <ICONS.plus className="w-4 h-4 mr-1.5 stroke-[2.4]" />
               Assign Asset
             </Button>
@@ -505,16 +549,28 @@ export default function Assignments() {
             onChange={(val) => handleFieldChange("asset_id", val)}
             options={[{ value: "", label: "Select an asset..." }, ...assetOptions]}
             required
+            searchable
           />
 
           <FormInput
             type="select"
             variant="light"
-            label="Assign To User *"
+            label="Assign To User (Final Recipient) *"
             value={form.assigned_to}
             onChange={(val) => handleFieldChange("assigned_to", val)}
             options={[{ value: "", label: "Select a user..." }, ...userOptions]}
             required
+            searchable
+          />
+
+          <FormInput
+            type="select"
+            variant="light"
+            label="Assign to Custodian (Optional - defaults to you)"
+            value={form.custodian_id}
+            onChange={(val) => handleFieldChange("custodian_id", val)}
+            options={[{ value: "", label: "Select a custodian..." }, ...custodianOptions]}
+            searchable
           />
 
           <FormInput 

@@ -10,11 +10,11 @@ from app.db import Base
 
 
 class UserRole(str, enum.Enum):
-    SUPER_SYSTEM_ADMINISTRATOR = "Super System Administrator"  # Has all permissions of Asset Manager plus user account management
-    SYSTEM_ADMINISTRATOR = "System Administrator"  # Can create users, view audit logs, read-only access to operations
-    ASSET_MANAGER = "Asset Manager"  # Can register, assign, transfer, dispose assets; approve requests (not own)
-    ASSET_CUSTODIAN = "Asset Custodian"  # Can register assets; confirms handover during transfers
-    EMPLOYEE = "Employee"  # Can submit asset requests; view assigned assets
+    SUPER_SYSTEM_ADMINISTRATOR = "SUPER_SYSTEM_ADMINISTRATOR"  # Has all permissions of Asset Manager plus user account management
+    SYSTEM_ADMINISTRATOR = "SYSTEM_ADMINISTRATOR"  # Can create users, view audit logs, read-only access to operations
+    ASSET_MANAGER = "ASSET_MANAGER"  # Can register, assign, transfer, dispose assets; approve requests (not own)
+    ASSET_CUSTODIAN = "ASSET_CUSTODIAN"  # Can register assets; confirms handover during transfers
+    EMPLOYEE = "EMPLOYEE"  # Can submit asset requests; view assigned assets
 
 
 class User(Base):
@@ -82,6 +82,15 @@ class User(Base):
     )
     disposals_authorised = relationship(
         "DisposalRecord", back_populates="authorised_by_user", foreign_keys="DisposalRecord.authorised_by"
+    )
+    requests_made = relationship(
+        "AssetRequest", back_populates="requester", foreign_keys="AssetRequest.requested_by"
+    )
+    requests_reviewed = relationship(
+        "AssetRequest", back_populates="reviewer", foreign_keys="AssetRequest.reviewed_by"
+    )
+    requests_assigned = relationship(
+        "AssetRequest", back_populates="assignee", foreign_keys="AssetRequest.assigned_to"
     )
     audit_logs = relationship("AuditLog", back_populates="user")
     # One-to-one relationship for user settings. uselist=False ensures a single settings row per user.

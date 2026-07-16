@@ -5,9 +5,10 @@ import string
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Header, status
+from fastapi import APIRouter, Depends, HTTPException, Header, status, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 
 from app.db import get_db
 from app.models.user import User
@@ -26,7 +27,6 @@ class RecentAccount(BaseModel):
     role: str
     department: Optional[str]
     created_at: str
-    password: Optional[str]
     password_revoked: bool
 
 
@@ -103,7 +103,11 @@ def get_recent_accounts(
     if search:
         search_term = f"%{search}%"
         query = query.filter(
-            (User.full_name.ilike(search_term)) | (User.email.ilike(search_term))
+            or_(
+                User.first_name.ilike(search_term),
+                User.last_name.ilike(search_term),
+                User.email.ilike(search_term)
+            )
         )
     
     # Get total count
@@ -121,7 +125,7 @@ def get_recent_accounts(
     # Build response
     accounts = []
     for user in users:
-        # Get temporary password if exists and not expired
+        # Get temporary password metadata if exists and not expired
         temp_pwd = db.query(TemporaryPassword).filter(
             TemporaryPassword.user_id == user.user_id,
             TemporaryPassword.expires_at > datetime.utcnow()
@@ -129,7 +133,7 @@ def get_recent_accounts(
 
         # Determine if password has been revoked (user changed it themselves)
         # password_revoked = True means the user already set their own password,
-        # so the stored temp password is no longer valid.
+        # so the temp password is no longer valid.
         password_revoked: bool
         if temp_pwd is None:
             # No active temp password — either expired or user changed it
@@ -147,7 +151,6 @@ def get_recent_accounts(
             role=user.role.value if user.role else "",
             department=user.department,
             created_at=user.created_at.isoformat() if user.created_at else "",
-            password=temp_pwd.password if temp_pwd else None,
             password_revoked=password_revoked,
         ))
     
@@ -162,6 +165,7 @@ def get_recent_accounts(
 @router.post("/{user_id}/regenerate-password", response_model=RegeneratePasswordResponse)
 def regenerate_password(
     user_id: int,
+    response: Response,
     x_admin_password: Optional[str] = Header(None, alias="X-Admin-Password"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR, UserRole.ASSET_MANAGER)),
@@ -171,9 +175,9 @@ def regenerate_password(
 
     The admin must re-authenticate with X-Admin-Password.
     A new random 12-character password (valid 7 days) is generated, hashed and
-    set on the user account, and stored in plain-text in temporary_passwords so
-    the admin can see and share it.  password_changed_at is cleared so that the
-    credentials page immediately shows the new password as active.
+    set on the user account. The plaintext is returned once in the response and
+    never stored. password_changed_at is cleared so that the credentials page
+    immediately shows the new password as active.
     """
     # Verify admin password for re-authentication
     if not x_admin_password:
@@ -207,11 +211,10 @@ def regenerate_password(
     # Remove any old temporary password entries for this user
     db.query(TemporaryPassword).filter(TemporaryPassword.user_id == user_id).delete(synchronize_session=False)
 
-    # Store the new plain-text temp password with a 7-day expiry
+    # Store metadata only (no plaintext password)
     expires_at = datetime.utcnow() + timedelta(days=7)
     temp_pwd = TemporaryPassword(
         user_id=user_id,
-        password=new_password,
         created_at=datetime.utcnow(),
         expires_at=expires_at,
     )
@@ -229,6 +232,9 @@ def regenerate_password(
     )
     db.add(audit)
     db.commit()
+
+    # Add Cache-Control header to prevent caching of password
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
 
     return RegeneratePasswordResponse(
         generated_password=new_password,

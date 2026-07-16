@@ -75,18 +75,21 @@ export default function Requests() {
   // Complete request confirmation
   const [completeConfirm, setCompleteConfirm] = React.useState<AssetRequest | null>(null);
 
-  const isAdminOrManager = user?.role === "System Administrator" || user?.role === "Asset Manager";
+  const canManageRequests = user?.role === "SUPER_SYSTEM_ADMINISTRATOR" || user?.role === "ASSET_MANAGER" || user?.role === "Asset Manager";
+  const isCustodian = user?.role === "ASSET_CUSTODIAN" || user?.role === "Asset Custodian";
 
   const fetchRequests = React.useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
       const data = await apiFetch<{ requests: AssetRequest[]; total: number }>("/requests", {});
-      // Filter for pending requests in main tab
-      setRequests(data.requests.filter(r => r.status === "Pending"));
-      // History tab shows confirmed/completed requests
+      // Filter for active requests in main tab (Pending, Approved, Assigned, ReadyForPickup - until pickup confirmed)
+      setRequests(data.requests.filter(r => 
+        ["Pending", "Approved", "Assigned", "ReadyForPickup"].includes(r.status)
+      ));
+      // History tab shows requests after pickup confirmation or are completed/cancelled
       setHistoryRequests(data.requests.filter(r => 
-        ["Approved", "Assigned", "ReadyForPickup", "PickedUp", "Completed", "Rejected", "Cancelled"].includes(r.status)
+        ["PickedUp", "Completed", "Rejected", "Cancelled"].includes(r.status)
       ));
     } catch (err: any) {
       setError(err.message || "Failed to load requests.");
@@ -100,14 +103,14 @@ export default function Requests() {
       const assetsData = await apiFetch<AssetOption[]>("/assets?for_request=true", {});
       setAssets(assetsData);
       
-      if (isAdminOrManager) {
+      if (canManageRequests) {
         const usersData = await apiFetch<UserRow[]>("/admin/users", {});
         setUsers(usersData);
       }
     } catch (err) {
       console.error("Failed to load assets/users context", err);
     }
-  }, [isAdminOrManager]);
+  }, [canManageRequests]);
 
   React.useEffect(() => {
     fetchRequests();
@@ -383,28 +386,28 @@ export default function Requests() {
 
   const renderActions = (r: AssetRequest) => (
     <div className="flex flex-wrap gap-1.5 select-none">
-      {user?.role === "Employee" && r.status === "Pending" && (
+      {(user?.role === "Employee" || user?.role === "EMPLOYEE") && r.status === "Pending" && (
         <Button variant="danger-outline" onClick={() => handleCancelClick(r)}>Cancel</Button>
       )}
-      {user?.role === "Employee" && r.status === "ReadyForPickup" && (
+      {(user?.role === "Employee" || user?.role === "EMPLOYEE") && r.status === "ReadyForPickup" && (
         <Button variant="outline" onClick={() => handlePickupClick(r)}>Confirm Pickup</Button>
       )}
-      {user?.role === "Asset Custodian" && r.assigned_to === parseInt(user.user_id) && r.status === "Assigned" && (
+      {isCustodian && r.assigned_to === parseInt(user.user_id) && r.status === "Assigned" && (
         <>
           <Button onClick={() => handleHandOverClick(r)}>Hand Over</Button>
           <Button variant="danger-outline" onClick={() => handleCustodianCancelClick(r)}>Cancel</Button>
         </>
       )}
-      {isAdminOrManager && r.status === "Pending" && (
+      {canManageRequests && r.status === "Pending" && (
         <>
           <Button onClick={() => handleApproveClick(r)}>Approve</Button>
           <Button variant="danger-outline" onClick={() => handleRejectClick(r)}>Reject</Button>
         </>
       )}
-      {isAdminOrManager && r.status === "Approved" && (
+      {canManageRequests && r.status === "Approved" && (
         <Button variant="outline" onClick={() => handleAssignClick(r)}>Assign</Button>
       )}
-      {isAdminOrManager && r.status === "PickedUp" && (
+      {canManageRequests && r.status === "PickedUp" && (
         <Button onClick={() => setCompleteConfirm(r)}>Complete</Button>
       )}
     </div>
@@ -445,11 +448,6 @@ export default function Requests() {
       render: (r) => (
         <div className="flex items-center gap-2">
           <StatusBadge status={r.status} />
-          {r.status === "Completed" && (
-            <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
-              Returned
-            </span>
-          )}
         </div>
       ),
     },
@@ -495,7 +493,7 @@ export default function Requests() {
     }));
 
   const custodianOptions = users
-    .filter(u => u.isActive && u.role === "Asset Custodian")
+    .filter(u => u.isActive && (u.role === "Asset Custodian" || u.role === "ASSET_CUSTODIAN"))
     .map(u => ({
       value: String(u.id),
       label: `${u.name} (${u.role})`,
@@ -507,9 +505,9 @@ export default function Requests() {
       {error && <ErrorMessage message={error} />}
 
       <PageHeader
-        title={isAdminOrManager ? "Asset Requests" : "My Asset Requests"}
+        title={canManageRequests || isCustodian ? "Asset Requests" : "My Asset Requests"}
         subtitle={
-          isAdminOrManager
+          canManageRequests || isCustodian
             ? "Review and manage employee asset requests"
             : "Submit and track your asset requests"
         }
@@ -564,7 +562,7 @@ export default function Requests() {
           </Tab.Panel>
 
           <Tab.Panel>
-            {isAdminOrManager && (
+            {canManageRequests && (
               <FilterBar
                 count={{ value: filteredHistoryRequests.length, label: "requests" }}
                 onClear={handleClearFilters}
