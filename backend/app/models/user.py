@@ -83,6 +83,15 @@ class User(Base):
     disposals_authorised = relationship(
         "DisposalRecord", back_populates="authorised_by_user", foreign_keys="DisposalRecord.authorised_by"
     )
+    requests_made = relationship(
+        "AssetRequest", back_populates="requester", foreign_keys="AssetRequest.requested_by"
+    )
+    requests_reviewed = relationship(
+        "AssetRequest", back_populates="reviewer", foreign_keys="AssetRequest.reviewed_by"
+    )
+    requests_assigned = relationship(
+        "AssetRequest", back_populates="assignee", foreign_keys="AssetRequest.assigned_to"
+    )
     audit_logs = relationship("AuditLog", back_populates="user")
     # One-to-one relationship for user settings. uselist=False ensures a single settings row per user.
     settings = relationship("UserSettings", back_populates="user", uselist=False, cascade="all, delete-orphan")

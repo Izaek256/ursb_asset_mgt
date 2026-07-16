@@ -109,3 +109,4 @@ class Asset(Base):
     transfers = relationship("Transfer", back_populates="asset")
     maintenance_records = relationship("MaintenanceRecord", back_populates="asset")
     disposal_records = relationship("DisposalRecord", back_populates="asset")
+    asset_requests = relationship("AssetRequest", back_populates="asset")

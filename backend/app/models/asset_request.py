@@ -90,7 +90,7 @@ class AssetRequest(Base):
     updated_at = Column(DateTime, nullable=True, onupdate=datetime.utcnow)
 
     # Relationships
-    asset = relationship("Asset", foreign_keys=[asset_id])
-    requester = relationship("User", foreign_keys=[requested_by])
-    reviewer = relationship("User", foreign_keys=[reviewed_by])
-    assignee = relationship("User", foreign_keys=[assigned_to])
+    asset = relationship("Asset", back_populates="asset_requests", foreign_keys=[asset_id])
+    requester = relationship("User", back_populates="requests_made", foreign_keys=[requested_by])
+    reviewer = relationship("User", back_populates="requests_reviewed", foreign_keys=[reviewed_by])
+    assignee = relationship("User", back_populates="requests_assigned", foreign_keys=[assigned_to])
