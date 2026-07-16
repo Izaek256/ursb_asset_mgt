@@ -142,8 +142,8 @@ def create_transfer(
     # Guard: Do not transfer if there is a pending request for this asset. This prevents orphaning that request.
     pending_exists = False
     try:
-        from app.models.request import Request  # type: ignore
-        pending = db.query(Request).filter(Request.asset_id == asset.asset_id, Request.status == "Pending").first()
+        from app.models.asset_request import AssetRequest  # type: ignore
+        pending = db.query(AssetRequest).filter(AssetRequest.asset_id == asset.asset_id, AssetRequest.status == "Pending").first()
         pending_exists = pending is not None
     except Exception:
         pending_exists = False
