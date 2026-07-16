@@ -119,14 +119,6 @@ def validate_status_transition(current_status: str | AssetStatus, new_status: st
             detail=f"Invalid asset status transition from '{curr_str}' to '{new_str}'"
         )
 
-_STATUS_MAP = {
-    "Active": AssetStatus.ASSIGNED,
-    "Available": AssetStatus.AVAILABLE,
-    "In Store": AssetStatus.AVAILABLE,
-    "In Storage": AssetStatus.AVAILABLE,
-}
-
-
 def get_asset(db: Session, asset_id: str) -> Asset:
     """
     Fetch a single asset by ID.
@@ -250,8 +242,6 @@ def create_asset(db: Session, data, created_by_id: int) -> Asset:
     """
     from fastapi import HTTPException
 
-    if data.status not in _STATUS_MAP:
-        raise HTTPException(400, detail=f"Invalid status '{data.status}'. Allowed: Active, Available, In Store.")
     try:
         asset_type_enum = AssetType(data.asset_type)
     except ValueError:
@@ -260,6 +250,10 @@ def create_asset(db: Session, data, created_by_id: int) -> Asset:
         condition_enum = AssetCondition(data.condition)
     except ValueError:
         raise HTTPException(400, detail=f"Invalid condition '{data.condition}'.")
+    try:
+        status_enum = AssetStatus(data.status)
+    except ValueError:
+        raise HTTPException(400, detail=f"Invalid status '{data.status}'.")
     try:
         source_type_enum = SourceType(data.source_type)
     except ValueError:
@@ -278,7 +272,7 @@ def create_asset(db: Session, data, created_by_id: int) -> Asset:
         category=data.category,
         serial_number=data.serial_number,
         condition=condition_enum,
-        status=_STATUS_MAP[data.status],
+        status=status_enum,
         source_type=source_type_enum,
         cost=data.cost,
         acquisition_date=parsed_date,
@@ -327,7 +321,11 @@ def update_asset(db: Session, asset_id: str, data, updated_by_id: int) -> Asset:
         raise HTTPException(400, detail=f"Cannot update asset in terminal status: {asset.status.value}")
 
     if data.status is not None:
-        validate_status_transition(asset.status, data.status)
+        try:
+            status_enum = AssetStatus(data.status)
+        except ValueError:
+            raise HTTPException(400, detail=f"Invalid status '{data.status}'.")
+        validate_status_transition(asset.status, status_enum)
 
     if data.asset_name is not None:
         asset.asset_name = data.asset_name
