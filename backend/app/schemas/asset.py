@@ -4,24 +4,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.models.asset import AssetCondition, AssetType, SourceType
-
-
-class AssetStatus(str, enum.Enum):
-    """Expanded asset status enum for schema-level validation.
-    
-    Note: This enum is defined at the schema level pending ORM model update in S3-03.
-    """
-    AVAILABLE = "Available"
-    RESERVED = "Reserved"
-    PENDING_ACCEPTANCE = "Pending Acceptance"
-    PENDING_PICKUP = "Pending Pickup"
-    ASSIGNED = "Assigned"
-    UNDER_TRANSFER = "Under Transfer"
-    UNDER_MAINTENANCE = "Under Maintenance"
-    RETURNED = "Returned"
-    DISPOSED = "Disposed"
-    DEACTIVATED = "Deactivated"
+from app.models.asset import AssetCondition, AssetStatus, AssetType, SourceType
 
 
 class AssetBase(BaseModel):

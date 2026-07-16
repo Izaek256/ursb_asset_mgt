@@ -15,6 +15,12 @@ class DisposalMethod(str, enum.Enum):
     DESTRUCTION = "Destruction"
 
 
+class DisposalStatus(str, enum.Enum):
+    RECOMMENDED = "Recommended"
+    APPROVED = "Approved"
+    REJECTED = "Rejected"
+
+
 class DisposalRecord(Base):
     __tablename__ = "disposal_records"
 
@@ -36,7 +42,10 @@ class DisposalRecord(Base):
         ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="Approved"
+    status: Mapped[DisposalStatus] = mapped_column(
+        Enum(DisposalStatus, native_enum=False, length=50),
+        nullable=False,
+        default=DisposalStatus.APPROVED,
     )
     recommended_by: Mapped[Optional[str]] = mapped_column(
         String(36),

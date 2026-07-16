@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models.asset import Asset, AssetStatus
-from app.models.disposal_record import DisposalRecord, DisposalMethod
+from app.models.disposal_record import DisposalRecord, DisposalMethod, DisposalStatus
 from app.models.assignment import Assignment, AssignmentStatus
 from app.models.audit_log import AuditLog
 from app.api.v1.auth import get_current_user, require_role
@@ -219,7 +219,7 @@ def recommend_disposal(
     # Prevent duplicate pending recommendations
     existing = db.query(DisposalRecord).filter(
         DisposalRecord.asset_id == asset_id,
-        DisposalRecord.status == "Recommended"
+        DisposalRecord.status == DisposalStatus.RECOMMENDED
     ).first()
     if existing:
         raise HTTPException(status_code=422, detail="A pending disposal recommendation already exists for this asset")
@@ -231,7 +231,7 @@ def recommend_disposal(
         disposal_method=DisposalMethod.WRITE_OFF,
         reason=body.reason,
         authorised_by=str(current_user.user_id),
-        status="Recommended",
+        status=DisposalStatus.RECOMMENDED,
         recommended_by=str(current_user.user_id),
         recommendation_reason=body.reason,
     )

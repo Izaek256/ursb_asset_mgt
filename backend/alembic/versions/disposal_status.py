@@ -16,11 +16,12 @@ depends_on = None
 
 def upgrade() -> None:
     with op.batch_alter_table('disposal_records') as batch_op:
-        batch_op.add_column(sa.Column('status', sa.String(20), nullable=False, server_default='Approved'))
+        batch_op.add_column(sa.Column('status', sa.String(50), nullable=False, server_default='Approved'))
         batch_op.add_column(sa.Column('recommended_by', sa.String(36), nullable=True))
         batch_op.add_column(sa.Column('recommendation_reason', sa.Text(), nullable=True))
     # Existing records default to Approved because they were created through
     # direct disposal before the recommendation workflow existed
+    # Note: server_default='Approved' matches DisposalStatus.APPROVED.value
 
 
 def downgrade() -> None:
