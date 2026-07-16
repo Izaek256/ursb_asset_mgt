@@ -92,7 +92,17 @@ export default function Header({ pageTitle, onLogout, onToggleMobileSidebar }: H
       case "ASSIGNMENT_SENT":
         return "text-badge-amberText bg-badge-amberBg";
       case "REQUEST_APPROVED":
+      case "RETURN_APPROVED":
+      case "RECEIPT_CONFIRMED":
+      case "PICKUP_CONFIRMED":
+      case "RETURN_COMPLETED":
         return "text-badge-greenText bg-badge-greenBg";
+      case "REQUEST_CANCELLED":
+      case "RETURN_REJECTED":
+        return "text-badge-roseText bg-badge-roseBg";
+      case "ASSET_READY_PICKUP":
+      case "ASSET_APPROVED_PICKUP":
+        return "text-badge-blueText bg-badge-blueBg";
       default:
         return "text-badge-blueText bg-badge-blueBg";
     }
@@ -103,7 +113,14 @@ export default function Header({ pageTitle, onLogout, onToggleMobileSidebar }: H
       case "ASSIGNMENT_SENT":
         return ICONS.alertCircle;
       case "REQUEST_APPROVED":
+      case "RETURN_APPROVED":
+      case "RECEIPT_CONFIRMED":
+      case "PICKUP_CONFIRMED":
+      case "RETURN_COMPLETED":
         return ICONS.checkCircle;
+      case "REQUEST_CANCELLED":
+      case "RETURN_REJECTED":
+        return ICONS.alertCircle;
       default:
         return ICONS.assets;
     }

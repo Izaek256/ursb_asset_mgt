@@ -2,7 +2,12 @@ export type Role =
   | "System Administrator"
   | "Asset Manager"
   | "Asset Custodian"
-  | "Employee";
+  | "Employee"
+  | "SUPER_SYSTEM_ADMINISTRATOR"
+  | "SYSTEM_ADMINISTRATOR"
+  | "ASSET_MANAGER"
+  | "ASSET_CUSTODIAN"
+  | "EMPLOYEE";
 
 export type AssetStatus =
   | "Available"
@@ -133,9 +138,9 @@ export interface Assignment {
   assignment_id: number;
   asset_id: string;
   asset_name: string;
-  assigned_to: number;
+  assigned_to: string;
   assigned_to_name: string;
-  assigned_by: number;
+  assigned_by: string;
   assigned_by_name: string;
   assigned_date?: string;
   assignment_date?: string;
@@ -426,9 +431,9 @@ export interface Assignment {
   assignment_id: number;
   asset_id: string;
   asset_name: string;
-  assigned_to: number;
+  assigned_to: string;
   assigned_to_name: string;
-  assigned_by: number;
+  assigned_by: string;
   assigned_by_name: string;
   assigned_date?: string;
   assignment_date?: string;

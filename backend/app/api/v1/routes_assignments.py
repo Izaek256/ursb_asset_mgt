@@ -29,8 +29,8 @@ router = APIRouter(prefix="/api/v1/assignments", tags=["assignments"])
 
 class AssignmentCreateRequest(BaseModel):
     asset_id: str
-    assigned_to: int
-    custodian_id: Optional[int] = None
+    assigned_to: str
+    custodian_id: Optional[str] = None
     assignment_date: Optional[date] = None
     return_date: Optional[date] = None
     expected_return_date: Optional[date] = None
@@ -45,9 +45,9 @@ class AssignmentResponse(BaseModel):
     assignment_id: int
     asset_id: str
     asset_name: Optional[str] = None
-    assigned_to: int
+    assigned_to: str
     assigned_to_name: Optional[str] = None
-    assigned_by: int
+    assigned_by: str
     assigned_by_name: Optional[str] = None
     assignment_date: date
     return_date: Optional[date] = None
@@ -78,9 +78,9 @@ def _serialize_assignment(assignment: Assignment, db: Session) -> AssignmentResp
         assignment_id=assignment.assignment_id,
         asset_id=assignment.asset_id,
         asset_name=asset.asset_name if asset else None,
-        assigned_to=int(assignment.assigned_to),
+        assigned_to=str(assigned_to_user.user_id) if assigned_to_user else str(assignment.assigned_to),
         assigned_to_name=assigned_to_user.full_name or f"{assigned_to_user.first_name or ''} {assigned_to_user.last_name or ''}".strip() or assigned_to_user.email if assigned_to_user else None,
-        assigned_by=int(assignment.assigned_by),
+        assigned_by=str(assigned_by_user.user_id) if assigned_by_user else str(assignment.assigned_by),
         assigned_by_name=assigned_by_user.full_name or f"{assigned_by_user.first_name or ''} {assigned_by_user.last_name or ''}".strip() or assigned_by_user.email if assigned_by_user else None,
         assignment_date=assignment.assignment_date,
         return_date=assignment.return_date,
@@ -119,12 +119,8 @@ def create_assignment(
     current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
 ):
     """Assign an asset to a custodian. Asset Manager and Super System Administrator only. SRS AM-A01."""
-    print(f"[DEBUG] ===== ASSIGNMENT CREATION START =====")
-    print(f"[DEBUG] create_assignment ENTRY: Request received")
-    print(f"[DEBUG] create_assignment: asset_id={body.asset_id}, assigned_to={body.assigned_to}, custodian_id={body.custodian_id}, assigned_by={current_user.user_id}")
-    
     # Prevent self-assignment for accountability
-    if int(body.assigned_to) == int(current_user.id):
+    if body.assigned_to == str(current_user.user_id):
         raise HTTPException(status_code=403, detail="Cannot assign assets to yourself for accountability reasons. Use transfer workflow instead.")
     
     assignment = assignment_service.assign_asset(db, body.asset_id, body, current_user.user_id)
@@ -157,7 +153,7 @@ def create_assignment(
 @router.get("", response_model=AssignmentListResponse)
 def list_assignments(
     asset_id: Optional[str] = None,
-    user_id: Optional[int] = None,
+    user_id: Optional[str] = None,
     status: Optional[str] = None,
     assignment_type: Optional[str] = None,  # "final_handover" to show only handovers to requesters
     db: Session = Depends(get_db),
@@ -184,8 +180,17 @@ def list_assignments(
     elif user_id is not None:
         # When user_id is provided, optionally filter by status
         if status:
+            from sqlalchemy import or_
             # Custom query to filter by both user_id and status
-            query = db.query(Assignment).filter(Assignment.assigned_to == str(user_id))
+            if current_user.role == UserRole.ASSET_CUSTODIAN:
+                query = db.query(Assignment).filter(
+                    or_(
+                        Assignment.assigned_to == str(user_id),
+                        Assignment.notes.like(f"%[Custodian: {user_id}:%")
+                    )
+                )
+            else:
+                query = db.query(Assignment).filter(Assignment.assigned_to == str(user_id))
             try:
                 query = query.filter(Assignment.status == AssignmentStatus(status))
             except ValueError:
@@ -271,6 +276,24 @@ def confirm_handover_route(
     _log(db, actor=current_user, action="CONFIRM_HANDOVER", record_id=str(assignment_id), 
           details=f"Physical handover confirmed by custodian {current_user.id}", workflow_step="CUSTODIAN_CONFIRMATION")
     
+    return _serialize_assignment(assignment, db)
+
+
+@router.post("/{assignment_id}/confirm-receipt", response_model=AssignmentResponse)
+def confirm_receipt_route(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.EMPLOYEE)),
+):
+    """Step 3: Employee confirms physical receipt of asset after custodian handover. Employee only."""
+    from app.services.assignment_service import confirm_receipt as service_confirm_receipt
+
+    assignment = service_confirm_receipt(db, assignment_id, current_user.id)
+
+    # Enhanced audit log with workflow step
+    _log(db, actor=current_user, action="CONFIRM_RECEIPT", record_id=str(assignment_id),
+          details=f"Receipt confirmed by employee {current_user.id}", workflow_step="RECEIPT_CONFIRMATION")
+
     return _serialize_assignment(assignment, db)
 
 

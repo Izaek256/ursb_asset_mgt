@@ -64,6 +64,9 @@ export default function Assignments() {
       // Main tab: Show Active and Pending Acceptance assignments
       let activeAssignments: Assignment[] = [];
       let pendingAssignments: Assignment[] = [];
+      let acceptedAssignments: Assignment[] = [];
+      let returnApprovedAssignments: Assignment[] = [];
+      let returnRequestedAssignments: Assignment[] = [];
       
       if (isEmployee || isCustodian) {
         // Fetch Active assignments
@@ -72,22 +75,51 @@ export default function Assignments() {
         activeAssignments = activeData.assignments;
         
         // Fetch Pending Acceptance assignments
-        const pendingEndpoint = `/assignments?user_id=${user?.user_id}&status=Pending Acceptance`;
+        const pendingEndpoint = `/assignments?user_id=${user?.user_id}&status=${encodeURIComponent("Pending Acceptance")}`;
         const pendingData = await apiFetch<{ assignments: Assignment[]; total: number }>(pendingEndpoint, {});
         pendingAssignments = pendingData.assignments;
+        
+        // Fetch Return Requested for Employees to approve/reject
+        if (isEmployee) {
+          const rrEndpoint = `/assignments?user_id=${user?.user_id}&status=${encodeURIComponent("Return Requested")}`;
+          const rrData = await apiFetch<{ assignments: Assignment[]; total: number }>(rrEndpoint, {});
+          returnRequestedAssignments = rrData.assignments;
+        }
+        
+        if (isCustodian) {
+          const acceptedEndpoint = `/assignments?user_id=${user?.user_id}&status=Accepted`;
+          const acceptedData = await apiFetch<{ assignments: Assignment[]; total: number }>(acceptedEndpoint, {});
+          acceptedAssignments = acceptedData.assignments;
+          
+          const raEndpoint = `/assignments?user_id=${user?.user_id}&status=${encodeURIComponent("Return Approved")}`;
+          const raData = await apiFetch<{ assignments: Assignment[]; total: number }>(raEndpoint, {});
+          returnApprovedAssignments = raData.assignments;
+        }
       } else {
         // Admin/Manager view
         const activeEndpoint = `/assignments?status=Active`;
         const activeData = await apiFetch<{ assignments: Assignment[]; total: number }>(activeEndpoint, {});
         activeAssignments = activeData.assignments;
         
-        const pendingEndpoint = `/assignments?status=Pending Acceptance`;
+        const pendingEndpoint = `/assignments?status=${encodeURIComponent("Pending Acceptance")}`;
         const pendingData = await apiFetch<{ assignments: Assignment[]; total: number }>(pendingEndpoint, {});
         pendingAssignments = pendingData.assignments;
+
+        const acceptedEndpoint = `/assignments?status=Accepted`;
+        const acceptedData = await apiFetch<{ assignments: Assignment[]; total: number }>(acceptedEndpoint, {});
+        acceptedAssignments = acceptedData.assignments;
+        
+        const raEndpoint = `/assignments?status=${encodeURIComponent("Return Approved")}`;
+        const raData = await apiFetch<{ assignments: Assignment[]; total: number }>(raEndpoint, {});
+        returnApprovedAssignments = raData.assignments;
+        
+        const rrEndpoint = `/assignments?status=${encodeURIComponent("Return Requested")}`;
+        const rrData = await apiFetch<{ assignments: Assignment[]; total: number }>(rrEndpoint, {});
+        returnRequestedAssignments = rrData.assignments;
       }
       
       // Combine without duplicates
-      const allAssignments = [...activeAssignments, ...pendingAssignments];
+      const allAssignments = [...activeAssignments, ...pendingAssignments, ...acceptedAssignments, ...returnApprovedAssignments, ...returnRequestedAssignments];
       const uniqueAssignments = allAssignments.filter((assignment, index, self) =>
         index === self.findIndex(a => a.assignment_id === assignment.assignment_id)
       );
@@ -152,10 +184,22 @@ export default function Assignments() {
     setSuccess(null);
     try {
       await apiFetch(`/assignments/${id}/confirm-handover`, { method: "POST" });
-      setSuccess("Handover confirmed successfully. Asset is now assigned.");
+      setSuccess("Handover confirmed successfully. Employee has been notified the asset is ready.");
       fetchAssignments();
     } catch (err: any) {
       setError(err.message || "Failed to confirm handover.");
+    }
+  };
+
+  const handleConfirmReceipt = async (id: number) => {
+    setError(null);
+    setSuccess(null);
+    try {
+      await apiFetch(`/assignments/${id}/confirm-receipt`, { method: "POST" });
+      setSuccess("Receipt confirmed. The asset is now fully active in your custody.");
+      fetchAssignments();
+    } catch (err: any) {
+      setError(err.message || "Failed to confirm receipt.");
     }
   };
 
@@ -228,8 +272,8 @@ export default function Assignments() {
         method: "POST",
         body: JSON.stringify({
           asset_id: form.asset_id,
-          assigned_to: parseInt(form.assigned_to, 10),
-          custodian_id: form.custodian_id ? parseInt(form.custodian_id, 10) : null,
+          assigned_to: form.assigned_to,
+          custodian_id: form.custodian_id || null,
           assignment_date: form.assignment_date,
           return_date: form.return_date || null,
           expected_return_date: form.return_date || null,
@@ -393,14 +437,21 @@ export default function Assignments() {
     },
     {
       header: "Status",
-      render: (a) => <StatusBadge status={a.status} />,
+      render: (a) => (
+        <div className="flex flex-col gap-1">
+          <StatusBadge status={a.status} />
+          {isEmployee && a.status === "Active" && !a.acknowledged_at && String(a.assigned_to) === String(user?.user_id) && (
+            <span className="text-[10px] text-amber-600 font-semibold">⏳ Awaiting your receipt</span>
+          )}
+        </div>
+      ),
     },
     
     {
       header: "Actions",
       render: (a) => (
         <div className="flex gap-2 select-none">
-          {isEmployee && a.status === "Pending Acceptance" && (
+          {a.status === "Pending Acceptance" && String(a.assigned_to) === String(user?.user_id) && (
             <>
               <Button variant="success" className="!py-1.5 !px-3 text-xs" onClick={() => handleAccept(a.assignment_id)}>
                 Accept
@@ -415,12 +466,17 @@ export default function Assignments() {
               Confirm Handover
             </Button>
           )}
+          {isEmployee && a.status === "Active" && !a.acknowledged_at && String(a.assigned_to) === String(user?.user_id) && (
+            <Button variant="success" className="!py-1.5 !px-3 text-xs" onClick={() => handleConfirmReceipt(a.assignment_id)}>
+              Confirm Receipt
+            </Button>
+          )}
           {isCustodian && a.status === "Active" && (
             <Button variant="danger-inverse" className="!py-1.5 !px-3 text-xs" onClick={() => handleRequestReturn(a.assignment_id)}>
               Request Asset Return
             </Button>
           )}
-          {isEmployee && a.status === "Return Requested" && String(a.assigned_to) === String(user?.user_id) && (
+          {a.status === "Return Requested" && String(a.assigned_to) === String(user?.user_id) && (
             <>
               <Button variant="success" className="!py-1.5 !px-3 text-xs" onClick={() => handleApproveReturn(a.assignment_id)}>
                 Approve

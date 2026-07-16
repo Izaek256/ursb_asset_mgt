@@ -82,9 +82,29 @@ export default function NotificationPanel({ open, onClose }: Props) {
   const getIcon = (type: string) => {
     switch (type) {
       case "ASSIGNMENT_SENT":
-        return "⚠️";
+        return "📋";
+      case "ASSET_APPROVED_PICKUP":
+        return "📦";
+      case "ASSET_READY_PICKUP":
+        return "🚚";
       case "REQUEST_APPROVED":
         return "✅";
+      case "REQUEST_SUBMITTED":
+        return "📩";
+      case "REQUEST_CANCELLED":
+        return "❌";
+      case "RECEIPT_CONFIRMED":
+        return "🎉";
+      case "PICKUP_CONFIRMED":
+        return "✅";
+      case "RETURN_REQUESTED":
+        return "↩️";
+      case "RETURN_APPROVED":
+        return "✅";
+      case "RETURN_REJECTED":
+        return "❌";
+      case "RETURN_COMPLETED":
+        return "📥";
       default:
         return "ℹ️";
     }

@@ -3,8 +3,6 @@ Assignment business logic service.
 Routers call these functions — no business logic lives in route handlers.
 """
 
-print("===== ASSIGNMENT_SERVICE.PY MODULE LOADED =====")
-
 from datetime import datetime, date
 from typing import List
 
@@ -50,45 +48,33 @@ def assign_asset(db: Session, asset_id: str, data, assigned_by_id: int) -> Assig
     Audit log:
         Writes action=ASSIGN_ASSET on success.
     """
-    # Debug logging
-    print(f"===== ASSIGNMENT SERVICE CALLED =====")
-    print(f"[DEBUG] assign_asset called with: asset_id={asset_id}, assigned_to={data.assigned_to}, custodian_id={getattr(data, 'custodian_id', 'None')}, assigned_by_id={assigned_by_id}")
-    
     asset = db.query(Asset).filter(Asset.asset_id == asset_id).first()
     if not asset:
-        print(f"[DEBUG] Asset not found: {asset_id}")
         raise HTTPException(404, detail="Asset not found")
-
-    print(f"[DEBUG] Asset found: {asset.asset_id}, status={asset.status.value}, is_active={getattr(asset, 'is_active', 'N/A')}")
 
     # Asset must be Available — 422 for any other status including Disposed
     try:
         validate_status_transition(asset.status, AssetStatus.PENDING_ACCEPTANCE)
     except HTTPException as e:
-        print(f"[DEBUG] Status transition failed: current={asset.status.value}, target=PENDING_ACCEPTANCE")
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Asset must be in Available status to assign. Current status: {asset.status.value}"
         )
 
-    target_user = db.query(User).filter(User.id == data.assigned_to).first()
+    target_user = next((u for u in db.query(User).all() if str(u.user_id) == data.assigned_to), None)
     if not target_user:
-        print(f"[DEBUG] Target user not found: {data.assigned_to}")
         raise HTTPException(404, detail="User not found")
     if not target_user.is_active:
-        print(f"[DEBUG] Target user inactive: {data.assigned_to}")
         raise HTTPException(400, detail="Assigned user is inactive")
 
     # If custodian is specified, assign to final recipient first with custodian info stored
     custodian_id = data.custodian_id if hasattr(data, 'custodian_id') and data.custodian_id else None
-    final_recipient_id = str(data.assigned_to)
+    final_recipient_id = str(target_user.id)
     
     if custodian_id:
         # Assignment with custodian workflow - assign to final recipient first
-        print(f"[DEBUG] Assignment with custodian: custodian_id={custodian_id}, final_recipient={final_recipient_id}")
-        custodian = db.query(User).filter(User.id == custodian_id).first()
+        custodian = next((u for u in db.query(User).all() if str(u.user_id) == custodian_id), None)
         if not custodian or not custodian.is_active:
-            print(f"[DEBUG] Custodian invalid or inactive: {custodian_id}")
             raise HTTPException(400, detail="Custodian is invalid or inactive")
         
         # Store custodian info in notes for later workflow steps
@@ -99,14 +85,13 @@ def assign_asset(db: Session, asset_id: str, data, assigned_by_id: int) -> Assig
             assignment_date=data.assignment_date or date.today(),
             return_date=data.return_date,
             status=AssignmentStatus.PENDING_ACCEPTANCE,
-            notes=f"{data.notes or ''} [Custodian: {custodian_id}:{custodian.email}]",
+            notes=f"{data.notes or ''} [Custodian: {custodian.id}:{custodian.email}]",
         )
-        asset.current_custodian_id = str(custodian_id)  # Asset with custodian for pickup
+        asset.current_custodian_id = str(custodian.id)  # Asset with custodian for pickup
         
-        audit_details = f"Asset {asset_id} assigned to final recipient {data.assigned_to} with custodian {custodian_id} for pickup, status set to Pending Acceptance"
+        audit_details = f"Asset {asset_id} assigned to final recipient {target_user.id} with custodian {custodian.id} for pickup, status set to Pending Acceptance"
     else:
         # Direct assignment to employee without custodian
-        print(f"[DEBUG] Direct assignment to employee: {final_recipient_id}")
         assignment = Assignment(
             asset_id=asset_id,
             assigned_to=final_recipient_id,
@@ -636,6 +621,85 @@ def reject_return_request(db: Session, assignment_id: int, employee_id: int, rej
         details=f"Return rejected for assignment {assignment_id} by employee {employee_id}. Reason: {rejection_reason or 'Not provided'}"
     )
     db.add(audit)
+    db.commit()
+    db.refresh(assignment)
+    return assignment
+
+
+def confirm_receipt(db: Session, assignment_id: int, employee_id: int) -> Assignment:
+    """
+    Employee confirms physical receipt of the asset after custodian handover.
+
+    Parameters:
+        db (Session): Database session.
+        assignment_id (int): ID of the assignment to confirm receipt for.
+        employee_id (int): ID of the employee confirming receipt.
+
+    Business Rules Enforced:
+        - 404 error if the assignment is not found.
+        - 403 error if the assignment is not assigned to the current user.
+        - 422 error if the assignment status is not 'Active' (custodian has confirmed handover).
+
+    What's Written to the Audit Log:
+        - Creates an AuditLog entry with action='RECEIPT_CONFIRMED'.
+
+    Status Transition Triggered:
+        - Assignment acknowledged_at is updated (confirming employee has the asset).
+        - Asset status remains 'Assigned' (already set by confirm_handover).
+        - Asset Manager is notified that the asset has been received by the employee.
+
+    Returns:
+        Assignment: The updated assignment object.
+    """
+    assignment = db.query(Assignment).filter(Assignment.assignment_id == assignment_id).first()
+    if not assignment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Assignment not found"
+        )
+
+    if assignment.assigned_to != str(employee_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to confirm receipt of this assignment."
+        )
+
+    if assignment.status != AssignmentStatus.ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Only assignments in 'Active' status can have receipt confirmed. Current: {assignment.status}"
+        )
+
+    asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset not found for this assignment."
+        )
+
+    # Mark receipt confirmed timestamp
+    assignment.acknowledged_at = datetime.utcnow()
+
+    audit = AuditLog(
+        user_id=str(employee_id),
+        action="RECEIPT_CONFIRMED",
+        table_affected="assignments",
+        record_id=str(assignment_id),
+        details=f"Receipt confirmed by employee {employee_id} for asset {assignment.asset_id}."
+    )
+    db.add(audit)
+
+    # Notify Asset Manager that asset has been received by the employee
+    from app.services.notification_service import create_notification
+    create_notification(
+        db=db,
+        user_id="Asset Manager",
+        title="Asset Receipt Confirmed",
+        message=f"Employee has confirmed receipt of asset '{asset.asset_name}' ({asset.asset_id}). Assignment is now active.",
+        notification_type="RECEIPT_CONFIRMED",
+        related_asset_id=asset.asset_id,
+    )
+
     db.commit()
     db.refresh(assignment)
     return assignment
