@@ -30,6 +30,7 @@ router = APIRouter(prefix="/api/v1/assignments", tags=["assignments"])
 class AssignmentCreateRequest(BaseModel):
     asset_id: str
     assigned_to: int
+    custodian_id: Optional[int] = None
     assignment_date: Optional[date] = None
     return_date: Optional[date] = None
     expected_return_date: Optional[date] = None
@@ -117,7 +118,11 @@ def create_assignment(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
 ):
-    """Assign an asset to a custodian. Asset Manager and System Administrator only. SRS AM-A01."""
+    """Assign an asset to a custodian. Asset Manager and Super System Administrator only. SRS AM-A01."""
+    print(f"[DEBUG] ===== ASSIGNMENT CREATION START =====")
+    print(f"[DEBUG] create_assignment ENTRY: Request received")
+    print(f"[DEBUG] create_assignment: asset_id={body.asset_id}, assigned_to={body.assigned_to}, custodian_id={body.custodian_id}, assigned_by={current_user.user_id}")
+    
     # Prevent self-assignment for accountability
     if int(body.assigned_to) == int(current_user.id):
         raise HTTPException(status_code=403, detail="Cannot assign assets to yourself for accountability reasons. Use transfer workflow instead.")
@@ -126,17 +131,23 @@ def create_assignment(
     
     # Enhanced audit log with workflow step
     _log(db, actor=current_user, action="CREATE_ASSIGNMENT", record_id=str(assignment.assignment_id), 
-          details=f"Asset {body.asset_id} assigned to user {body.assigned_to}", workflow_step="INITIATION")
+          details=f"Asset {body.asset_id} assigned to custodian {assignment.assigned_to} for final recipient {body.assigned_to}", workflow_step="INITIATION")
     
-    # S3-08: Notify employee of assignment
+    # S3-08: Notify final recipient of assignment
     from app.services.notification_service import create_notification
     asset = db.query(Asset).filter(Asset.asset_id == body.asset_id).first()
     if asset:
+        # Notify the final recipient who needs to accept the assignment
+        recipient_id = str(body.assigned_to)
+        message = f"You have been assigned the asset '{asset.asset_name}'. Please accept or decline this assignment."
+        if body.custodian_id:
+            message += " A custodian will handle pickup after your approval."
+        
         create_notification(
             db=db,
-            user_id=str(assignment.assigned_to),
-            title="New Asset Custody Assignment",
-            message=f"You have been assigned the asset '{asset.asset_name}'. Please accept or decline custody of this asset.",
+            user_id=recipient_id,
+            title="New Asset Assignment",
+            message=message,
             notification_type="ASSIGNMENT_SENT",
             related_asset_id=asset.asset_id,
         )
@@ -152,17 +163,17 @@ def list_assignments(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List assignments with optional filters. All authenticated roles can view their own assignments. Admins/managers/custodians can view all. SRS AM-A04."""
+    """List assignments with optional filters. All authenticated roles can view their own assignments. Admins/managers can view all. SRS AM-A04."""
+    
     # Roles that can view all assignments
     can_view_all = current_user.role in {
         UserRole.SUPER_SYSTEM_ADMINISTRATOR,
         UserRole.SYSTEM_ADMINISTRATOR,
-        UserRole.ASSET_MANAGER,
-        UserRole.ASSET_CUSTODIAN
+        UserRole.ASSET_MANAGER
     }
     
-    # Employees can only view their own assignments
-    if current_user.role == UserRole.EMPLOYEE:
+    # Employees and custodians can only view their own assignments by default
+    if current_user.role in {UserRole.EMPLOYEE, UserRole.ASSET_CUSTODIAN}:
         user_id = int(current_user.id)
     elif user_id is not None and not can_view_all:
         # Non-admin users cannot filter by other user IDs

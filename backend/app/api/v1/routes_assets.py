@@ -227,7 +227,7 @@ def list_assets_endpoint(
     _user=Depends(get_current_user),
 ):
     """List assets with optional filters. All authenticated roles. SRS AM-P03."""
-    assets, _ = list_assets(db, status=status, asset_type=asset_type, search=search, department=department, for_request=for_request)
+    assets, total = list_assets(db, status=status, asset_type=asset_type, search=search, department=department, for_request=for_request)
     return [
         AssetOut(
             asset_id=a.asset_id,

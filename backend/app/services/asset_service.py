@@ -17,6 +17,7 @@ VALID_TRANSITIONS = {
         AssetStatus.DEACTIVATED,         # Triggered by deactivating an available asset
         AssetStatus.ASSIGNED,            # Triggered by direct assignment from storage (immediate assign)
         AssetStatus.PENDING_APPROVAL,    # Triggered by assigning asset to custodian for request handover
+        AssetStatus.PENDING_ACCEPTANCE,  # Triggered by direct assignment to custodian/employee
     },
     AssetStatus.RESERVED: {
         AssetStatus.PENDING_ACCEPTANCE,  # Triggered by employee notification of request approval - see S3-05
@@ -77,7 +78,7 @@ VALID_TRANSITIONS = {
 def validate_status_transition(current_status: str | AssetStatus, new_status: str | AssetStatus) -> None:
     """Validate if transition between two asset statuses is permitted.
     Valid Transitions:
-    - Available -> Reserved, Under Maintenance, Disposed, Deactivated, Assigned
+    - Available -> Reserved, Under Maintenance, Disposed, Deactivated, Assigned, Pending Acceptance
     - Reserved -> Pending Acceptance, Available, Disposed, Deactivated
     - Pending Acceptance -> Pending Pickup, Available, Disposed, Deactivated
     - Pending Pickup -> Assigned, Available, Disposed, Deactivated

@@ -342,7 +342,7 @@ def reject_request(
     # If asset was assigned, return it to AVAILABLE
     if request.asset_id:
         asset = db.query(Asset).filter(Asset.asset_id == request.asset_id).first()
-        if asset and asset.status in {AssetStatus.ASSIGNED, AssetStatus.PENDING_APPROVAL}:
+        if asset and asset.status in {AssetStatus.ASSIGNED, AssetStatus.PENDING_APPROVAL, AssetStatus.PENDING_PICKUP}:
             validate_status_transition(asset.status, AssetStatus.AVAILABLE)
             asset.status = AssetStatus.AVAILABLE
             asset.current_custodian_id = None
@@ -389,31 +389,37 @@ def assign_request(
     if not custodian or not custodian.is_active:
         raise HTTPException(400, detail="Assigned custodian is invalid")
 
+    # New workflow: assign to final recipient first with custodian info
+    final_recipient_id = request.requested_by
+    
     request.status = RequestStatus.ASSIGNED
     request.assigned_to = custodian_id
     request.assigned_at = datetime.utcnow()
-    db.add(
-        Assignment(
-            asset_id=asset.asset_id,
-            assigned_to=str(custodian_id),
-            assigned_by=str(current_user.id),
-            assignment_date=date.today(),
-            status=AssignmentStatus.ACTIVE,
-            notes="Assigned from asset request",
-        )
+    
+    # Create assignment to final recipient with custodian info in notes
+    assignment = Assignment(
+        asset_id=asset.asset_id,
+        assigned_to=str(final_recipient_id),
+        assigned_by=str(current_user.id),
+        assignment_date=date.today(),
+        status=AssignmentStatus.PENDING_ACCEPTANCE,
+        notes=f"Assigned from asset request [Custodian: {custodian_id}:{custodian.email}]",
     )
-    validate_status_transition(asset.status, AssetStatus.PENDING_APPROVAL)
-    asset.status = AssetStatus.PENDING_APPROVAL
+    db.add(assignment)
+    
+    validate_status_transition(asset.status, AssetStatus.PENDING_ACCEPTANCE)
+    asset.status = AssetStatus.PENDING_ACCEPTANCE
     asset.current_custodian_id = str(custodian_id)
-    _log(db, actor=current_user, action="ASSIGN_FROM_REQUEST", record_id=str(request.request_id), details="Assigned request to asset")
-    # Notify custodian of assignment
+    _log(db, actor=current_user, action="ASSIGN_FROM_REQUEST", record_id=str(request.request_id), details=f"Assigned request to asset for final recipient {final_recipient_id} with custodian {custodian_id}")
+    
+    # Notify final recipient of assignment
     from app.services.notification_service import create_notification
     create_notification(
         db=db,
-        user_id=str(custodian_id),
-        title="Asset Assigned for Handover",
-        message=f"You have been assigned asset {asset.asset_name} ({asset.asset_id}) to hand over to the requester.",
-        notification_type="ASSET_ASSIGNED",
+        user_id=str(final_recipient_id),
+        title="New Asset Assignment",
+        message=f"You have been assigned asset {asset.asset_name} ({asset.asset_id}). Please accept or decline this assignment.",
+        notification_type="ASSIGNMENT_SENT",
         related_asset_id=asset.asset_id,
     )
     db.commit()
@@ -547,8 +553,10 @@ def pickup_request(
                 Assignment.status == AssignmentStatus.ACTIVE
             ).first()
             if existing_assignment:
+                # Mark as returned since custody is being transferred to requester
                 existing_assignment.status = AssignmentStatus.RETURNED
                 existing_assignment.return_date = date.today()
+                existing_assignment.notes = f"{existing_assignment.notes or ''} - Handover completed to requester"
             
             # Create new assignment to requester
             db.add(Assignment(
@@ -561,6 +569,24 @@ def pickup_request(
             ))
     
     _log(db, actor=current_user, action="PICKUP_CONFIRMED", record_id=str(request.request_id), details="Pickup confirmed")
+    # Notify Asset Managers and Super System Administrators that pickup was confirmed
+    from app.services.notification_service import create_notification
+    create_notification(
+        db=db,
+        user_id="Asset Manager",
+        title="Asset Pickup Confirmed",
+        message=f"Request #{request.request_id} has been picked up by the requester. The asset is now assigned to them.",
+        notification_type="PICKUP_CONFIRMED",
+        related_asset_id=request.asset_id,
+    )
+    create_notification(
+        db=db,
+        user_id="SUPER_SYSTEM_ADMINISTRATOR",
+        title="Asset Pickup Confirmed",
+        message=f"Request #{request.request_id} has been picked up by the requester. The asset is now assigned to them.",
+        notification_type="PICKUP_CONFIRMED",
+        related_asset_id=request.asset_id,
+    )
     db.commit()
     db.refresh(request)
     return _serialize_request(request)
@@ -612,7 +638,7 @@ def cancel_request(
     # If asset was assigned, return it to AVAILABLE
     if request.asset_id:
         asset = db.query(Asset).filter(Asset.asset_id == request.asset_id).first()
-        if asset and asset.status in {AssetStatus.ASSIGNED, AssetStatus.PENDING_APPROVAL}:
+        if asset and asset.status in {AssetStatus.ASSIGNED, AssetStatus.PENDING_APPROVAL, AssetStatus.PENDING_PICKUP}:
             validate_status_transition(asset.status, AssetStatus.AVAILABLE)
             asset.status = AssetStatus.AVAILABLE
             asset.current_custodian_id = None
