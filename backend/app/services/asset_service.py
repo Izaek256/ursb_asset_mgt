@@ -346,7 +346,7 @@ def update_asset(db: Session, asset_id: str, data, updated_by_id: int) -> Asset:
     if data.department is not None:
         asset.department = data.department
     if data.current_custodian_id is not None:
-        asset.current_custodian_id = str(data.current_custodian_id)
+        asset.current_custodian_id = data.current_custodian_id
     if data.supplier is not None:
         asset.supplier = data.supplier
     if data.procurement_ref is not None:

@@ -231,7 +231,7 @@ def create_asset(
 
     # ── Audit log ───────────────────────────────────────────────────────────────
     audit_entry = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="ASSET_REGISTRATION",
         table_affected="assets",
         record_id=new_asset_id,
@@ -457,7 +457,7 @@ def update_asset(
     if body.department is not None:
         asset.department = body.department
     if body.current_custodian_id is not None:
-        asset.current_custodian_id = str(body.current_custodian_id)
+        asset.current_custodian_id = body.current_custodian_id
     if body.supplier is not None:
         asset.supplier = body.supplier
     if body.procurement_ref is not None:
@@ -467,7 +467,7 @@ def update_asset(
 
     # Audit log
     audit_entry = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="ASSET_UPDATE",
         table_affected="assets",
         record_id=asset_id,
@@ -529,7 +529,7 @@ def deactivate_asset(
 
     # Audit log
     audit_entry = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="ASSET_DEACTIVATE",
         table_affected="assets",
         record_id=asset_id,
@@ -551,7 +551,12 @@ def reactivate_asset(
     Reactivate an asset. Sets is_active = True.
     """
     asset = db.query(Asset).filter(Asset.asset_id == asset_id).first()
-    
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Asset with ID {asset_id} not found"
+        )
+
     # Check if already active
     if asset.is_active:
         raise HTTPException(
@@ -563,7 +568,7 @@ def reactivate_asset(
 
     # Audit log
     audit_entry = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="ASSET_REACTIVATE",
         table_affected="assets",
         record_id=asset_id,
@@ -584,8 +589,14 @@ def activate_asset(
     """
     Activate a newly registered asset. Sets is_active = True.
     """
-    asset = get_asset(db, asset_id).filter(Asset.asset_id == asset_id).first()
-        # Check if already active
+    asset = db.query(Asset).filter(Asset.asset_id == asset_id).first()
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Asset with ID {asset_id} not found"
+        )
+
+    # Check if already active
     if asset.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -596,7 +607,7 @@ def activate_asset(
 
     # Audit log
     audit_entry = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="ASSET_ACTIVATE",
         table_affected="assets",
         record_id=asset_id,
