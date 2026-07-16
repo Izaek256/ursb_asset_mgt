@@ -8,6 +8,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Header, status, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 
 from app.db import get_db
 from app.models.user import User
@@ -102,7 +103,11 @@ def get_recent_accounts(
     if search:
         search_term = f"%{search}%"
         query = query.filter(
-            (User.full_name.ilike(search_term)) | (User.email.ilike(search_term))
+            or_(
+                User.first_name.ilike(search_term),
+                User.last_name.ilike(search_term),
+                User.email.ilike(search_term)
+            )
         )
     
     # Get total count

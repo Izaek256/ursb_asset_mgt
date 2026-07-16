@@ -463,7 +463,7 @@ def list_audit_logs(
     to_date: Optional[date] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(
-        require_role(UserRole.SYSTEM_ADMINISTRATOR, UserRole.ASSET_MANAGER)
+        require_role(UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR, UserRole.ASSET_MANAGER)
     ),
 ):
     

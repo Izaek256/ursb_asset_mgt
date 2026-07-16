@@ -91,6 +91,13 @@ export const ACTION_PERMISSIONS: Record<string, ActionPermission[]> = {
 };
 
 /**
+ * Normalize role name for comparison (handles both "SUPER_SYSTEM_ADMINISTRATOR" and "Super System Administrator")
+ */
+function normalizeRole(role: string): string {
+  return role.toLowerCase().replace(/[_\s]/g, '');
+}
+
+/**
  * Check if a user role has access to a specific page
  */
 export function hasPageAccess(userRole: UserRole | string | undefined, path: string): boolean {
@@ -99,8 +106,9 @@ export function hasPageAccess(userRole: UserRole | string | undefined, path: str
   const permission = PAGE_PERMISSIONS.find(p => p.path === path);
   if (!permission) return false;
   
+  const normalizedUserRole = normalizeRole(userRole);
   return permission.allowedRoles.some(role => 
-    userRole.toLowerCase().includes(role.toLowerCase())
+    normalizedUserRole === normalizeRole(role)
   );
 }
 
@@ -113,9 +121,10 @@ export function hasActionPermission(userRole: UserRole | string | undefined, act
   const permissions = ACTION_PERMISSIONS[action];
   if (!permissions) return false;
   
+  const normalizedUserRole = normalizeRole(userRole);
   return permissions.some(permission => 
     permission.allowedRoles.some(role => 
-      userRole.toLowerCase().includes(role.toLowerCase())
+      normalizedUserRole === normalizeRole(role)
     )
   );
 }
@@ -126,9 +135,10 @@ export function hasActionPermission(userRole: UserRole | string | undefined, act
 export function getAccessiblePages(userRole: UserRole | string | undefined): PagePermission[] {
   if (!userRole) return [];
   
+  const normalizedUserRole = normalizeRole(userRole);
   return PAGE_PERMISSIONS.filter(permission => 
     permission.allowedRoles.some(role => 
-      userRole.toLowerCase().includes(role.toLowerCase())
+      normalizedUserRole === normalizeRole(role)
     )
   );
 }
@@ -139,18 +149,19 @@ export function getAccessiblePages(userRole: UserRole | string | undefined): Pag
 export function getDefaultPathForRole(userRole: UserRole | string | undefined): string {
   if (!userRole) return "/dashboard";
   
-  const roleLower = userRole.toLowerCase();
+  const normalizedUserRole = normalizeRole(userRole);
   
-  if (roleLower.includes("system administrator")) {
+  if (normalizedUserRole === normalizeRole("Super System Administrator") || 
+      normalizedUserRole === normalizeRole("System Administrator")) {
     return "/dashboard";
   }
-  if (roleLower.includes("asset manager")) {
+  if (normalizedUserRole === normalizeRole("Asset Manager")) {
     return "/dashboard";
   }
-  if (roleLower.includes("asset custodian")) {
+  if (normalizedUserRole === normalizeRole("Asset Custodian")) {
     return "/dashboard";
   }
-  if (roleLower.includes("employee")) {
+  if (normalizedUserRole === normalizeRole("Employee")) {
     return "/dashboard";
   }
   
@@ -162,8 +173,10 @@ export function getDefaultPathForRole(userRole: UserRole | string | undefined): 
  */
 export function canViewAllRequests(userRole: UserRole | string | undefined): boolean {
   if (!userRole) return false;
-  const roleLower = userRole.toLowerCase();
-  return roleLower.includes("system administrator") || roleLower.includes("asset manager");
+  const normalizedUserRole = normalizeRole(userRole);
+  return normalizedUserRole === normalizeRole("Super System Administrator") || 
+         normalizedUserRole === normalizeRole("System Administrator") ||
+         normalizedUserRole === normalizeRole("Asset Manager");
 }
 
 /**
@@ -171,8 +184,10 @@ export function canViewAllRequests(userRole: UserRole | string | undefined): boo
  */
 export function canManageUsers(userRole: UserRole | string | undefined): boolean {
   if (!userRole) return false;
-  const roleLower = userRole.toLowerCase();
-  return roleLower.includes("system administrator") || roleLower.includes("asset manager");
+  const normalizedUserRole = normalizeRole(userRole);
+  return normalizedUserRole === normalizeRole("Super System Administrator") || 
+         normalizedUserRole === normalizeRole("System Administrator") ||
+         normalizedUserRole === normalizeRole("Asset Manager");
 }
 
 /**
@@ -180,8 +195,10 @@ export function canManageUsers(userRole: UserRole | string | undefined): boolean
  */
 export function canViewAuditLogs(userRole: UserRole | string | undefined): boolean {
   if (!userRole) return false;
-  const roleLower = userRole.toLowerCase();
-  return roleLower.includes("system administrator") || roleLower.includes("asset manager");
+  const normalizedUserRole = normalizeRole(userRole);
+  return normalizedUserRole === normalizeRole("Super System Administrator") || 
+         normalizedUserRole === normalizeRole("System Administrator") ||
+         normalizedUserRole === normalizeRole("Asset Manager");
 }
 
 /**
@@ -189,6 +206,7 @@ export function canViewAuditLogs(userRole: UserRole | string | undefined): boole
  */
 export function canAccessCredentials(userRole: UserRole | string | undefined): boolean {
   if (!userRole) return false;
-  const roleLower = userRole.toLowerCase();
-  return roleLower.includes("system administrator");
+  const normalizedUserRole = normalizeRole(userRole);
+  return normalizedUserRole === normalizeRole("Super System Administrator") || 
+         normalizedUserRole === normalizeRole("System Administrator");
 }
