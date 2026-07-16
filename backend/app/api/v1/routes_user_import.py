@@ -2,8 +2,6 @@
 
 import asyncio
 import json
-import secrets
-import string
 from datetime import datetime, timedelta
 from typing import List, Optional
 
@@ -15,8 +13,9 @@ from app.db import get_db, SessionLocal
 from app.models.user import User, UserRole
 from app.models.audit_log import AuditLog
 from app.models.temporary_password import TemporaryPassword
-from app.api.v1.auth import get_current_user, require_role
+from app.api.v1.auth import get_current_user, require_roles
 from app.services.auth import create_password_hash, validate_ursb_email, get_session, SESSION_COOKIE_NAME
+from app.services.user_service import generate_secure_password
 
 router = APIRouter(prefix="/api/v1/users", tags=["user-import"])
 
@@ -45,39 +44,6 @@ class BulkImportResponse(BaseModel):
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-
-def generate_secure_password() -> str:
-    """
-    Generate a cryptographically random secure password.
-
-    Requirements:
-    - Minimum 12 characters
-    - At least one uppercase letter (A-Z)
-    - At least one lowercase letter (a-z)
-    - At least one digit (0-9)
-    - At least one special character from !@#$%^&*
-
-    Uses Python's secrets module for cryptographic randomness.
-    """
-    uppercase = string.ascii_uppercase
-    lowercase = string.ascii_lowercase
-    digits = string.digits
-    special = "!@#$%^&*"
-
-    password = [
-        secrets.choice(uppercase),
-        secrets.choice(lowercase),
-        secrets.choice(digits),
-        secrets.choice(special),
-    ]
-
-    all_chars = uppercase + lowercase + digits + special
-    for _ in range(8):
-        password.append(secrets.choice(all_chars))
-
-    secrets.SystemRandom().shuffle(password)
-    return ''.join(password)
-
 
 def _validate_rows(rows: list, db: Session) -> tuple[list, list]:
     """
@@ -135,7 +101,7 @@ def _validate_rows(rows: list, db: Session) -> tuple[list, list]:
 async def bulk_import_users(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
+    current_user: User = Depends(require_roles("System Administrator")),
 ):
     """
     Bulk import users from CSV or XLSX file.

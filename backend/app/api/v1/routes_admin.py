@@ -1,7 +1,5 @@
 """Admin routes: user management and audit logs."""
 
-import secrets
-import string
 from datetime import datetime, date, timedelta
 from typing import List, Optional
 
@@ -14,48 +12,14 @@ from app.models.user import User, UserRole
 from app.models.audit_log import AuditLog
 from app.models.session import Session
 from app.models.temporary_password import TemporaryPassword
-from app.api.v1.auth import get_current_user, require_role
+from app.api.v1.auth import get_current_user, require_roles
 from app.services.auth import create_password_hash, validate_ursb_email
+from app.services.user_service import generate_secure_password
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
 
-def generate_secure_password() -> str:
-    """
-    Generate a cryptographically random secure password.
 
-    Requirements:
-    - Minimum 12 characters
-    - At least one uppercase letter (A-Z)
-    - At least one lowercase letter (a-z)
-    - At least one digit (0-9)
-    - At least one special character from !@#$%^&*
-
-    Uses Python's secrets module for cryptographic randomness.
-    The generated value is returned once and never stored.
-    """
-    uppercase = string.ascii_uppercase
-    lowercase = string.ascii_lowercase
-    digits = string.digits
-    special = "!@#$%^&*"
-
-    # Ensure at least one character from each required set
-    password = [
-        secrets.choice(uppercase),
-        secrets.choice(lowercase),
-        secrets.choice(digits),
-        secrets.choice(special),
-    ]
-
-    # Fill the rest with random characters from all sets
-    all_chars = uppercase + lowercase + digits + special
-    for _ in range(8):  # 8 more characters to reach minimum 12
-        password.append(secrets.choice(all_chars))
-
-    # Shuffle to avoid predictable pattern
-    secrets.SystemRandom().shuffle(password)
-
-    return ''.join(password)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────────
@@ -224,7 +188,7 @@ def _log_to_out(log: AuditLog, db: Session) -> AuditLogOut:
 def list_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(
-        require_role(UserRole.SYSTEM_ADMINISTRATOR, UserRole.ASSET_MANAGER)
+        require_roles("System Administrator", "Asset Manager")
     ),
 ):
     """List all users. Accessible by System Administrator and Asset Manager."""
@@ -236,7 +200,7 @@ def list_users(
 def create_user(
     body: UserCreateAutoRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
+    current_user: User = Depends(require_roles("System Administrator")),
 ):
     """Create a new user account with auto-generated password. Admin only."""
     # Validate email domain - only @ursb.go.ug addresses are permitted
@@ -303,7 +267,7 @@ def update_user(
     user_id: str,
     body: UpdateUserRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
+    current_user: User = Depends(require_roles("System Administrator")),
 ):
     """Update user details. Admin only."""
     target = db.query(User).filter(User.user_id == user_id).first()
@@ -359,7 +323,7 @@ def update_user_role(
     user_id: str,
     body: RoleUpdateRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
+    current_user: User = Depends(require_roles("System Administrator")),
 ):
     """Change a user's role. Only System Administrators can do this."""
     target = db.query(User).filter(User.user_id == user_id).first()
@@ -405,7 +369,7 @@ def update_user_role(
 def deactivate_user(
     user_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
+    current_user: User = Depends(require_roles("System Administrator")),
 ):
     """Deactivate a user without deleting them. Admin only."""
     target = db.query(User).filter(User.user_id == user_id).first()
@@ -438,7 +402,7 @@ def deactivate_user(
 def reactivate_user(
     user_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
+    current_user: User = Depends(require_roles("System Administrator")),
 ):
     """Reactivate a previously deactivated user. Admin only."""
     target = db.query(User).filter(User.user_id == user_id).first()
@@ -473,7 +437,7 @@ def list_audit_logs(
     to_date: Optional[date] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(
-        require_role(UserRole.SYSTEM_ADMINISTRATOR, UserRole.ASSET_MANAGER)
+        require_roles("System Administrator", "Asset Manager")
     ),
 ):
     

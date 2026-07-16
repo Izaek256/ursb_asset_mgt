@@ -15,8 +15,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db, SessionLocal
 from app.models.asset import Asset, AssetCondition, AssetStatus, AssetType, SourceType
 from app.models.audit_log import AuditLog
-from app.models.user import UserRole
-from app.api.v1.auth import get_current_user, require_role
+from app.api.v1.auth import get_current_user, require_roles
 
 router = APIRouter(prefix="/api/v1/assets", tags=["assets", "import"])
 
@@ -50,7 +49,7 @@ async def bulk_import_assets(
     request: Request,
     file: UploadFile = File(...),
     import_mode: str = Form("add"),
-    current_user=Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SYSTEM_ADMINISTRATOR, UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.ASSET_CUSTODIAN))
+    current_user=Depends(require_roles("Asset Manager", "System Administrator", "Asset Custodian"))
 ):
     """
     Bulk import assets from a CSV or XLSX file.
@@ -138,6 +137,49 @@ async def bulk_import_assets(
                     await asyncio.sleep(0.005)
                     continue
 
+                # Shared parsing for acquisition_date (attempt for adds; optional for updates)
+                acq_date = None
+                if acquisition_date_str or import_mode == "add":
+                    try:
+                        if isinstance(row.get("acquisition_date"), datetime):
+                            acq_date = row.get("acquisition_date").date()
+                        else:
+                            acq_date = datetime.strptime(acquisition_date_str, "%Y-%m-%d").date()
+
+                        if acq_date > date.today():
+                            skipped += 1
+                            errors.append({"row": idx, "serial_number": serial_number, "reason": "acquisition_date cannot be in the future"})
+                            yield json.dumps({"type": "progress", "current": idx, "total": total_rows}) + "\n"
+                            await asyncio.sleep(0.005)
+                            continue
+                    except ValueError:
+                        skipped += 1
+                        errors.append({"row": idx, "serial_number": serial_number, "reason": "Invalid acquisition_date format (expected YYYY-MM-DD)"})
+                        yield json.dumps({"type": "progress", "current": idx, "total": total_rows}) + "\n"
+                        await asyncio.sleep(0.005)
+                        continue
+
+                # Shared parsing for cost (if provided)
+                cost_int = None
+                if cost_str:
+                    try:
+                        if isinstance(row.get("cost"), (int, float)):
+                            cost_int = int(row.get("cost"))
+                        else:
+                            cost_int = int(cost_str)
+                        if cost_int < 0:
+                            skipped += 1
+                            errors.append({"row": idx, "serial_number": serial_number, "reason": "cost cannot be negative"})
+                            yield json.dumps({"type": "progress", "current": idx, "total": total_rows}) + "\n"
+                            await asyncio.sleep(0.005)
+                            continue
+                    except ValueError:
+                        skipped += 1
+                        errors.append({"row": idx, "serial_number": serial_number, "reason": "cost must be an integer"})
+                        yield json.dumps({"type": "progress", "current": idx, "total": total_rows}) + "\n"
+                        await asyncio.sleep(0.005)
+                        continue
+
                 if import_mode == "update":
                     if serial_number not in existing_assets_map:
                         skipped += 1
@@ -195,48 +237,13 @@ async def bulk_import_assets(
                             yield json.dumps({"type": "progress", "current": idx, "total": total_rows}) + "\n"
                             await asyncio.sleep(0.005)
                             continue
-                            
-                    if acquisition_date_str:
-                        try:
-                            if isinstance(row.get("acquisition_date"), datetime):
-                                acq_date = row.get("acquisition_date").date()
-                            else:
-                                acq_date = datetime.strptime(acquisition_date_str, "%Y-%m-%d").date()
-                            
-                            if acq_date > date.today():
-                                skipped += 1
-                                errors.append({"row": idx, "serial_number": serial_number, "reason": "acquisition_date cannot be in the future"})
-                                yield json.dumps({"type": "progress", "current": idx, "total": total_rows}) + "\n"
-                                await asyncio.sleep(0.005)
-                                continue
-                            asset_to_update.acquisition_date = acq_date
-                        except ValueError:
-                            skipped += 1
-                            errors.append({"row": idx, "serial_number": serial_number, "reason": "Invalid acquisition_date format (expected YYYY-MM-DD)"})
-                            yield json.dumps({"type": "progress", "current": idx, "total": total_rows}) + "\n"
-                            await asyncio.sleep(0.005)
-                            continue
-                            
-                    if cost_str:
-                        try:
-                            if isinstance(row.get("cost"), (int, float)):
-                                cost_int = int(row.get("cost"))
-                            else:
-                                cost_int = int(cost_str)
-                            if cost_int < 0:
-                                skipped += 1
-                                errors.append({"row": idx, "serial_number": serial_number, "reason": "cost cannot be negative"})
-                                yield json.dumps({"type": "progress", "current": idx, "total": total_rows}) + "\n"
-                                await asyncio.sleep(0.005)
-                                continue
-                            asset_to_update.cost = cost_int
-                        except ValueError:
-                            skipped += 1
-                            errors.append({"row": idx, "serial_number": serial_number, "reason": "cost must be an integer"})
-                            yield json.dumps({"type": "progress", "current": idx, "total": total_rows}) + "\n"
-                            await asyncio.sleep(0.005)
-                            continue
-                    
+
+                    # Apply shared parsed values if present
+                    if acq_date is not None:
+                        asset_to_update.acquisition_date = acq_date
+                    if cost_int is not None:
+                        asset_to_update.cost = cost_int
+
                     asset_to_update.updated_at = datetime.now()
                     imported += 1
                 
@@ -287,49 +294,16 @@ async def bulk_import_assets(
                         await asyncio.sleep(0.005)
                         continue
                         
-                    # 7. acquisition_date is a valid date in YYYY-MM-DD format and is not in the future
-                    try:
-                        # handle cases where excel reads it as datetime already
-                        if isinstance(row.get("acquisition_date"), datetime):
-                            acq_date = row.get("acquisition_date").date()
-                        else:
-                            acq_date = datetime.strptime(acquisition_date_str, "%Y-%m-%d").date()
-                        
-                        if acq_date > date.today():
-                            skipped += 1
-                            errors.append({"row": idx, "serial_number": serial_number, "reason": "acquisition_date cannot be in the future"})
-                            yield json.dumps({"type": "progress", "current": idx, "total": total_rows}) + "\n"
-                            await asyncio.sleep(0.005)
-                            continue
-                    except ValueError:
+                    # 7. acquisition_date was parsed earlier into `acq_date`.
+                    if acq_date is None:
                         skipped += 1
-                        errors.append({"row": idx, "serial_number": serial_number, "reason": "Invalid acquisition_date format (expected YYYY-MM-DD)"})
+                        errors.append({"row": idx, "serial_number": serial_number or None, "reason": "Invalid or missing acquisition_date (expected YYYY-MM-DD)"})
                         yield json.dumps({"type": "progress", "current": idx, "total": total_rows}) + "\n"
                         await asyncio.sleep(0.005)
                         continue
-                        
-                    # 8. cost is a non-negative integer (if provided)
-                    cost_val = 0
-                    if cost_str:
-                        try:
-                            # If parsed as float in excel
-                            if isinstance(row.get("cost"), (int, float)):
-                                cost_int = int(row.get("cost"))
-                            else:
-                                cost_int = int(cost_str)
-                            if cost_int < 0:
-                                skipped += 1
-                                errors.append({"row": idx, "serial_number": serial_number, "reason": "cost cannot be negative"})
-                                yield json.dumps({"type": "progress", "current": idx, "total": total_rows}) + "\n"
-                                await asyncio.sleep(0.005)
-                                continue
-                            cost_val = cost_int
-                        except ValueError:
-                            skipped += 1
-                            errors.append({"row": idx, "serial_number": serial_number, "reason": "cost must be an integer"})
-                            yield json.dumps({"type": "progress", "current": idx, "total": total_rows}) + "\n"
-                            await asyncio.sleep(0.005)
-                            continue
+
+                    # 8. cost_val uses shared parsed `cost_int` (default 0 if not provided)
+                    cost_val = cost_int if cost_int is not None else 0
 
                     # If it passed all validations, generate id and queue for insert
                     new_asset_id = f"AST-{uuid.uuid4().hex[:8].upper()}"

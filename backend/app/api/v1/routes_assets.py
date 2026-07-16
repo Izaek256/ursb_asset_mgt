@@ -255,8 +255,6 @@ def create_asset(
         created_at=str(new_asset.created_at),
     )
 
-
-
 @router.get("", response_model=List[AssetOut])
 def list_assets_endpoint(
     status: Optional[str] = Query(None),
