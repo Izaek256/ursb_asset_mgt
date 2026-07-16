@@ -63,9 +63,9 @@ def get_user_settings(
     current_user: User = Depends(get_current_user),
 ):
     """Fetch or create user settings for current user (fetch-or-create pattern)."""
-    settings = db.query(UserSettings).filter(UserSettings.user_id == current_user.user_id).first()
+    settings = db.query(UserSettings).filter(UserSettings.user_id == current_user.id).first()
     if not settings:
-        settings = UserSettings(user_id=current_user.user_id)
+        settings = UserSettings(user_id=current_user.id)
         db.add(settings)
         db.commit()
         db.refresh(settings)
@@ -87,9 +87,9 @@ def update_user_settings(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    settings = db.query(UserSettings).filter(UserSettings.user_id == current_user.user_id).first()
+    settings = db.query(UserSettings).filter(UserSettings.user_id == current_user.id).first()
     if not settings:
-        settings = UserSettings(user_id=current_user.user_id)
+        settings = UserSettings(user_id=current_user.id)
         db.add(settings)
 
     if body.theme is not None and body.theme not in ("light", "dark"):
@@ -165,18 +165,18 @@ def update_system_settings(
         if value is not None:
             setattr(settings, field, value)
 
-    settings.updated_by = current_user.user_id
+    settings.updated_by = current_user.id
     settings.updated_at = datetime.utcnow()
     db.add(settings)
     db.commit()
 
     # Audit
     audit = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="UPDATE_SYSTEM_SETTINGS",
         table_affected="system_settings",
         record_id=str(settings.id),
-        details=f"System settings updated by user {current_user.user_id}",
+        details=f"System settings updated by user {current_user.id}",
     )
     db.add(audit)
     db.commit()

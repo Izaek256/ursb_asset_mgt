@@ -70,8 +70,8 @@ def hash_password(plain: str):
 # Seed helpers
 # ---------------------------------------------------------------------------
 def uid(user) -> str:
-    """Cast user.user_id (int PK) to str for String FK columns in related tables."""
-    return str(user.user_id)
+    """Cast user.id (int PK) to str for String FK columns in related tables."""
+    return str(user.id)
 
 
 def get_or_create_user(db, *, email: str, first_name: str, last_name: str,

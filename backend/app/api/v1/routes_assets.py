@@ -230,7 +230,7 @@ def create_asset(
 
     # ── Audit log ───────────────────────────────────────────────────────────────
     audit_entry = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="ASSET_REGISTRATION",
         table_affected="assets",
         record_id=new_asset_id,
@@ -466,7 +466,7 @@ def update_asset(
 
     # Audit log
     audit_entry = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="ASSET_UPDATE",
         table_affected="assets",
         record_id=asset_id,
@@ -528,7 +528,7 @@ def deactivate_asset(
 
     # Audit log
     audit_entry = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="ASSET_DEACTIVATE",
         table_affected="assets",
         record_id=asset_id,
@@ -562,7 +562,7 @@ def reactivate_asset(
 
     # Audit log
     audit_entry = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="ASSET_REACTIVATE",
         table_affected="assets",
         record_id=asset_id,
@@ -595,7 +595,7 @@ def activate_asset(
 
     # Audit log
     audit_entry = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="ASSET_ACTIVATE",
         table_affected="assets",
         record_id=asset_id,

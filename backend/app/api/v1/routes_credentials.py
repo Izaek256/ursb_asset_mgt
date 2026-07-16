@@ -123,7 +123,7 @@ def get_recent_accounts(
     for user in users:
         # Get temporary password if exists and not expired
         temp_pwd = db.query(TemporaryPassword).filter(
-            TemporaryPassword.user_id == user.user_id,
+            TemporaryPassword.user_id == user.id,
             TemporaryPassword.expires_at > datetime.utcnow()
         ).order_by(TemporaryPassword.created_at.desc()).first()
 
@@ -141,7 +141,7 @@ def get_recent_accounts(
             password_revoked = False
 
         accounts.append(RecentAccount(
-            user_id=str(user.user_id) if user.user_id else "",
+            user_id=str(user.id) if user.id else "",
             full_name=user.full_name or "",
             email=user.email,
             role=user.role.value if user.role else "",
@@ -220,7 +220,7 @@ def regenerate_password(
     # Audit log
     from app.models.audit_log import AuditLog
     audit = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="REGENERATE_PASSWORD",
         table_affected="users",
         record_id=user_id,

@@ -97,7 +97,7 @@ def _serialize_assignment(assignment: Assignment, db: Session) -> AssignmentResp
 def _log(db: Session, *, actor: User, action: str, record_id: str, details: str, workflow_step: str = None) -> None:
     """Enhanced audit logging with workflow step tracking for accountability."""
     log_entry = AuditLog(
-        user_id=actor.user_id,
+        user_id=actor.id,
         action=action,
         table_affected="assignments",
         record_id=record_id,
@@ -122,7 +122,7 @@ def create_assignment(
     if int(body.assigned_to) == int(current_user.id):
         raise HTTPException(status_code=403, detail="Cannot assign assets to yourself for accountability reasons. Use transfer workflow instead.")
     
-    assignment = assignment_service.assign_asset(db, body.asset_id, body, current_user.user_id)
+    assignment = assignment_service.assign_asset(db, body.asset_id, body, current_user.id)
     
     # Enhanced audit log with workflow step
     _log(db, actor=current_user, action="CREATE_ASSIGNMENT", record_id=str(assignment.assignment_id), 
@@ -273,7 +273,7 @@ def request_return_route(
     from app.services.assignment_service import request_asset_return
     from app.services.notification_service import create_notification
     
-    assignment = request_asset_return(db, assignment_id, current_user.user_id)
+    assignment = request_asset_return(db, assignment_id, current_user.id)
     
     # Enhanced audit log with workflow step
     _log(db, actor=current_user, action="REQUEST_RETURN", record_id=str(assignment_id), 
@@ -304,7 +304,7 @@ def approve_return_route(
     from app.services.assignment_service import approve_return_request
     from app.services.notification_service import create_notification
     
-    assignment = approve_return_request(db, assignment_id, current_user.user_id)
+    assignment = approve_return_request(db, assignment_id, current_user.id)
     
     # Enhanced audit log with workflow step
     _log(db, actor=current_user, action="APPROVE_RETURN", record_id=str(assignment_id), 
@@ -336,7 +336,7 @@ def reject_return_route(
     from app.services.assignment_service import reject_return_request
     from app.services.notification_service import create_notification
     
-    assignment = reject_return_request(db, assignment_id, current_user.user_id, body.reason)
+    assignment = reject_return_request(db, assignment_id, current_user.id, body.reason)
     
     # Enhanced audit log with workflow step
     _log(db, actor=current_user, action="REJECT_RETURN", record_id=str(assignment_id), 
@@ -367,7 +367,7 @@ def confirm_return_route(
     from app.services.assignment_service import confirm_asset_return
     from app.services.notification_service import create_notification
     
-    assignment = confirm_asset_return(db, assignment_id, current_user.user_id)
+    assignment = confirm_asset_return(db, assignment_id, current_user.id)
     
     # Enhanced audit log with workflow step
     _log(db, actor=current_user, action="CONFIRM_RETURN", record_id=str(assignment_id), 

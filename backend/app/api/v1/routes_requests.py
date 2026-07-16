@@ -127,7 +127,7 @@ def _serialize_request(request: AssetRequest) -> AssetRequestResponse:
 def _log(db: Session, *, actor: User, action: str, record_id: str, details: str) -> None:
     db.add(
         AuditLog(
-            user_id=actor.user_id,
+            user_id=actor.id,
             action=action,
             table_affected="asset_requests",
             record_id=str(record_id),

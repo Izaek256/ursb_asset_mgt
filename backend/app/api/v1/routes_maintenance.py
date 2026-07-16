@@ -40,7 +40,7 @@ def _user_name(u: Optional[User]) -> str:
 
 def _log(db: Session, *, actor: User, action: str, record_id: str, details: str):
     db.add(AuditLog(
-        user_id=actor.user_id,
+        user_id=actor.id,
         action=action,
         table_affected="maintenance_records",
         record_id=record_id,

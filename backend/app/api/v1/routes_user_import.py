@@ -196,7 +196,7 @@ async def bulk_import_users(
             db.flush()
 
             db.add(TemporaryPassword(
-                user_id=new_user.user_id,
+                user_id=new_user.id,
                 password=password,
                 expires_at=datetime.utcnow() + timedelta(days=7),
             ))
@@ -210,7 +210,7 @@ async def bulk_import_users(
 
         if created_accounts:
             db.add(AuditLog(
-                user_id=current_user.user_id,
+                user_id=current_user.id,
                 action="BULK_USER_IMPORT",
                 table_affected="users",
                 record_id="bulk",
@@ -262,7 +262,7 @@ async def bulk_import_ws(websocket: WebSocket):
         if session.user.role.value != "System Administrator":
             await websocket.close(code=4003, reason="Forbidden")
             return
-        admin_user_id = session.user.user_id
+        admin_user_id = session.user.id
         admin_email = session.user.email
 
     # Receive rows payload
@@ -306,7 +306,7 @@ async def bulk_import_ws(websocket: WebSocket):
                 db.flush()
 
                 db.add(TemporaryPassword(
-                    user_id=new_user.user_id,
+                    user_id=new_user.id,
                     password=password,
                     expires_at=datetime.utcnow() + timedelta(days=7),
                 ))

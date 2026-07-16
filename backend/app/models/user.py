@@ -88,14 +88,6 @@ class User(Base):
     settings = relationship("UserSettings", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
     @hybrid_property
-    def user_id(self):
-        return self.id
-
-    @user_id.setter
-    def user_id(self, value):
-        self.id = value
-
-    @hybrid_property
     def full_name(self):
         parts = [self.first_name, self.last_name]
         return " ".join([p for p in parts if p]).strip()

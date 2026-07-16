@@ -138,7 +138,7 @@ def create_session(db: DbSession, user: User) -> SessionModel:
     now = datetime.utcnow()
     session = SessionModel(
         session_token=token,
-        user_id=user.user_id,
+        user_id=user.id,
         created_at=now,
         expires_at=now + SESSION_DURATION,
     )

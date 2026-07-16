@@ -47,7 +47,7 @@ class StorageListResponse(BaseModel):
 def _log(db: Session, *, actor: User, action: str, record_id: str, details: str) -> None:
     db.add(
         AuditLog(
-            user_id=actor.user_id,
+            user_id=actor.id,
             action=action,
             table_affected="assets",
             record_id=record_id,

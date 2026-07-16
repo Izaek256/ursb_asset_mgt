@@ -370,7 +370,7 @@ async def bulk_import_assets(
             details_desc = f"Bulk {import_mode}ed {imported} assets from file {file.filename}"
             
             audit_entry = AuditLog(
-                user_id=current_user.user_id,
+                user_id=current_user.id,
                 action=action_desc,
                 table_affected="assets",
                 record_id="MULTIPLE",

@@ -75,7 +75,7 @@ def _log(db: Session, *, actor: User, action: str, table: str,
          record_id: str, details: str):
     """Write a single audit log entry."""
     db.add(AuditLog(
-        user_id=actor.user_id,
+        user_id=actor.id,
         action=action,
         table_affected=table,
         record_id=record_id,
@@ -191,7 +191,7 @@ class StatusChangeResponse(BaseModel):
 # ── Serialisers ───────────────────────────────────────────────────────────────────
 def _user_to_out(u: User) -> UserOut:
     return UserOut(
-        id=str(u.user_id) if u.user_id is not None else "",
+        id=str(u.id) if u.id is not None else "",
         name=_full_name(u),
         email=u.email,
         role=u.role.value if u.role else "",
@@ -202,10 +202,10 @@ def _user_to_out(u: User) -> UserOut:
 
 
 def _log_to_out(log: AuditLog, db: Session) -> AuditLogOut:
-    actor = db.query(User).filter(User.user_id == log.user_id).first()
+    actor = db.query(User).filter(User.id == log.user_id).first()
     target_user = ""
     if log.record_id:
-        target = db.query(User).filter(User.user_id == log.record_id).first()
+        target = db.query(User).filter(User.id == log.record_id).first()
         target_user = _full_name(target) if target else log.record_id
 
     return AuditLogOut(
@@ -268,13 +268,13 @@ def create_user(
     )
     db.add(new_user)
     db.flush()  # Get the auto-generated user_id before commit
-    print(f"DEBUG: User created with ID: {new_user.user_id}, email: {new_user.email}")
+    print(f"DEBUG: User created with ID: {new_user.id}, email: {new_user.email}")
 
     audit = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="USER_CREATED",
         table_affected="users",
-        record_id=new_user.user_id,
+        record_id=new_user.id,
         details=f"User {new_user.email} created by admin {current_user.email}",
         timestamp=datetime.utcnow(),
     )
@@ -282,13 +282,13 @@ def create_user(
 
     # Store temporary password for admin viewing (expires in 7 days)
     temp_password = TemporaryPassword(
-        user_id=new_user.user_id,
+        user_id=new_user.id,
         password=generated_password,
         created_at=datetime.utcnow(),
         expires_at=datetime.utcnow() + timedelta(days=7),
     )
     db.add(temp_password)
-    print(f"DEBUG: Saving TemporaryPassword for user_id={new_user.user_id}")
+    print(f"DEBUG: Saving TemporaryPassword for user_id={new_user.id}")
     db.commit()
     db.refresh(new_user)
 
@@ -306,7 +306,7 @@ def update_user(
     current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
 ):
     """Update user details. Admin only."""
-    target = db.query(User).filter(User.user_id == user_id).first()
+    target = db.query(User).filter(User.id == user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -315,7 +315,7 @@ def update_user(
     if body.email and body.email != target.email:
         # Validate email domain - only @ursb.go.ug addresses are permitted
         validate_ursb_email(body.email)
-        dup = db.query(User).filter(User.email == body.email, User.user_id != user_id).first()
+        dup = db.query(User).filter(User.email == body.email, User.id != user_id).first()
         if dup:
             raise HTTPException(status_code=409, detail="Another user already has this email.")
         changes.append(f"email '{target.email}' → '{body.email}'")
@@ -342,10 +342,10 @@ def update_user(
         raise HTTPException(status_code=400, detail="No changes provided.")
 
     audit = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="USER_UPDATED",
         table_affected="users",
-        record_id=target.user_id,
+        record_id=target.id,
         details=f"Updated user '{target.full_name}': {'; '.join(changes)}.",
     )
     db.add(audit)
@@ -362,7 +362,7 @@ def update_user_role(
     current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
 ):
     """Change a user's role. Only System Administrators can do this."""
-    target = db.query(User).filter(User.user_id == user_id).first()
+    target = db.query(User).filter(User.id == user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -376,17 +376,17 @@ def update_user_role(
     old_role = target.role.value
     if old_role == new_role.value:
         return RoleChangeResponse(
-            message="Role unchanged", user_id=str(target.user_id), new_role=new_role.value
+            message="Role unchanged", user_id=str(target.id), new_role=new_role.value
         )
 
     target.role = new_role
 
     # Create audit log
     audit_entry = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="CHANGE_ROLE",
         table_affected="users",
-        record_id=target.user_id,
+        record_id=target.id,
         details=f"User {target.email} role changed from {old_role} to {new_role.value} by {current_user.email}",
         timestamp=datetime.utcnow(),
     )
@@ -396,7 +396,7 @@ def update_user_role(
 
     return RoleChangeResponse(
         message=f"Role updated from '{old_role}' to '{new_role.value}'",
-        user_id=str(target.user_id),
+        user_id=str(target.id),
         new_role=new_role.value,
     )
 
@@ -408,10 +408,10 @@ def deactivate_user(
     current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
 ):
     """Deactivate a user without deleting them. Admin only."""
-    target = db.query(User).filter(User.user_id == user_id).first()
+    target = db.query(User).filter(User.id == user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
-    if target.user_id == current_user.user_id:
+    if target.id == current_user.id:
         raise HTTPException(status_code=400, detail="You cannot deactivate your own account.")
     if not target.is_active:
         raise HTTPException(status_code=400, detail="User is already deactivated.")
@@ -419,13 +419,13 @@ def deactivate_user(
     target.is_active = False
 
     # Invalidate all active sessions on deactivation — user cannot continue using the system
-    db.query(Session).filter(Session.user_id == target.user_id).delete()
+    db.query(Session).filter(Session.user_id == target.id).delete()
 
     audit = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="DEACTIVATE_USER",
         table_affected="users",
-        record_id=target.user_id,
+        record_id=target.id,
         details=f"User {target.email} deactivated by {current_user.email}. All sessions invalidated.",
     )
     db.add(audit)
@@ -441,7 +441,7 @@ def reactivate_user(
     current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
 ):
     """Reactivate a previously deactivated user. Admin only."""
-    target = db.query(User).filter(User.user_id == user_id).first()
+    target = db.query(User).filter(User.id == user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     if target.is_active:
@@ -450,10 +450,10 @@ def reactivate_user(
     target.is_active = True
 
     audit = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="REACTIVATE_USER",
         table_affected="users",
-        record_id=target.user_id,
+        record_id=target.id,
         details=f"User {target.email} reactivated by {current_user.email}",
     )
     db.add(audit)
@@ -517,7 +517,7 @@ def list_audit_logs(
     )
     log_responses = []
     for log in logs:
-        user = db.query(User).filter(User.user_id == log.user_id).first()
+        user = db.query(User).filter(User.id == log.user_id).first()
         user_name = _full_name(user) if user else "Unknown User"
         log_responses.append(AuditLogResponse(
             log_id=str(log.log_id),

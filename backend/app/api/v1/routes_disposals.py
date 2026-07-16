@@ -130,7 +130,7 @@ def create_disposal(
         disposal_date=date.today(),
         disposal_method=disposal_method_enum,
         reason=body.reason,
-        authorised_by=str(current_user.user_id),
+        authorised_by=str(current_user.id),
     )
     db.add(disposal)
 
@@ -141,7 +141,7 @@ def create_disposal(
 
     # Audit log
     audit_entry = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="ASSET_DISPOSAL",
         table_affected="assets",
         record_id=body.asset_id,
@@ -230,15 +230,15 @@ def recommend_disposal(
         disposal_date=date.today(),
         disposal_method=DisposalMethod.WRITE_OFF,
         reason=body.reason,
-        authorised_by=str(current_user.user_id),
+        authorised_by=str(current_user.id),
         status="Recommended",
-        recommended_by=str(current_user.user_id),
+        recommended_by=str(current_user.id),
         recommendation_reason=body.reason,
     )
     db.add(disposal)
 
     audit_entry = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="DISPOSAL_RECOMMENDED",
         table_affected="disposal_records",
         record_id=asset_id,
@@ -288,7 +288,7 @@ def approve_disposal(
     disposal.status = "Approved"
     disposal.disposal_method = disposal_method_enum
     disposal.disposal_date = body.disposal_date
-    disposal.authorised_by = str(current_user.user_id)
+    disposal.authorised_by = str(current_user.id)
 
     # Set asset to Disposed — terminal state, no further transitions allowed
     # Reference: once Disposed, validate_status_transition() treats this as terminal
@@ -296,7 +296,7 @@ def approve_disposal(
     asset.current_custodian_id = None
 
     audit_entry = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="DISPOSAL_APPROVED",
         table_affected="disposal_records",
         record_id=disposal.asset_id,
@@ -334,7 +334,7 @@ def reject_disposal(
     disposal.status = "Rejected"
 
     audit_entry = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="DISPOSAL_REJECTED",
         table_affected="disposal_records",
         record_id=disposal.asset_id,

@@ -77,9 +77,9 @@ def list_transfers(
     results: List[TransferResponse] = []
     for t in transfers:
         asset = db.query(Asset).filter(Asset.asset_id == t.asset_id).first()
-        from_u = db.query(User).filter(User.user_id == t.from_user_id).first()
-        to_u = db.query(User).filter(User.user_id == t.to_user_id).first()
-        auth_u = db.query(User).filter(User.user_id == t.authorised_by).first()
+        from_u = db.query(User).filter(User.id == t.from_user_id).first()
+        to_u = db.query(User).filter(User.id == t.to_user_id).first()
+        auth_u = db.query(User).filter(User.id == t.authorised_by).first()
 
         results.append(
             TransferResponse(
@@ -126,7 +126,7 @@ def create_transfer(
     from_user_id = asset.current_custodian_id
 
     # Validate target user exists and is active
-    to_user = db.query(User).filter(User.user_id == body.to_user_id).first()
+    to_user = db.query(User).filter(User.id == body.to_user_id).first()
     if not to_user:
         raise HTTPException(status_code=404, detail="Target user not found")
     if not to_user.is_active:
@@ -136,7 +136,7 @@ def create_transfer(
         raise HTTPException(status_code=400, detail="Cannot transfer to the current custodian")
     
     # Prevent self-transfer for accountability
-    if str(body.to_user_id) == str(current_user.user_id):
+    if str(body.to_user_id) == str(current_user.id):
         raise HTTPException(status_code=403, detail="Cannot transfer assets to yourself for accountability reasons. Use assignment workflow instead.")
 
     # Guard: Do not transfer if there is a pending request for this asset. This prevents orphaning that request.
@@ -158,7 +158,7 @@ def create_transfer(
         to_user_id=body.to_user_id,
         transfer_date=body.transfer_date,
         reason=body.reason,
-        authorised_by=current_user.user_id,
+        authorised_by=current_user.id,
         acknowledged_at=None,
     )
 
@@ -177,7 +177,7 @@ def create_transfer(
     new_assignment = Assignment(
         asset_id=asset.asset_id,
         assigned_to=body.to_user_id,
-        assigned_by=current_user.user_id,
+        assigned_by=current_user.id,
         assignment_date=body.transfer_date,
         status=AssignmentStatus.ACTIVE,
     )
@@ -198,7 +198,7 @@ def create_transfer(
 
     # Write audit log with workflow step
     audit = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="TRANSFER_ASSET",
         table_affected="transfers",
         record_id=str(transfer.transfer_id),
@@ -215,10 +215,10 @@ def create_transfer(
         asset_serial=asset.serial_number,
         from_user_id=transfer.from_user_id,
         to_user_id=transfer.to_user_id,
-        from_user_name=(db.query(User).filter(User.user_id == transfer.from_user_id).first().full_name if db.query(User).filter(User.user_id == transfer.from_user_id).first() else None),
+        from_user_name=(db.query(User).filter(User.id == transfer.from_user_id).first().full_name if db.query(User).filter(User.id == transfer.from_user_id).first() else None),
         to_user_name=(to_user.full_name if to_user else None),
         authorised_by=transfer.authorised_by,
-        authorised_by_name=(db.query(User).filter(User.user_id == transfer.authorised_by).first().full_name if db.query(User).filter(User.user_id == transfer.authorised_by).first() else None),
+        authorised_by_name=(db.query(User).filter(User.id == transfer.authorised_by).first().full_name if db.query(User).filter(User.id == transfer.authorised_by).first() else None),
         transfer_date=str(transfer.transfer_date),
         reason=transfer.reason,
         acknowledged_at=transfer.acknowledged_at,
@@ -240,7 +240,7 @@ def acknowledge_transfer(
         raise HTTPException(status_code=400, detail="Transfer has already been acknowledged")
 
     # Dual-access rule: receiver OR System Administrator may acknowledge
-    if str(transfer.to_user_id) != str(current_user.user_id) and current_user.role != getattr(current_user.role.__class__, "SYSTEM_ADMINISTRATOR", current_user.role):
+    if str(transfer.to_user_id) != str(current_user.id) and current_user.role != getattr(current_user.role.__class__, "SYSTEM_ADMINISTRATOR", current_user.role):
         # If current_user is not receiver or System Administrator, deny
         raise HTTPException(status_code=403, detail="Only the receiving user or a System Administrator can acknowledge this transfer")
 
@@ -271,17 +271,17 @@ def acknowledge_transfer(
 
     # Audit with workflow step
     audit = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="ACKNOWLEDGE_TRANSFER",
         table_affected="transfers",
         record_id=str(transfer.transfer_id),
-        details=f"[TRANSFER_ACKNOWLEDGMENT] Transfer {transfer.transfer_id} acknowledged by user {current_user.user_id}",
+        details=f"[TRANSFER_ACKNOWLEDGMENT] Transfer {transfer.transfer_id} acknowledged by user {current_user.id}",
     )
     db.add(audit)
     db.commit()
 
     asset = db.query(Asset).filter(Asset.asset_id == transfer.asset_id).first()
-    auth_u = db.query(User).filter(User.user_id == transfer.authorised_by).first()
+    auth_u = db.query(User).filter(User.id == transfer.authorised_by).first()
 
     return TransferResponse(
         transfer_id=transfer.transfer_id,
@@ -290,8 +290,8 @@ def acknowledge_transfer(
         asset_serial=asset.serial_number if asset else None,
         from_user_id=transfer.from_user_id,
         to_user_id=transfer.to_user_id,
-        from_user_name=(db.query(User).filter(User.user_id == transfer.from_user_id).first().full_name if db.query(User).filter(User.user_id == transfer.from_user_id).first() else None),
-        to_user_name=(db.query(User).filter(User.user_id == transfer.to_user_id).first().full_name if db.query(User).filter(User.user_id == transfer.to_user_id).first() else None),
+        from_user_name=(db.query(User).filter(User.id == transfer.from_user_id).first().full_name if db.query(User).filter(User.id == transfer.from_user_id).first() else None),
+        to_user_name=(db.query(User).filter(User.id == transfer.to_user_id).first().full_name if db.query(User).filter(User.id == transfer.to_user_id).first() else None),
         authorised_by=transfer.authorised_by,
         authorised_by_name=auth_u.full_name if auth_u else None,
         transfer_date=str(transfer.transfer_date),

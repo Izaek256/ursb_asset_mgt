@@ -57,7 +57,7 @@ def get_current_user(
             detail="Not authenticated",
         )
 
-    db_user = db.query(User).filter(User.user_id == user.user_id).first()
+    db_user = db.query(User).filter(User.id == user.id).first()
     if db_user is None or not db_user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -220,7 +220,7 @@ def login(
     user = get_user_by_email(db, payload.email)
     print(f"DEBUG: User found: {user is not None}")
     if user:
-        print(f"DEBUG: User ID: {user.user_id}, Email: {user.email}, Is active: {user.is_active}")
+        print(f"DEBUG: User ID: {user.id}, Email: {user.email}, Is active: {user.is_active}")
         print(f"DEBUG: Password salt: {user.password_salt[:20]}... Hash: {user.password_hash[:20]}...")
     if user and is_account_locked(user):
         raise HTTPException(
@@ -278,7 +278,7 @@ def auth_check(
         "username": current_user.username,
         "phone_number": current_user.phone_number,
         "department": current_user.department,
-        "user_id": str(current_user.user_id) if current_user.user_id is not None else None,
+        "user_id": str(current_user.id) if current_user.id is not None else None,
         "role": current_user.role.value if hasattr(current_user.role, "value") else current_user.role,
         "full_name": current_user.full_name or f"{current_user.first_name or ''} {current_user.last_name or ''}".strip(),
         "theme": settings.theme if settings else "light",
@@ -350,20 +350,20 @@ def change_password(
 
     # Invalidate all sessions for this user
     from app.models.session import Session
-    db.query(Session).filter(Session.user_id == current_user.user_id).delete()
+    db.query(Session).filter(Session.user_id == current_user.id).delete()
 
     # Clear any stored temporary passwords so they no longer show on credentials page
     from app.models.temporary_password import TemporaryPassword
-    db.query(TemporaryPassword).filter(TemporaryPassword.user_id == current_user.user_id).delete()
+    db.query(TemporaryPassword).filter(TemporaryPassword.user_id == current_user.id).delete()
 
     # Write audit log for password change
     from app.models.audit_log import AuditLog
     from datetime import datetime
     audit = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="CHANGE_PASSWORD",
         table_affected="users",
-        record_id=current_user.user_id,
+        record_id=current_user.id,
         details=f"Password changed for user {current_user.email}",
         timestamp=datetime.utcnow(),
     )
@@ -416,16 +416,16 @@ def change_password_no_session_invalidate(
 
     # Clear any stored temporary passwords so they no longer show on credentials page
     from app.models.temporary_password import TemporaryPassword
-    db.query(TemporaryPassword).filter(TemporaryPassword.user_id == current_user.user_id).delete()
+    db.query(TemporaryPassword).filter(TemporaryPassword.user_id == current_user.id).delete()
 
     # Write audit log for password change
     from app.models.audit_log import AuditLog
     from datetime import datetime
     audit = AuditLog(
-        user_id=current_user.user_id,
+        user_id=current_user.id,
         action="PASSWORD_CHANGED",
         table_affected="users",
-        record_id=current_user.user_id,
+        record_id=current_user.id,
         details=f"Password changed for user {current_user.email}",
         timestamp=datetime.utcnow(),
     )
