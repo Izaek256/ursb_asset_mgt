@@ -5,7 +5,7 @@ import string
 from datetime import datetime, date, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
@@ -13,7 +13,6 @@ from app.db import get_db
 from app.models.user import User, UserRole
 from app.models.audit_log import AuditLog
 from app.models.session import Session
-from app.models.temporary_password import TemporaryPassword
 from app.api.v1.auth import get_current_user, require_role
 from app.services.auth import create_password_hash, validate_ursb_email
 
@@ -235,6 +234,7 @@ def list_users(
 @router.post("/users")
 def create_user(
     body: UserCreateAutoRequest,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
 ):
@@ -253,9 +253,7 @@ def create_user(
 
     # Auto-generate secure password
     generated_password = generate_secure_password()
-    print(f"DEBUG: Generated password for {body.email}: {generated_password}")
     salt, p_hash = create_password_hash(generated_password)
-    print(f"DEBUG: Salt: {salt[:20]}... Hash: {p_hash[:20]}...")
 
     new_user = User(
         full_name=body.full_name,
@@ -268,7 +266,6 @@ def create_user(
     )
     db.add(new_user)
     db.flush()  # Get the auto-generated user_id before commit
-    print(f"DEBUG: User created with ID: {new_user.user_id}, email: {new_user.email}")
 
     audit = AuditLog(
         user_id=current_user.user_id,
@@ -279,18 +276,11 @@ def create_user(
         timestamp=datetime.utcnow(),
     )
     db.add(audit)
-
-    # Store temporary password for admin viewing (expires in 7 days)
-    temp_password = TemporaryPassword(
-        user_id=new_user.user_id,
-        password=generated_password,
-        created_at=datetime.utcnow(),
-        expires_at=datetime.utcnow() + timedelta(days=7),
-    )
-    db.add(temp_password)
-    print(f"DEBUG: Saving TemporaryPassword for user_id={new_user.user_id}")
     db.commit()
     db.refresh(new_user)
+
+    # Add Cache-Control header to prevent caching of password
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
 
     return {
         **_user_to_out(new_user).model_dump(),
