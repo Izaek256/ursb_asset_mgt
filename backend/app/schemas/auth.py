@@ -35,6 +35,10 @@ class LoginResponse(BaseModel):
     message: str
 
 
+class MessageResponse(BaseModel):
+    message: str
+
+
 class AuthStatusResponse(BaseModel):
     authenticated: bool
     email: EmailStr

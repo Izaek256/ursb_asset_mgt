@@ -10,6 +10,7 @@ from app.db import get_db
 from app.api.v1.auth import get_current_user
 from app.models.notification import Notification
 from app.models.user import User
+from app.schemas import MessageResponse
 
 router = APIRouter(prefix="/api/v1/notifications", tags=["notifications"])
 
@@ -75,7 +76,7 @@ def get_unread_count(
         .filter(Notification.user_id == str(current_user.id), Notification.is_read == False)
         .count()
     )
-    return {"count": count}
+    return UnreadCountResponse(count=count)
 
 
 @router.patch("/{id}/read", response_model=NotificationResponse)
@@ -112,7 +113,7 @@ def mark_as_read(
     return notification
 
 
-@router.patch("/read-all", response_model=dict)
+@router.patch("/read-all", response_model=MessageResponse)
 def mark_all_as_read(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -131,4 +132,4 @@ def mark_all_as_read(
         Notification.is_read == False
     ).update({Notification.is_read: True}, synchronize_session=False)
     db.commit()
-    return {"message": "All notifications marked as read"}
+    return MessageResponse(message="All notifications marked as read")

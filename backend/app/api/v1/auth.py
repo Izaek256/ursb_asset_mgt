@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models.session import Session as UserSession
 from app.models.user import User, UserRole
-from app.schemas import AuthStatusResponse, LoginRequest, LoginResponse, SignupRequest
+from app.schemas import AuthStatusResponse, LoginRequest, LoginResponse, MessageResponse, PasswordChangeRequest, SignupRequest
 from app.services.auth import (
     SESSION_COOKIE_NAME,
     create_password_hash,
@@ -170,11 +170,11 @@ def require_not_self_approval(
 require_roles = require_role
 
 
-@router.post("/signup", response_model=LoginResponse)
+@router.post("/signup", response_model=MessageResponse)
 def signup(
     payload: SignupRequest,
     db: Session = Depends(get_db),
-) -> dict[str, str]:
+) -> MessageResponse:
     validate_ursb_email(payload.email)
 
     if payload.password != payload.confirm_password:
@@ -205,16 +205,16 @@ def signup(
         department=payload.department,
         username=payload.username,
     )
-    return {"message": "Account created successfully. Please sign in."}
+    return MessageResponse(message="Account created successfully. Please sign in.")
 
 
-@router.post("/login", response_model=LoginResponse)
+@router.post("/login", response_model=MessageResponse)
 def login(
     payload: LoginRequest,
     response: Response,
     request: Request,
     db: Session = Depends(get_db),
-) -> dict[str, str]:
+) -> MessageResponse:
     print(f"DEBUG: Login attempt for email: {payload.email}")
     print(f"DEBUG: Received password: '{payload.password}'")
     user = get_user_by_email(db, payload.email)
@@ -248,60 +248,46 @@ def login(
         value=session.session_token,
         **_cookie_settings(request),
     )
-    return {"message": "Login successful"}
+    return MessageResponse(message="Login successful")
 
 
-@router.post("/logout", response_model=LoginResponse)
+@router.post("/logout", response_model=MessageResponse)
 def logout(
     request: Request,
     response: Response,
     db: Session = Depends(get_db),
-) -> dict[str, str]:
+) -> MessageResponse:
     session_token = request.cookies.get(SESSION_COOKIE_NAME)
     if session_token:
         delete_session(db, session_token)
     response.delete_cookie(SESSION_COOKIE_NAME, path="/")
-    return {"message": "Logout successful"}
+    return MessageResponse(message="Logout successful")
 
 
 @router.get("/auth/check", response_model=AuthStatusResponse)
 def auth_check(
     request: Request,
     current_user: User = Depends(get_current_user),
-) -> dict[str, object]:
-    settings = current_user.settings
-    return {
-        "authenticated": True,
-        "email": current_user.email,
-        "first_name": current_user.first_name,
-        "last_name": current_user.last_name,
-        "username": current_user.username,
-        "phone_number": current_user.phone_number,
-        "department": current_user.department,
-        "user_id": str(current_user.user_id) if current_user.user_id is not None else None,
-        "role": current_user.role.value if hasattr(current_user.role, "value") else current_user.role,
-        "full_name": current_user.full_name or f"{current_user.first_name or ''} {current_user.last_name or ''}".strip(),
-        "theme": settings.theme if settings else "light",
-    }
+) -> AuthStatusResponse:
+    return AuthStatusResponse(
+        authenticated=True,
+    )
 
 
-@router.get("/protected")
-def protected_route(request: Request) -> dict[str, str]:
+@router.get("/protected", response_model=MessageResponse)
+def protected_route(request: Request) -> MessageResponse:
     user = getattr(request.state, "user", None)
-    return {
-        "message": "Protected route accessed",
-        "email": getattr(user, "email", "unknown"),
-    }
+    return MessageResponse(message=f"Protected route accessed: {getattr(user, 'email', 'unknown')}")
 
 
-@router.put("/password")
+@router.put("/password", response_model=MessageResponse)
 def change_password(
     payload: PasswordChangeRequest,
     request: Request,
     response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> dict[str, str]:
+) -> MessageResponse:
     """Change the current user's password. Requires authentication (all roles)."""
 
     # Validate current password
@@ -373,16 +359,16 @@ def change_password(
     # Clear session cookie
     response.delete_cookie(SESSION_COOKIE_NAME, path="/")
 
-    return {"message": "Password changed successfully. Please log in again."}
+    return MessageResponse(message="Password changed successfully. Please log in again.")
 
 
-@router.post("/change-password")
+@router.post("/change-password", response_model=MessageResponse)
 def change_password_no_session_invalidate(
     payload: PasswordChangeRequest,
     request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> dict[str, str]:
+) -> MessageResponse:
     """Change the current user's password without invalidating sessions. Requires authentication (all roles)."""
 
     # Validate current password
@@ -432,5 +418,5 @@ def change_password_no_session_invalidate(
     db.add(audit)
     db.commit()
 
-    return {"message": "Password changed successfully"}
+    return MessageResponse(message="Password changed successfully")
 

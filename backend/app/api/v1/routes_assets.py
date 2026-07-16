@@ -27,6 +27,7 @@ from app.models.asset import Asset, AssetCondition, AssetStatus, AssetType, Sour
 from app.models.audit_log import AuditLog
 from app.api.v1.auth import get_current_user, require_role, require_roles
 from app.models.user import UserRole
+from app.schemas import MessageResponse
 from app.services.asset_service import VALID_TRANSITIONS, validate_status_transition, get_asset, list_assets, create_asset, update_asset, export_assets_csv
 
 router = APIRouter(prefix="/api/v1/assets", tags=["assets"])
@@ -480,12 +481,12 @@ def update_asset(
     return get_asset_detail(asset_id, db, current_user)
 
 
-@router.patch("/{asset_id}/deactivate")
+@router.patch("/{asset_id}/deactivate", response_model=MessageResponse)
 def deactivate_asset(
     asset_id: str,
     db: Session = Depends(get_db),
     current_user=Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
-):
+) -> MessageResponse:
     """
     Deactivate an asset. Sets is_active = False.
     Requires: asset not inactive, no active assignment, not Disposed.
@@ -537,15 +538,15 @@ def deactivate_asset(
     db.add(audit_entry)
     db.commit()
 
-    return {"message": "Asset deactivated successfully"}
+    return MessageResponse(message="Asset deactivated successfully")
 
 
-@router.patch("/{asset_id}/reactivate")
+@router.patch("/{asset_id}/reactivate", response_model=MessageResponse)
 def reactivate_asset(
     asset_id: str,
     db: Session = Depends(get_db),
     current_user=Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
-):
+) -> MessageResponse:
     """
     Reactivate an asset. Sets is_active = True.
     """
@@ -571,15 +572,15 @@ def reactivate_asset(
     db.add(audit_entry)
     db.commit()
 
-    return {"message": "Asset reactivated successfully"}
+    return MessageResponse(message="Asset reactivated successfully")
 
 
-@router.patch("/{asset_id}/activate")
+@router.patch("/{asset_id}/activate", response_model=MessageResponse)
 def activate_asset(
     asset_id: str,
     db: Session = Depends(get_db),
     current_user=Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
-):
+) -> MessageResponse:
     """
     Activate a newly registered asset. Sets is_active = True.
     """
@@ -604,7 +605,7 @@ def activate_asset(
     db.add(audit_entry)
     db.commit()
 
-    return {"message": "Asset activated successfully"}
+    return MessageResponse(message="Asset activated successfully")
 
 
 @router.get("/export/pdf")
