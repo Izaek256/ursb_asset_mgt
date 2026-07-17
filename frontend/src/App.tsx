@@ -18,7 +18,7 @@ import Settings from "./pages/Settings";
 import Storage from "./pages/Storage";
 import Transfers from "./pages/Transfers";
 import CredentialsPage from "./pages/CredentialsPage";
-import { hasPageAccess, getDefaultPathForRole } from "./utils/rbac";
+import { hasPageAccess, getDefaultPathForRole, hasActionPermission } from "./utils/rbac";
 
 const NAV_LABELS: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -69,7 +69,7 @@ function AppShell() {
   }, [user, path]);
 
   const getRequestsLabel = () =>
-    ["System Administrator", "Asset Manager"].includes(user!.role) ? "Requests" : "My Requests";
+    hasActionPermission(user?.role, "approveRequest") ? "Requests" : "My Requests";
 
   const getPageTitle = (): string => {
     if (path.startsWith("/assets/") && path !== "/assets" && path !== "/assets/register") {
@@ -90,9 +90,17 @@ function AppShell() {
 
     switch (path) {
       case "/dashboard":
-        return <Dashboard onNavigate={navigate} />;
+        return (
+          <RoleGuard requiredPath="/dashboard">
+            <Dashboard onNavigate={navigate} />
+          </RoleGuard>
+        );
       case "/requests":
-        return <Requests />;
+        return (
+          <RoleGuard requiredPath="/requests">
+            <Requests />
+          </RoleGuard>
+        );
       case "/assets":
         return (
           <RoleGuard requiredPath="/assets">
@@ -106,9 +114,17 @@ function AppShell() {
           </RoleGuard>
         );
       case "/inventory":
-        return <Inventory />;
+        return (
+          <RoleGuard requiredPath="/inventory">
+            <Inventory />
+          </RoleGuard>
+        );
       case "/assignments":
-        return <Assignments />;
+        return (
+          <RoleGuard requiredPath="/assignments">
+            <Assignments />
+          </RoleGuard>
+        );
       case "/storage":
         return (
           <RoleGuard requiredPath="/storage">
@@ -140,7 +156,11 @@ function AppShell() {
           </RoleGuard>
         );
       case "/settings":
-        return <Settings />;
+        return (
+          <RoleGuard requiredPath="/settings">
+            <Settings />
+          </RoleGuard>
+        );
       case "/credentials":
         return (
           <RoleGuard requiredPath="/credentials">
@@ -148,7 +168,11 @@ function AppShell() {
           </RoleGuard>
         );
       default:
-        return <Dashboard onNavigate={navigate} />;
+        return (
+          <RoleGuard requiredPath="/dashboard">
+            <Dashboard onNavigate={navigate} />
+          </RoleGuard>
+        );
     }
   };
 

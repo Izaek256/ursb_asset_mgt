@@ -1,4 +1,5 @@
 export type Role =
+  | "Super System Administrator"
   | "System Administrator"
   | "Asset Manager"
   | "Asset Custodian"

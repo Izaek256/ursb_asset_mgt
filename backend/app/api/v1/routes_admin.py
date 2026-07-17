@@ -223,10 +223,10 @@ def _log_to_out(log: AuditLog, db: Session) -> AuditLogOut:
 def list_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(
-        require_role(UserRole.SYSTEM_ADMINISTRATOR, UserRole.ASSET_MANAGER)
+        require_role(UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR, UserRole.ASSET_MANAGER)
     ),
 ):
-    """List all users. Accessible by System Administrator and Asset Manager."""
+    """List all users. Accessible by Super System Administrator, System Administrator and Asset Manager."""
     users = db.query(User).order_by(User.created_at.desc()).all()
     return [_user_to_out(u) for u in users]
 
@@ -236,7 +236,7 @@ def create_user(
     body: UserCreateAutoRequest,
     response: Response,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
+    current_user: User = Depends(require_role(UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR)),
 ):
     """Create a new user account with auto-generated password. Admin only."""
     # Validate email domain - only @ursb.go.ug addresses are permitted
@@ -293,7 +293,7 @@ def update_user(
     user_id: str,
     body: UpdateUserRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
+    current_user: User = Depends(require_role(UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR)),
 ):
     """Update user details. Admin only."""
     target = db.query(User).filter(User.user_id == user_id).first()
@@ -349,9 +349,9 @@ def update_user_role(
     user_id: str,
     body: RoleUpdateRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
+    current_user: User = Depends(require_role(UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR)),
 ):
-    """Change a user's role. Only System Administrators can do this."""
+    """Change a user's role. Only System Administrators and Super System Administrators can do this."""
     target = db.query(User).filter(User.user_id == user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
@@ -395,7 +395,7 @@ def update_user_role(
 def deactivate_user(
     user_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
+    current_user: User = Depends(require_role(UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR)),
 ):
     """Deactivate a user without deleting them. Admin only."""
     target = db.query(User).filter(User.user_id == user_id).first()
@@ -428,7 +428,7 @@ def deactivate_user(
 def reactivate_user(
     user_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
+    current_user: User = Depends(require_role(UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR)),
 ):
     """Reactivate a previously deactivated user. Admin only."""
     target = db.query(User).filter(User.user_id == user_id).first()

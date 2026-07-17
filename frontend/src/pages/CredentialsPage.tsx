@@ -85,7 +85,7 @@ export default function CredentialsPage() {
   // Single user creation state
   const [singleFullName, setSingleFullName] = React.useState("");
   const [singleEmail, setSingleEmail] = React.useState("");
-  const [singleRole, setSingleRole] = React.useState("Employee");
+  const [singleRole, setSingleRole] = React.useState("EMPLOYEE");
   const [singleDepartment, setSingleDepartment] = React.useState("");
   const [isCreatingUser, setIsCreatingUser] = React.useState(false);
   const [createError, setCreateError] = React.useState<string | null>(null);
@@ -325,7 +325,7 @@ export default function CredentialsPage() {
       setShowSingleResult(true);
       setSingleFullName("");
       setSingleEmail("");
-      setSingleRole("Employee");
+      setSingleRole("EMPLOYEE");
       setSingleDepartment("");
       // Refresh the accounts list to show the new user
       fetchAccounts();
@@ -787,10 +787,11 @@ export default function CredentialsPage() {
               <div className="flex flex-col gap-2">
                 <label htmlFor="single-role" className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">Role</label>
                 <select id="single-role" className={filterSelectCls} value={singleRole} onChange={(e) => setSingleRole(e.target.value)} required>
-                  <option value="Employee">Employee</option>
-                  <option value="Asset Custodian">Asset Custodian</option>
-                  <option value="Asset Manager">Asset Manager</option>
-                  <option value="System Administrator">System Administrator</option>
+                  <option value="EMPLOYEE">Employee</option>
+                  <option value="ASSET_CUSTODIAN">Asset Custodian</option>
+                  <option value="ASSET_MANAGER">Asset Manager</option>
+                  <option value="SYSTEM_ADMINISTRATOR">System Administrator</option>
+                  <option value="SUPER_SYSTEM_ADMINISTRATOR">Super System Administrator</option>
                 </select>
               </div>
               <div className="flex flex-col gap-2">

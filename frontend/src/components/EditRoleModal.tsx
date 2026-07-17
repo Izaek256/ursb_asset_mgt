@@ -9,11 +9,12 @@ type Props = {
   onRequestConfirm: (newRole: Role) => void;
 };
 
-const ROLE_OPTIONS: Role[] = [
-  "System Administrator",
-  "Asset Manager",
-  "Asset Custodian",
-  "Employee",
+const ROLE_OPTIONS: { label: string; value: string }[] = [
+  { label: "Super System Administrator", value: "SUPER_SYSTEM_ADMINISTRATOR" },
+  { label: "System Administrator",       value: "SYSTEM_ADMINISTRATOR" },
+  { label: "Asset Manager",              value: "ASSET_MANAGER" },
+  { label: "Asset Custodian",            value: "ASSET_CUSTODIAN" },
+  { label: "Employee",                   value: "EMPLOYEE" },
 ];
 
 export default function EditRoleModal({ user, open, onClose, onRequestConfirm }: Props) {
@@ -55,8 +56,8 @@ export default function EditRoleModal({ user, open, onClose, onRequestConfirm }:
             >
               <option value="">Select a role...</option>
               {ROLE_OPTIONS.map((r) => (
-                <option key={r} value={r}>
-                  {r}
+                <option key={r.value} value={r.value}>
+                  {r.label}
                 </option>
               ))}
             </select>

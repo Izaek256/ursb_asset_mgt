@@ -11,9 +11,16 @@ import StatusBadge from "../components/common/badges/StatusBadge";
 import RoleBadge from "../components/common/badges/RoleBadge";
 import SuccessBanner from "../components/common/SuccessBanner";
 import ErrorMessage from "../components/ErrorMessage";
+import Modal from "../components/Modal";
 
-const ROLES: Role[] = ["System Administrator", "Asset Manager", "Asset Custodian", "Employee"];
-const ROLE_FILTERS: (Role | "All")[] = ["All", ...ROLES];
+const ROLE_FILTER_OPTIONS: { label: string; value: Role | "All" }[] = [
+  { label: "All",                        value: "All" },
+  { label: "Super System Administrator", value: "SUPER_SYSTEM_ADMINISTRATOR" },
+  { label: "System Administrator",       value: "SYSTEM_ADMINISTRATOR" },
+  { label: "Asset Manager",              value: "ASSET_MANAGER" },
+  { label: "Asset Custodian",            value: "ASSET_CUSTODIAN" },
+  { label: "Employee",                   value: "EMPLOYEE" },
+];
 
 
 
@@ -38,7 +45,50 @@ export default function UserManagement() {
   // Deactivate/Reactivate confirm
   const [statusAction, setStatusAction] = React.useState<{ user: UserRow; action: "deactivate" | "reactivate" } | null>(null);
 
-  const canManage = currentUser?.role === "System Administrator";
+  // Edit user
+  const [editUser, setEditUser] = React.useState<UserRow | null>(null);
+  const [editForm, setEditForm] = React.useState({ full_name: "", email: "", department: "" });
+  const [isEditUserOpen, setEditUserOpen] = React.useState(false);
+  const [isSavingEdit, setIsSavingEdit] = React.useState(false);
+  const [editError, setEditError] = React.useState<string | null>(null);
+
+  const openEditUser = (u: UserRow) => {
+    setEditUser(u);
+    setEditForm({ full_name: u.name, email: u.email, department: u.department || "" });
+    setEditError(null);
+    setEditUserOpen(true);
+  };
+
+  const saveEditUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editUser) return;
+    setIsSavingEdit(true);
+    setEditError(null);
+    try {
+      await apiFetch(`/admin/users/${editUser.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          full_name: editForm.full_name,
+          email: editForm.email,
+          department: editForm.department,
+        }),
+      });
+      flash(`User '${editForm.full_name}' updated successfully.`);
+      setEditUserOpen(false);
+      setEditUser(null);
+      await fetchUsers();
+    } catch (err: any) {
+      setEditError(err.message || "Failed to update user.");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  const canManage = 
+    currentUser?.role === "SYSTEM_ADMINISTRATOR" || 
+    currentUser?.role === "SUPER_SYSTEM_ADMINISTRATOR" ||
+    currentUser?.role === "System Administrator" ||
+    currentUser?.role === "Super System Administrator";
 
   const flash = (msg: string) => { setSuccessMsg(msg); setErrorMsg(null); setTimeout(() => setSuccessMsg(null), 4000); };
   const flashErr = (msg: string) => { setErrorMsg(msg); setSuccessMsg(null); setTimeout(() => setErrorMsg(null), 5000); };
@@ -124,6 +174,7 @@ export default function UserManagement() {
             header: "Actions",
             render: (u: UserRow) => (
               <div className="flex flex-wrap gap-1.5">
+                <Button variant="outline" onClick={() => openEditUser(u)}>Edit</Button>
                 <Button variant="outline" onClick={() => openRoleEdit(u)}>Role</Button>
                 {u.isActive ? (
                   <Button variant="danger-outline" onClick={() => setStatusAction({ user: u, action: "deactivate" })}>
@@ -174,8 +225,8 @@ export default function UserManagement() {
             }}
             className={filterSelectCls}
           >
-            {ROLE_FILTERS.map((r) => (
-              <option key={r} value={r}>{r}</option>
+            {ROLE_FILTER_OPTIONS.map((r) => (
+              <option key={r.value} value={r.value}>{r.label}</option>
             ))}
           </select>
         </FilterField>
@@ -220,6 +271,49 @@ export default function UserManagement() {
           </>
         );
       })()}
+
+      {/* Edit User Modal */}
+      <Modal open={isEditUserOpen} onClose={() => setEditUserOpen(false)} title="Edit User">
+        <form onSubmit={saveEditUser} className="flex flex-col gap-5 font-sans select-none min-w-[360px] px-1 pb-1">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="edit-full-name" className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">Full Name</label>
+            <input
+              id="edit-full-name"
+              type="text"
+              className={filterInputCls}
+              value={editForm.full_name}
+              onChange={(e) => setEditForm(f => ({ ...f, full_name: e.target.value }))}
+              required
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="edit-email" className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">Email</label>
+            <input
+              id="edit-email"
+              type="email"
+              className={filterInputCls}
+              value={editForm.email}
+              onChange={(e) => setEditForm(f => ({ ...f, email: e.target.value }))}
+              required
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="edit-department" className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">Department</label>
+            <input
+              id="edit-department"
+              type="text"
+              className={filterInputCls}
+              value={editForm.department}
+              onChange={(e) => setEditForm(f => ({ ...f, department: e.target.value }))}
+            />
+          </div>
+          {editError && <ErrorMessage message={editError} />}
+          <div className="flex justify-end gap-2 pt-2 border-t border-sky-page/50">
+            <Button type="button" variant="ghost" onClick={() => setEditUserOpen(false)}>Cancel</Button>
+            <Button type="submit" isLoading={isSavingEdit}>Save Changes</Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Role Change Modal */}
       <EditRoleModal user={editing} open={isEditOpen} onClose={() => setEditOpen(false)} onRequestConfirm={handleRequestConfirm} />

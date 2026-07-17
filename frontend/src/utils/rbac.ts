@@ -3,6 +3,10 @@
  * 
  * This file defines role permissions and provides helper functions
  * to check if a user has access to specific pages, actions, or features.
+ * 
+ * Role values match the backend UserRole enum (uppercase with underscores).
+ * The normalizeRole function handles comparison between enum values and
+ * display names so both formats work throughout the codebase.
  */
 
 export type UserRole = 
@@ -10,7 +14,12 @@ export type UserRole =
   | "System Administrator" 
   | "Asset Manager"
   | "Asset Custodian"
-  | "Employee";
+  | "Employee"
+  | "SUPER_SYSTEM_ADMINISTRATOR"
+  | "SYSTEM_ADMINISTRATOR"
+  | "ASSET_MANAGER"
+  | "ASSET_CUSTODIAN"
+  | "EMPLOYEE";
 
 export interface PagePermission {
   path: string;
@@ -23,71 +32,71 @@ export interface ActionPermission {
   allowedRoles: UserRole[];
 }
 
-// Page access permissions
+// Page access permissions — roles listed using enum values to match the backend
 export const PAGE_PERMISSIONS: PagePermission[] = [
-  { path: "/dashboard", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager", "Asset Custodian", "Employee"], label: "Dashboard" },
-  { path: "/requests", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager", "Asset Custodian", "Employee"], label: "Requests" },
-  { path: "/assets", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager", "Asset Custodian"], label: "Assets" },
-  { path: "/assets/register", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager", "Asset Custodian"], label: "Register Asset" },
-  { path: "/inventory", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager", "Asset Custodian", "Employee"], label: "Inventory" },
-  { path: "/assignments", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager", "Asset Custodian", "Employee"], label: "Assignments" },
-  { path: "/storage", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager"], label: "Storage" },
-  { path: "/transfers", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager"], label: "Transfers" },
-  { path: "/maintenance", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager"], label: "Maintenance" },
-  { path: "/admin/users", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager"], label: "User Management" },
-  { path: "/admin/audit-logs", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager"], label: "Audit Logs" },
-  { path: "/credentials", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager"], label: "Credentials" },
-  { path: "/settings", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager", "Asset Custodian", "Employee"], label: "Settings" },
+  { path: "/dashboard",        allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER", "ASSET_CUSTODIAN", "EMPLOYEE"], label: "Dashboard" },
+  { path: "/requests",         allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER", "ASSET_CUSTODIAN", "EMPLOYEE"], label: "Requests" },
+  { path: "/assets",           allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER", "ASSET_CUSTODIAN"], label: "Assets" },
+  { path: "/assets/register",  allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER", "ASSET_CUSTODIAN"], label: "Register Asset" },
+  { path: "/inventory",        allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER", "ASSET_CUSTODIAN", "EMPLOYEE"], label: "Inventory" },
+  { path: "/assignments",      allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER", "ASSET_CUSTODIAN", "EMPLOYEE"], label: "Assignments" },
+  { path: "/storage",          allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER"], label: "Storage" },
+  { path: "/transfers",        allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER"], label: "Transfers" },
+  { path: "/maintenance",      allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER"], label: "Maintenance" },
+  { path: "/admin/users",      allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR"], label: "User Management" },
+  { path: "/admin/audit-logs", allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER"], label: "Audit Logs" },
+  { path: "/credentials",      allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR"], label: "Credentials" },
+  { path: "/settings",         allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER", "ASSET_CUSTODIAN", "EMPLOYEE"], label: "Settings" },
 ];
 
 // Action permissions for specific operations
 export const ACTION_PERMISSIONS: Record<string, ActionPermission[]> = {
   // Asset actions
-  createAsset: [{ action: "createAsset", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager", "Asset Custodian"] }],
-  updateAsset: [{ action: "updateAsset", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager", "Asset Custodian"] }],
-  deleteAsset: [{ action: "deleteAsset", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager"] }],
-  deactivateAsset: [{ action: "deactivateAsset", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager"] }],
-  reactivateAsset: [{ action: "reactivateAsset", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager"] }],
-  bulkImportAssets: [{ action: "bulkImportAssets", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager", "Asset Custodian"] }],
-  
-  // Request actions (with self-approval prevention for accountability)
-  approveRequest: [{ action: "approveRequest", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager"] }],
-  rejectRequest: [{ action: "rejectRequest", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager"] }],
-  assignRequest: [{ action: "assignRequest", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager"] }],
-  completeRequest: [{ action: "completeRequest", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager"] }],
-  cancelRequest: [{ action: "cancelRequest", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager", "Employee"] }],
-  
-  // Transfer actions (with self-transfer prevention for accountability)
-  createTransfer: [{ action: "createTransfer", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager"] }],
-  acknowledgeTransfer: [{ action: "acknowledgeTransfer", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager", "Asset Custodian", "Employee"] }],
-  
-  // Assignment actions (with self-assignment prevention for accountability)
-  createAssignment: [{ action: "createAssignment", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager"] }],
-  acceptAssignment: [{ action: "acceptAssignment", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager", "Asset Custodian", "Employee"] }],
-  declineAssignment: [{ action: "declineAssignment", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager", "Asset Custodian", "Employee"] }],
-  confirmHandover: [{ action: "confirmHandover", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager", "Asset Custodian"] }],
-  returnAssignment: [{ action: "returnAssignment", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager", "Asset Custodian", "Employee"] }],
-  
+  createAsset:      [{ action: "createAsset",      allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER", "ASSET_CUSTODIAN"] }],
+  updateAsset:      [{ action: "updateAsset",      allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER", "ASSET_CUSTODIAN"] }],
+  deleteAsset:      [{ action: "deleteAsset",      allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER"] }],
+  deactivateAsset:  [{ action: "deactivateAsset",  allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER"] }],
+  reactivateAsset:  [{ action: "reactivateAsset",  allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER"] }],
+  bulkImportAssets: [{ action: "bulkImportAssets", allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER", "ASSET_CUSTODIAN"] }],
+
+  // Request actions
+  approveRequest:  [{ action: "approveRequest",  allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER"] }],
+  rejectRequest:   [{ action: "rejectRequest",   allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER"] }],
+  assignRequest:   [{ action: "assignRequest",   allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER"] }],
+  completeRequest: [{ action: "completeRequest", allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER"] }],
+  cancelRequest:   [{ action: "cancelRequest",   allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER", "EMPLOYEE"] }],
+
+  // Transfer actions
+  createTransfer:      [{ action: "createTransfer",      allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER"] }],
+  acknowledgeTransfer: [{ action: "acknowledgeTransfer", allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER", "ASSET_CUSTODIAN", "EMPLOYEE"] }],
+
+  // Assignment actions
+  createAssignment:  [{ action: "createAssignment",  allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER"] }],
+  acceptAssignment:  [{ action: "acceptAssignment",  allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER", "ASSET_CUSTODIAN", "EMPLOYEE"] }],
+  declineAssignment: [{ action: "declineAssignment", allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER", "ASSET_CUSTODIAN", "EMPLOYEE"] }],
+  confirmHandover:   [{ action: "confirmHandover",   allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER", "ASSET_CUSTODIAN"] }],
+  returnAssignment:  [{ action: "returnAssignment",  allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER", "ASSET_CUSTODIAN", "EMPLOYEE"] }],
+
   // Maintenance actions
-  createMaintenance: [{ action: "createMaintenance", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager"] }],
-  updateMaintenance: [{ action: "updateMaintenance", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager"] }],
-  
+  createMaintenance: [{ action: "createMaintenance", allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER"] }],
+  updateMaintenance: [{ action: "updateMaintenance", allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER"] }],
+
   // Disposal actions
-  disposeAsset: [{ action: "disposeAsset", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager"] }],
-  
+  disposeAsset: [{ action: "disposeAsset", allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER"] }],
+
   // User management actions
-  createUser: [{ action: "createUser", allowedRoles: ["Super System Administrator", "System Administrator"] }],
-  updateUser: [{ action: "updateUser", allowedRoles: ["Super System Administrator", "System Administrator"] }],
-  deleteUser: [{ action: "deleteUser", allowedRoles: ["Super System Administrator", "System Administrator"] }],
-  changeUserRole: [{ action: "changeUserRole", allowedRoles: ["Super System Administrator", "System Administrator"] }],
-  resetPassword: [{ action: "resetPassword", allowedRoles: ["Super System Administrator", "System Administrator"] }],
-  
+  createUser:    [{ action: "createUser",    allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR"] }],
+  updateUser:    [{ action: "updateUser",    allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR"] }],
+  deleteUser:    [{ action: "deleteUser",    allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR"] }],
+  changeUserRole:[{ action: "changeUserRole",allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR"] }],
+  resetPassword: [{ action: "resetPassword", allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR"] }],
+
   // Audit log actions
-  viewAuditLogs: [{ action: "viewAuditLogs", allowedRoles: ["Super System Administrator", "System Administrator", "Asset Manager"] }],
-  
+  viewAuditLogs: [{ action: "viewAuditLogs", allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER"] }],
+
   // Credential actions
-  viewCredentials: [{ action: "viewCredentials", allowedRoles: ["Super System Administrator", "System Administrator"] }],
-  generateCredentials: [{ action: "generateCredentials", allowedRoles: ["Super System Administrator", "System Administrator"] }],
+  viewCredentials:     [{ action: "viewCredentials",     allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR"] }],
+  generateCredentials: [{ action: "generateCredentials", allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR"] }],
 };
 
 /**
@@ -177,41 +186,26 @@ export function getDefaultPathForRole(userRole: UserRole | string | undefined): 
  * Check if user can view all requests or only their own
  */
 export function canViewAllRequests(userRole: UserRole | string | undefined): boolean {
-  if (!userRole) return false;
-  const normalizedUserRole = normalizeRole(userRole);
-  return normalizedUserRole === normalizeRole("Super System Administrator") || 
-         normalizedUserRole === normalizeRole("System Administrator") ||
-         normalizedUserRole === normalizeRole("Asset Manager");
+  return hasActionPermission(userRole, "approveRequest");
 }
 
 /**
  * Check if user can manage users
  */
 export function canManageUsers(userRole: UserRole | string | undefined): boolean {
-  if (!userRole) return false;
-  const normalizedUserRole = normalizeRole(userRole);
-  return normalizedUserRole === normalizeRole("Super System Administrator") || 
-         normalizedUserRole === normalizeRole("System Administrator") ||
-         normalizedUserRole === normalizeRole("Asset Manager");
+  return hasPageAccess(userRole, "/admin/users");
 }
 
 /**
  * Check if user can view audit logs
  */
 export function canViewAuditLogs(userRole: UserRole | string | undefined): boolean {
-  if (!userRole) return false;
-  const normalizedUserRole = normalizeRole(userRole);
-  return normalizedUserRole === normalizeRole("Super System Administrator") || 
-         normalizedUserRole === normalizeRole("System Administrator") ||
-         normalizedUserRole === normalizeRole("Asset Manager");
+  return hasPageAccess(userRole, "/admin/audit-logs");
 }
 
 /**
  * Check if user can access credentials
  */
 export function canAccessCredentials(userRole: UserRole | string | undefined): boolean {
-  if (!userRole) return false;
-  const normalizedUserRole = normalizeRole(userRole);
-  return normalizedUserRole === normalizeRole("Super System Administrator") || 
-         normalizedUserRole === normalizeRole("System Administrator");
+  return hasPageAccess(userRole, "/credentials");
 }
