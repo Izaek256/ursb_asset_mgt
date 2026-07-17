@@ -52,6 +52,7 @@ export default function Assignments() {
   // Action confirmations
   const [dirtyConfirm, setDirtyConfirm] = React.useState<{ open: boolean; onConfirm: () => void } | null>(null);
   const [rejectReturnConfirm, setRejectReturnConfirm] = React.useState<{ open: boolean; assignment: Assignment | null; reason: string }>({ open: false, assignment: null, reason: "" });
+  const [cancelAssignConfirm, setCancelAssignConfirm] = React.useState<Assignment | null>(null);
 
   const isAdminOrManager = user?.role === "Asset Manager" || user?.role === "SUPER_SYSTEM_ADMINISTRATOR" || user?.role === "ASSET_MANAGER";
   const isCustodian = user?.role === "Asset Custodian" || user?.role === "ASSET_CUSTODIAN";
@@ -201,6 +202,19 @@ export default function Assignments() {
     } catch (err: any) {
       setError(err.message || "Failed to confirm receipt.");
     }
+  };
+
+  const handleCancelAssignment = async (id: number) => {
+    setError(null);
+    setSuccess(null);
+    try {
+      await apiFetch(`/assignments/${id}`, { method: "DELETE" });
+      setSuccess("Assignment cancelled. Asset returned to Available.");
+      fetchAssignments();
+    } catch (err: any) {
+      setError(err.message || "Failed to cancel assignment.");
+    }
+    setCancelAssignConfirm(null);
   };
 
   React.useEffect(() => {
@@ -491,6 +505,11 @@ export default function Assignments() {
               Confirm Return
             </Button>
           )}
+          {isAdminOrManager && (a.status === "Pending Acceptance" || a.status === "Accepted") && (
+            <Button variant="danger-outline" className="!py-1.5 !px-3 text-xs" onClick={() => setCancelAssignConfirm(a)}>
+              Cancel
+            </Button>
+          )}
         </div>
       ),
     },
@@ -718,6 +737,15 @@ export default function Assignments() {
           </div>
         </div>
       </Modal>
+
+      {/* Cancel Assignment Confirm Dialog */}
+      <ConfirmDialog
+        open={!!cancelAssignConfirm}
+        title="Cancel assignment?"
+        message={`This will cancel the pending assignment for "${cancelAssignConfirm?.asset_name}" and return the asset to Available status. The employee will be notified.`}
+        onCancel={() => setCancelAssignConfirm(null)}
+        onConfirm={() => cancelAssignConfirm && handleCancelAssignment(cancelAssignConfirm.assignment_id)}
+      />
     </div>
   );
 }

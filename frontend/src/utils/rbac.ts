@@ -102,8 +102,13 @@ function normalizeRole(role: string): string {
  */
 export function hasPageAccess(userRole: UserRole | string | undefined, path: string): boolean {
   if (!userRole) return false;
-  
-  const permission = PAGE_PERMISSIONS.find(p => p.path === path);
+
+  // Handle dynamic asset detail paths like /assets/URSB-XXXXXXXX
+  const normalizedPath = path.startsWith("/assets/") && path !== "/assets/register"
+    ? "/assets"
+    : path;
+
+  const permission = PAGE_PERMISSIONS.find(p => p.path === normalizedPath);
   if (!permission) return false;
   
   const normalizedUserRole = normalizeRole(userRole);

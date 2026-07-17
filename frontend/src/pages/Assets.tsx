@@ -175,7 +175,7 @@ export default function Assets() {
 
   const navigateToDetail = (assetId: string) => {
     window.history.pushState({}, "", `/assets/${assetId}`);
-    window.dispatchEvent(new PopStateEvent("popstate"));
+    window.dispatchEvent(new PopStateEvent("popstate", { state: { path: `/assets/${assetId}` } }));
   };
 
   const handleExport = async (format: "pdf" | "excel") => {

@@ -223,10 +223,20 @@ def list_requests(
     current_user: User = Depends(get_current_user),
 ):
     from sqlalchemy.orm import joinedload
+    from sqlalchemy import exists, or_
     query = db.query(AssetRequest).options(
         joinedload(AssetRequest.requester),
         joinedload(AssetRequest.asset)
     )
+
+    # Exclude requests where a specific asset was assigned but that asset has since been deleted
+    query = query.filter(
+        or_(
+            AssetRequest.asset_id == None,  # type-based requests with no asset yet
+            exists().where(Asset.asset_id == AssetRequest.asset_id)  # asset still exists
+        )
+    )
+
     if status:
         try:
             query = query.filter(AssetRequest.status == RequestStatus(status))

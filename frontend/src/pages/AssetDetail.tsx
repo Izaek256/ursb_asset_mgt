@@ -102,7 +102,11 @@ export default function AssetDetail() {
   // Fetch pending disposal recommendation for Asset Manager view
   React.useEffect(() => {
     if (!assetId || !user) return;
-    if (user.role !== "Asset Manager" && user.role !== "System Administrator") return;
+    if (
+      user.role !== "Asset Manager" && user.role !== "ASSET_MANAGER" &&
+      user.role !== "System Administrator" && user.role !== "SYSTEM_ADMINISTRATOR" &&
+      user.role !== "SUPER_SYSTEM_ADMINISTRATOR"
+    ) return;
 
     apiFetch<any>(`/disposals?asset_id=${assetId}&status=Recommended`, {}, token)
       .then((data) => {
@@ -295,7 +299,10 @@ export default function AssetDetail() {
     }
   };
 
-  const canEdit = user?.role === "Asset Manager" || user?.role === "System Administrator";
+  const canEdit = 
+    user?.role === "Asset Manager" || user?.role === "ASSET_MANAGER" ||
+    user?.role === "System Administrator" || user?.role === "SYSTEM_ADMINISTRATOR" ||
+    user?.role === "SUPER_SYSTEM_ADMINISTRATOR";
 
   if (isLoading) {
     return <div className="page-loading">Loading asset details...</div>;
@@ -409,10 +416,8 @@ export default function AssetDetail() {
             </>
           )}
 
-          {/* Custodian: Recommend Disposal button
-              Renders only when: user is Custodian, asset is not Disposed or Deactivated,
-              and no pending recommendation already exists for this asset */}
-          {user?.role === "Asset Custodian" &&
+          {/* Custodian: Recommend Disposal button */}
+          {(user?.role === "Asset Custodian" || user?.role === "ASSET_CUSTODIAN") &&
             asset.status !== "Disposed" &&
             asset.is_active && (
             <Button
@@ -423,10 +428,10 @@ export default function AssetDetail() {
             </Button>
           )}
 
-          {/* Asset Manager: Approve/Reject buttons
-              Renders only when: user is Asset Manager or Admin,
-              and a pending recommendation exists for this asset */}
-          {(user?.role === "Asset Manager" || user?.role === "System Administrator") &&
+          {/* Asset Manager: Approve/Reject buttons */}
+          {(user?.role === "Asset Manager" || user?.role === "ASSET_MANAGER" ||
+            user?.role === "System Administrator" || user?.role === "SYSTEM_ADMINISTRATOR" ||
+            user?.role === "SUPER_SYSTEM_ADMINISTRATOR") &&
             pendingDisposal && asset.status !== "Disposed" && (
             <>
               <Button

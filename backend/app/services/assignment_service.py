@@ -295,6 +295,18 @@ def decline_assignment(db: Session, assignment_id: int, current_user_id: int) ->
         details=f"Assignment {assignment_id} for asset {assignment.asset_id} was declined by user {current_user_id}."
     )
     db.add(audit)
+
+    # Notify Asset Manager that asset is back to Available
+    from app.services.notification_service import create_notification
+    create_notification(
+        db=db,
+        user_id="ASSET_MANAGER",
+        title="Assignment Declined",
+        message=f"Employee declined the assignment for asset '{asset.asset_name}' ({asset.asset_id}). The asset is now Available.",
+        notification_type="ASSIGNMENT_DECLINED",
+        related_asset_id=asset.asset_id,
+    )
+
     db.commit()
     db.refresh(assignment)
     return assignment
@@ -345,8 +357,8 @@ def confirm_handover(db: Session, assignment_id: int, custodian_id: int) -> Assi
     asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
     if not asset:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Asset not found for this assignment."
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Asset '{assignment.asset_id}' linked to this assignment no longer exists. Please contact your administrator."
         )
 
     try:
@@ -409,7 +421,7 @@ def get_assignment_history(db: Session, asset_id: str) -> List[Assignment]:
     return (
         db.query(Assignment)
         .filter(Assignment.asset_id == asset_id)
-        .order_by(Assignment.assignment_date.desc())
+        .order_by(Assignment.assignment_date.desc(), Assignment.assignment_id.desc())
         .all()
     )
 
@@ -441,7 +453,7 @@ def get_user_assignments(db: Session, user_id: int) -> List[Assignment]:
             Assignment.assigned_to == str(user_id),
             Assignment.status.in_([AssignmentStatus.ACTIVE, AssignmentStatus.RETURN_REQUESTED]),
         )
-        .order_by(Assignment.assignment_date.desc())
+        .order_by(Assignment.assignment_date.desc(), Assignment.assignment_id.desc())
         .all()
     )
 
@@ -670,13 +682,6 @@ def confirm_receipt(db: Session, assignment_id: int, employee_id: int) -> Assign
             detail=f"Only assignments in 'Active' status can have receipt confirmed. Current: {assignment.status}"
         )
 
-    asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
-    if not asset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Asset not found for this assignment."
-        )
-
     # Mark receipt confirmed timestamp
     assignment.acknowledged_at = datetime.utcnow()
 
@@ -689,16 +694,43 @@ def confirm_receipt(db: Session, assignment_id: int, employee_id: int) -> Assign
     )
     db.add(audit)
 
-    # Notify Asset Manager that asset has been received by the employee
+    # Notify Asset Manager and custodian that asset has been received by the employee
+    asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
     from app.services.notification_service import create_notification
-    create_notification(
-        db=db,
-        user_id="Asset Manager",
-        title="Asset Receipt Confirmed",
-        message=f"Employee has confirmed receipt of asset '{asset.asset_name}' ({asset.asset_id}). Assignment is now active.",
-        notification_type="RECEIPT_CONFIRMED",
-        related_asset_id=asset.asset_id,
-    )
+    if asset:
+        # Notify all Asset Managers
+        create_notification(
+            db=db,
+            user_id="ASSET_MANAGER",
+            title="Asset Receipt Confirmed",
+            message=f"Employee has confirmed receipt of asset '{asset.asset_name}' ({asset.asset_id}). Assignment #{assignment_id} is now fully active.",
+            notification_type="RECEIPT_CONFIRMED",
+            related_asset_id=asset.asset_id,
+        )
+        # Notify the custodian who handled the handover (stored in notes)
+        if assignment.notes and "[Custodian:" in assignment.notes:
+            import re
+            match = re.search(r'\[Custodian: (\d+):', assignment.notes)
+            if match:
+                custodian_id_from_notes = int(match.group(1))
+                create_notification(
+                    db=db,
+                    user_id=str(custodian_id_from_notes),
+                    title="Asset Receipt Confirmed",
+                    message=f"The employee has confirmed receipt of asset '{asset.asset_name}' ({asset.asset_id}). Handover is complete.",
+                    notification_type="RECEIPT_CONFIRMED",
+                    related_asset_id=asset.asset_id,
+                )
+    else:
+        # Asset record missing but still notify managers
+        create_notification(
+            db=db,
+            user_id="ASSET_MANAGER",
+            title="Asset Receipt Confirmed",
+            message=f"Employee has confirmed receipt of asset (ID: {assignment.asset_id}). Assignment #{assignment_id} is now fully active.",
+            notification_type="RECEIPT_CONFIRMED",
+            related_asset_id=None,
+        )
 
     db.commit()
     db.refresh(assignment)

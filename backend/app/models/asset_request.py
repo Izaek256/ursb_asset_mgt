@@ -42,7 +42,7 @@ class AssetRequest(Base):
         nullable=True,
     )
     asset_type = Column(
-        Enum(AssetType, native_enum=False, length=50),
+        Enum(AssetType, native_enum=False, length=50, values_callable=lambda x: [e.name for e in x]),
         nullable=True,
     )
 
@@ -65,12 +65,12 @@ class AssetRequest(Base):
 
     # Status & priority
     status = Column(
-        Enum(RequestStatus, native_enum=False, length=20),
+        Enum(RequestStatus, native_enum=False, length=20, values_callable=lambda x: [e.name for e in x]),
         nullable=False,
         default=RequestStatus.PENDING,
     )
     priority = Column(
-        Enum(RequestPriority, native_enum=False, length=10),
+        Enum(RequestPriority, native_enum=False, length=10, values_callable=lambda x: [e.name for e in x]),
         nullable=False,
         default=RequestPriority.NORMAL,
     )

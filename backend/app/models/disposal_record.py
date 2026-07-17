@@ -34,7 +34,7 @@ class DisposalRecord(Base):
     )
     disposal_date: Mapped[date] = mapped_column(Date, nullable=False)
     disposal_method: Mapped[DisposalMethod] = mapped_column(
-        Enum(DisposalMethod, native_enum=False, length=50), nullable=False
+        Enum(DisposalMethod, native_enum=False, length=50, values_callable=lambda x: [e.name for e in x]), nullable=False
     )
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     authorised_by: Mapped[str] = mapped_column(
@@ -43,7 +43,7 @@ class DisposalRecord(Base):
         nullable=False,
     )
     status: Mapped[DisposalStatus] = mapped_column(
-        Enum(DisposalStatus, native_enum=False, length=50),
+        Enum(DisposalStatus, native_enum=False, length=50, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=DisposalStatus.APPROVED,
     )

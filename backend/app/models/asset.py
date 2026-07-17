@@ -60,17 +60,17 @@ class Asset(Base):
     )
     asset_name: Mapped[str] = mapped_column(String(255), nullable=False)
     asset_type: Mapped[AssetType] = mapped_column(
-        Enum(AssetType, native_enum=False, length=50), nullable=False
+        Enum(AssetType, native_enum=False, length=50, values_callable=lambda x: [e.name for e in x]), nullable=False
     )
     category: Mapped[str] = mapped_column(String(100), nullable=False)
     serial_number: Mapped[str] = mapped_column(
         String(100), nullable=False, unique=True, index=True
     )
     condition: Mapped[AssetCondition] = mapped_column(
-        Enum(AssetCondition, native_enum=False, length=50), nullable=False
+        Enum(AssetCondition, native_enum=False, length=50, values_callable=lambda x: [e.name for e in x]), nullable=False
     )
     status: Mapped[AssetStatus] = mapped_column(
-        Enum(AssetStatus, native_enum=False, length=50),
+        Enum(AssetStatus, native_enum=False, length=50, values_callable=lambda x: [e.name for e in x]),
         nullable=False,
         default=AssetStatus.AVAILABLE,
     )
@@ -78,7 +78,7 @@ class Asset(Base):
         Boolean, nullable=False, default=True
     )
     source_type: Mapped[SourceType] = mapped_column(
-        Enum(SourceType, native_enum=False, length=50), nullable=False
+        Enum(SourceType, native_enum=False, length=50, values_callable=lambda x: [e.name for e in x]), nullable=False
     )
     procurement_ref: Mapped[str | None] = mapped_column(String(100), nullable=True)
     cost: Mapped[float] = mapped_column(DECIMAL(15, 2), nullable=False)

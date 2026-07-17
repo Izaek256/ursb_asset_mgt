@@ -42,7 +42,7 @@ class Assignment(Base):
     assignment_date: Mapped[date] = mapped_column(Date, nullable=False)
     return_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[AssignmentStatus] = mapped_column(
-        Enum(AssignmentStatus, native_enum=False, length=50),
+        Enum(AssignmentStatus, native_enum=False, length=50, values_callable=lambda x: [e.name for e in x]),
         nullable=False,
         default=AssignmentStatus.ACTIVE,
     )

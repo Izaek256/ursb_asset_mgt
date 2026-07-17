@@ -77,7 +77,7 @@ def _serialize_assignment(assignment: Assignment, db: Session) -> AssignmentResp
     return AssignmentResponse(
         assignment_id=assignment.assignment_id,
         asset_id=assignment.asset_id,
-        asset_name=asset.asset_name if asset else None,
+        asset_name=asset.asset_name if asset else assignment.asset_id,
         assigned_to=str(assigned_to_user.user_id) if assigned_to_user else str(assignment.assigned_to),
         assigned_to_name=assigned_to_user.full_name or f"{assigned_to_user.first_name or ''} {assigned_to_user.last_name or ''}".strip() or assigned_to_user.email if assigned_to_user else None,
         assigned_by=str(assigned_by_user.user_id) if assigned_by_user else str(assignment.assigned_by),
@@ -160,7 +160,15 @@ def list_assignments(
     current_user: User = Depends(get_current_user),
 ):
     """List assignments with optional filters. All authenticated roles can view their own assignments. Admins/managers can view all. SRS AM-A04."""
-    
+    from app.models.asset import Asset
+    from sqlalchemy import exists
+
+    # Helper: subquery that keeps only assignments whose asset still exists in the DB
+    def _with_existing_asset(q):
+        return q.filter(
+            exists().where(Asset.asset_id == Assignment.asset_id)
+        )
+
     # Roles that can view all assignments
     can_view_all = current_user.role in {
         UserRole.SUPER_SYSTEM_ADMINISTRATOR,
@@ -195,11 +203,17 @@ def list_assignments(
                 query = query.filter(Assignment.status == AssignmentStatus(status))
             except ValueError:
                 raise HTTPException(400, detail="Invalid status")
-            assignments = query.order_by(Assignment.assignment_date.desc()).all()
+            assignments = _with_existing_asset(query).order_by(Assignment.assignment_date.desc(), Assignment.assignment_id.desc()).all()
         else:
-            assignments = assignment_service.get_user_assignments(db, user_id)
+            # get_user_assignments returns Active+ReturnRequested for the user;
+            # filter out orphaned assets inline
+            base = db.query(Assignment).filter(
+                Assignment.assigned_to == str(user_id),
+                Assignment.status.in_([AssignmentStatus.ACTIVE, AssignmentStatus.RETURN_REQUESTED]),
+            )
+            assignments = _with_existing_asset(base).order_by(Assignment.assignment_date.desc(), Assignment.assignment_id.desc()).all()
     else:
-        # Only admins/managers/custodians can view all assignments without filters
+        # Only admins/managers can view all assignments without filters
         if not can_view_all:
             raise HTTPException(403, detail="Not authorized to view all assignments")
         query = db.query(Assignment)
@@ -211,7 +225,7 @@ def list_assignments(
         # Filter to show only final handovers to requesters (not internal custodian assignments)
         if assignment_type == "final_handover":
             query = query.filter(Assignment.notes.like("%Asset handed over from request%"))
-        assignments = query.order_by(Assignment.assignment_date.desc()).all()
+        assignments = _with_existing_asset(query).order_by(Assignment.assignment_date.desc(), Assignment.assignment_id.desc()).all()
 
     return AssignmentListResponse(
         assignments=[_serialize_assignment(a, db) for a in assignments],
@@ -228,6 +242,59 @@ def get_assignment(
     if not assignment:
         raise HTTPException(404, detail="Assignment not found")
     return _serialize_assignment(assignment, db)
+
+
+@router.delete("/{assignment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_assignment(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
+):
+    """
+    Cancel and delete a pending assignment (Pending Acceptance or Accepted only).
+    Returns the asset to Available and clears the custodian.
+    Asset Manager and Super System Administrator only.
+    """
+    assignment = db.query(Assignment).filter(Assignment.assignment_id == assignment_id).first()
+    if not assignment:
+        raise HTTPException(404, detail="Assignment not found")
+
+    # Only allow deletion of pre-handover assignments
+    if assignment.status not in {AssignmentStatus.PENDING_ACCEPTANCE, AssignmentStatus.ACCEPTED}:
+        raise HTTPException(
+            400,
+            detail=f"Only Pending Acceptance or Accepted assignments can be deleted. Current status: {assignment.status.value}"
+        )
+
+    # Reset asset status back to Available
+    asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
+    if asset:
+        asset.status = AssetStatus.AVAILABLE
+        asset.current_custodian_id = None
+
+    # Audit log before deletion
+    db.add(AuditLog(
+        user_id=current_user.user_id,
+        action="DELETE_ASSIGNMENT",
+        table_affected="assignments",
+        record_id=str(assignment_id),
+        details=f"Assignment {assignment_id} for asset {assignment.asset_id} deleted by {current_user.email}. Asset returned to Available.",
+    ))
+
+    # Notify the employee who was assigned
+    from app.services.notification_service import create_notification
+    asset_label = asset.asset_name if asset else assignment.asset_id
+    create_notification(
+        db=db,
+        user_id=str(assignment.assigned_to),
+        title="Assignment Cancelled",
+        message=f"Your pending assignment for asset '{asset_label}' has been cancelled by the administrator.",
+        notification_type="ASSIGNMENT_CANCELLED",
+        related_asset_id=assignment.asset_id,
+    )
+
+    db.delete(assignment)
+    db.commit()
 
 
 

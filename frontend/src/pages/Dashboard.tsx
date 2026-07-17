@@ -3,7 +3,8 @@ import { apiFetch } from "../AuthContext";
 import { ICONS } from "../utils/icons";
 import Button from "../components/common/Button";
 import { Dropdown } from "../components/common/Dropdown";
-import { CHART, DEPT_BAR_CLASSES, DOT_CLASSES } from "../theme/chartColors";
+import DonutChart, { DonutSlice } from "../components/DonutChart";
+import { CHART, DOT_CLASSES } from "../theme/chartColors";
 import {
   BarChart,
   Bar,
@@ -29,6 +30,7 @@ interface CategoryBreakdown {
   count: number;
   total: string;
   pct: number;
+  color?: string;
 }
 interface MonthlyAcquisition {
   month: string;
@@ -37,6 +39,7 @@ interface MonthlyAcquisition {
 interface DepartmentAllocation {
   dept: string;
   assets: number;
+  color?: string;
 }
 interface DashboardData {
   stats: StatCard[];
@@ -169,8 +172,6 @@ export default function Dashboard({ onNavigate }: { onNavigate: (path: string) =
   }
 
   const statsList = CORE_STAT_KEYS.map((key) => resolveStatCard(data.stats, key));
-
-  const totalDeptAssets = data.departments.reduce((sum, d) => sum + d.assets, 0) || 1;
 
   return (
     <div className="w-full flex flex-col gap-6 select-none font-sans">
@@ -374,7 +375,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (path: string) =
 
         {/* Right side panels */}
         <div className="flex flex-col gap-6">
-          {/* Category breakdown */}
+          {/* Category breakdown — donut chart */}
           <div className="bg-white border border-sky-cardBorder rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow duration-250">
             <div className="border-b border-sky-page/20 pb-4 mb-4">
               <h3 className="font-bold text-sm text-ink flex items-center gap-2">
@@ -382,33 +383,22 @@ export default function Dashboard({ onNavigate }: { onNavigate: (path: string) =
                 Asset Categories
               </h3>
             </div>
-            <div className="flex flex-col gap-5">
-              {data.categories.map((c) => (
-                <div key={c.name} className="flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between text-xs font-semibold text-ink">
-                    <span className="font-bold truncate max-w-[130px]">
-                      {c.name || "—"}
-                    </span>
-                    <span className="text-ink-dim">
-                      {c.total || "—"}
-                    </span>
-                  </div>
-                  {/* Gradient progress track */}
-                  <div className="h-1.5 w-full bg-badge-greyBg rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-ursb to-emerald-400 transition-all duration-500 motion-reduce:transition-none"
-                      style={{ width: `${Math.min(c.pct, 100)}%` }}
-                    />
-                  </div>
-                  <span className="text-[10px] text-ink-dim/60 font-semibold">
-                    {c.count} assets
-                  </span>
-                </div>
-              ))}
-            </div>
+            <DonutChart
+              slices={data.categories
+                .filter(c => c.count > 0)
+                .map(c => ({
+                  label: c.name,
+                  value: c.count,
+                  color: c.color ?? "#2563eb",
+                }))}
+              size={172}
+              thickness={36}
+              centerLabel="Categories"
+              centerSub={`${data.categories.reduce((s, c) => s + c.count, 0)} assets`}
+            />
           </div>
 
-          {/* Department allocation */}
+          {/* Department allocation — donut chart */}
           <div className="bg-white border border-sky-cardBorder rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow duration-250">
             <div className="border-b border-sky-page/20 pb-4 mb-4">
               <h3 className="font-bold text-sm text-ink flex items-center gap-2">
@@ -416,38 +406,19 @@ export default function Dashboard({ onNavigate }: { onNavigate: (path: string) =
                 Department Allocation
               </h3>
             </div>
-            <div className="flex flex-col gap-4">
-              {/* Stacked horizontal bar chart */}
-              <div className="h-4 w-full bg-badge-greyBg rounded-lg overflow-hidden flex shadow-inner">
-                {data.departments.map((d, idx) => {
-                  const pct = (d.assets / totalDeptAssets) * 100;
-                  return (
-                    <div
-                      key={d.dept}
-                      className={`h-full first:rounded-l-lg last:rounded-r-lg transition-all duration-300 ${DEPT_BAR_CLASSES[idx % DEPT_BAR_CLASSES.length]}`}
-                      style={{ width: `${pct}%` }}
-                      title={`${d.dept}: ${d.assets} assets`}
-                    />
-                  );
-                })}
-              </div>
-
-              {/* Department Legend */}
-              <div className="flex flex-col gap-2">
-                {data.departments.map((d, idx) => (
-                  <div
-                    key={d.dept}
-                    className="flex items-center justify-between text-xs font-semibold text-ink"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${DEPT_BAR_CLASSES[idx % DEPT_BAR_CLASSES.length]}`} />
-                      <span className="truncate max-w-[130px]">{d.dept || "—"}</span>
-                    </div>
-                    <span className="text-ink-dim font-bold">{d.assets}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <DonutChart
+              slices={data.departments
+                .filter(d => d.assets > 0)
+                .map(d => ({
+                  label: d.dept,
+                  value: d.assets,
+                  color: d.color ?? "#2563eb",
+                }))}
+              size={172}
+              thickness={36}
+              centerLabel="Departments"
+              centerSub={`${data.departments.reduce((s, d) => s + d.assets, 0)} assets`}
+            />
           </div>
 
           {/* Insight card */}

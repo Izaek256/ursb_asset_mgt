@@ -93,6 +93,9 @@ export default function NotificationPanel({ open, onClose }: Props) {
         return "📩";
       case "REQUEST_CANCELLED":
         return "❌";
+      case "ASSIGNMENT_CANCELLED":
+      case "ASSIGNMENT_DECLINED":
+        return "🚫";
       case "RECEIPT_CONFIRMED":
         return "🎉";
       case "PICKUP_CONFIRMED":
