@@ -9,6 +9,7 @@ Access Control Rules:
 from typing import List, Optional
 
 from datetime import datetime, date, timezone
+from app.utils.time import utcnow
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, constr
@@ -189,7 +190,7 @@ def create_transfer(
     validate_status_transition(asset.status, AssetStatus.UNDER_TRANSFER)
     asset.status = AssetStatus.UNDER_TRANSFER
     asset.current_custodian_id = body.to_user_id
-    asset.updated_at = datetime.now(timezone.utc)
+    asset.updated_at = utcnow()
 
     # All four state changes committed atomically to prevent partial custody transfer
     db.add(transfer)
@@ -247,7 +248,7 @@ def acknowledge_transfer(
         # If current_user is not receiver or System Administrator, deny
         raise HTTPException(status_code=403, detail="Only the receiving user or a System Administrator can acknowledge this transfer")
 
-    transfer.acknowledged_at = datetime.now(timezone.utc)
+    transfer.acknowledged_at = utcnow()
     db.add(transfer)
     db.commit()
     

@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import secrets
 from datetime import datetime, timedelta, timezone
+from app.utils.time import utcnow
 from typing import Optional
 
 from fastapi import HTTPException
@@ -73,7 +74,9 @@ LOCKOUT_DURATION = timedelta(minutes=15)
 
 
 def is_account_locked(user: User) -> bool:
-    return bool(user.locked_until and user.locked_until > datetime.now(timezone.utc))
+    if not user.locked_until:
+        return False
+    return user.locked_until > utcnow()
 
 
 def reset_failed_login_attempts(db: DbSession, user: User) -> None:
@@ -87,7 +90,7 @@ def reset_failed_login_attempts(db: DbSession, user: User) -> None:
 def register_failed_login_attempt(db: DbSession, user: User) -> None:
     user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
     if user.failed_login_attempts >= LOCKOUT_THRESHOLD:
-        user.locked_until = datetime.now(timezone.utc) + LOCKOUT_DURATION
+        user.locked_until = utcnow() + LOCKOUT_DURATION
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -135,7 +138,7 @@ def authenticate_user(db: DbSession, email: str, password: str) -> Optional[User
 
 def create_session(db: DbSession, user: User) -> SessionModel:
     token = secrets.token_urlsafe(32)
-    now = datetime.now(timezone.utc)
+    now = utcnow()
     session = SessionModel(
         session_token=token,
         user_id=user.user_id,
@@ -158,19 +161,17 @@ def get_session(db: DbSession, token: str) -> Optional[SessionModel]:
     )
     if not session:
         return None
-    
-    now = datetime.now(timezone.utc)
-    if session.expires_at < now:
+
+    # DB stores naive UTC datetimes — utcnow() returns naive UTC
+    now_naive = utcnow()
+    if session.expires_at < now_naive:
         db.delete(session)
         db.commit()
         return None
 
-    # Only extend the session when more than half its lifetime has elapsed.
-    # This avoids a DB write on every single request (which was causing
-    # "database is locked" contention with the bulk-import WebSocket).
     half_duration = SESSION_DURATION / 2
-    if (session.expires_at - now) < half_duration:
-        session.expires_at = now + SESSION_DURATION
+    if (session.expires_at - now_naive) < half_duration:
+        session.expires_at = now_naive + SESSION_DURATION
         db.add(session)
         db.commit()
 

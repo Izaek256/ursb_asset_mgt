@@ -13,6 +13,7 @@ Access Control Rules:
 """
 
 from datetime import datetime, date, timezone
+from app.utils.time import utcnow
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -311,7 +312,7 @@ def approve_request(
 
     request.status = RequestStatus.APPROVED
     request.reviewed_by = current_user.id
-    request.reviewed_at = datetime.now(timezone.utc)
+    request.reviewed_at = utcnow()
     _log(db, actor=current_user, action="APPROVE_REQUEST", record_id=str(request.request_id), details="Approved asset request")
     # S3-08: Notify Employee of Request Approval
     from app.services.notification_service import create_notification
@@ -347,7 +348,7 @@ def reject_request(
     request.status = RequestStatus.REJECTED
     request.notes = body.notes
     request.reviewed_by = current_user.id
-    request.reviewed_at = datetime.now(timezone.utc)
+    request.reviewed_at = utcnow()
     
     # If asset was assigned, return it to AVAILABLE
     if request.asset_id:
@@ -404,7 +405,7 @@ def assign_request(
     
     request.status = RequestStatus.ASSIGNED
     request.assigned_to = custodian_id
-    request.assigned_at = datetime.now(timezone.utc)
+    request.assigned_at = utcnow()
     
     # Create assignment to final recipient with custodian info in notes
     assignment = Assignment(
@@ -504,7 +505,7 @@ def handover_request(
         raise HTTPException(400, detail="Request must be in Assigned status for handover")
 
     request.status = RequestStatus.READY_FOR_PICKUP
-    request.handed_over_at = datetime.now(timezone.utc)
+    request.handed_over_at = utcnow()
     
     # Update asset status from PENDING_APPROVAL to PENDING_PICKUP to show it's awaiting pickup
     if request.asset_id:
@@ -545,7 +546,7 @@ def pickup_request(
         raise HTTPException(400, detail="Invalid status transition")
 
     request.status = RequestStatus.PICKED_UP
-    request.pickup_confirmed_at = datetime.now(timezone.utc)
+    request.pickup_confirmed_at = utcnow()
     
     # Update asset status to ASSIGNED and change custodian to requester
     if request.asset_id:
@@ -567,7 +568,7 @@ def pickup_request(
                 # Transition the assignment from PENDING_ACCEPTANCE to ACTIVE
                 # This prevents duplicate assignment records
                 existing_assignment.status = AssignmentStatus.ACTIVE
-                existing_assignment.acknowledged_at = datetime.now(timezone.utc)
+                existing_assignment.acknowledged_at = utcnow()
                 existing_assignment.notes = f"{existing_assignment.notes or ''} - Pickup confirmed from request"
             else:
                 # Fallback: create new assignment if no pending assignment found
@@ -580,7 +581,7 @@ def pickup_request(
                     assignment_date=date.today(),
                     status=AssignmentStatus.ACTIVE,
                     notes=f"Asset handed over from request{custodian_ref}",
-                    acknowledged_at=datetime.now(timezone.utc),
+                    acknowledged_at=utcnow(),
                 ))
     
     _log(db, actor=current_user, action="PICKUP_CONFIRMED", record_id=str(request.request_id), details="Pickup confirmed")

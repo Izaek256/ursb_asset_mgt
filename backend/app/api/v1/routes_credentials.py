@@ -3,6 +3,7 @@
 import secrets
 import string
 from datetime import datetime, timedelta, timezone
+from app.utils.time import utcnow
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Header, status, Response
@@ -94,7 +95,7 @@ def get_recent_accounts(
         raise HTTPException(status_code=400, detail="page_size must be between 1 and 50")
     
     # Calculate time threshold (7 days)
-    time_threshold = datetime.now(timezone.utc) - timedelta(days=7)
+    time_threshold = utcnow() - timedelta(days=7)
     
     # Build base query for users created in last 7 days
     query = db.query(User).filter(User.created_at >= time_threshold)
@@ -128,7 +129,7 @@ def get_recent_accounts(
         # Get temporary password metadata if exists and not expired
         temp_pwd = db.query(TemporaryPassword).filter(
             TemporaryPassword.user_id == user.user_id,
-            TemporaryPassword.expires_at > datetime.now(timezone.utc)
+            TemporaryPassword.expires_at > utcnow()
         ).order_by(TemporaryPassword.created_at.desc()).first()
 
         # Determine if password has been revoked (user changed it themselves)
@@ -212,10 +213,10 @@ def regenerate_password(
     db.query(TemporaryPassword).filter(TemporaryPassword.user_id == user_id).delete(synchronize_session=False)
 
     # Store metadata only (no plaintext password)
-    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    expires_at = utcnow() + timedelta(days=7)
     temp_pwd = TemporaryPassword(
         user_id=user_id,
-        created_at=datetime.now(timezone.utc),
+        created_at=utcnow(),
         expires_at=expires_at,
     )
     db.add(temp_pwd)
@@ -228,7 +229,7 @@ def regenerate_password(
         table_affected="users",
         record_id=user_id,
         details=f"Admin {current_user.email} regenerated temporary password for user {target_user.email}",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=utcnow(),
     )
     db.add(audit)
     db.commit()

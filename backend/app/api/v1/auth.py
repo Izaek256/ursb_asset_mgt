@@ -337,8 +337,8 @@ def change_password(
     current_user.password_hash = password_hash
     current_user.password_salt = salt
     # Stamp when user last changed their own password (used by credentials page)
-    from datetime import datetime as _dt, timezone
-    current_user.password_changed_at = _dt.now(timezone.utc)
+    from app.utils.time import utcnow as _utcnow
+    current_user.password_changed_at = _utcnow()
 
     # Invalidate all sessions for this user
     from app.models.session import Session
@@ -350,14 +350,14 @@ def change_password(
 
     # Write audit log for password change
     from app.models.audit_log import AuditLog
-    from datetime import datetime, timezone
+    from app.utils.time import utcnow
     audit = AuditLog(
         user_id=current_user.user_id,
         action="CHANGE_PASSWORD",
         table_affected="users",
         record_id=current_user.user_id,
         details=f"Password changed for user {current_user.email}",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=utcnow(),
     )
     db.add(audit)
     db.commit()
@@ -403,8 +403,8 @@ def change_password_no_session_invalidate(
     current_user.password_hash = password_hash
     current_user.password_salt = salt
     # Stamp when user last changed their own password (used by credentials page)
-    from datetime import datetime as _dt, timezone
-    current_user.password_changed_at = _dt.now(timezone.utc)
+    from app.utils.time import utcnow as _utcnow
+    current_user.password_changed_at = _utcnow()
 
     # Clear any stored temporary passwords so they no longer show on credentials page
     from app.models.temporary_password import TemporaryPassword
@@ -412,14 +412,14 @@ def change_password_no_session_invalidate(
 
     # Write audit log for password change
     from app.models.audit_log import AuditLog
-    from datetime import datetime, timezone
+    from app.utils.time import utcnow
     audit = AuditLog(
         user_id=current_user.user_id,
         action="PASSWORD_CHANGED",
         table_affected="users",
         record_id=current_user.user_id,
         details=f"Password changed for user {current_user.email}",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=utcnow(),
     )
     db.add(audit)
     db.commit()

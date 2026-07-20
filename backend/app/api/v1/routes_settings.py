@@ -1,6 +1,7 @@
 """Settings router: user and system settings endpoints."""
 
 from datetime import datetime, timezone
+from app.utils.time import utcnow
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -105,7 +106,7 @@ def update_user_settings(
             else:
                 setattr(settings, field, value)
 
-    settings.updated_at = datetime.now(timezone.utc)
+    settings.updated_at = utcnow()
     db.add(settings)
     db.add(current_user)
     db.commit()
@@ -166,7 +167,7 @@ def update_system_settings(
             setattr(settings, field, value)
 
     settings.updated_by = current_user.user_id
-    settings.updated_at = datetime.now(timezone.utc)
+    settings.updated_at = utcnow()
     db.add(settings)
     db.commit()
 

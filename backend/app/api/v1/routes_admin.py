@@ -3,6 +3,7 @@
 import secrets
 import string
 from datetime import datetime, date, timedelta, timezone
+from app.utils.time import utcnow
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response
@@ -79,7 +80,7 @@ def _log(db: Session, *, actor: User, action: str, table: str,
         table_affected=table,
         record_id=record_id,
         details=details,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=utcnow(),
     ))
 
 
@@ -273,7 +274,7 @@ def create_user(
         table_affected="users",
         record_id=new_user.user_id,
         details=f"User {new_user.email} created by admin {current_user.email}",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=utcnow(),
     )
     db.add(audit)
     db.commit()
@@ -378,7 +379,7 @@ def update_user_role(
         table_affected="users",
         record_id=target.user_id,
         details=f"User {target.email} role changed from {old_role} to {new_role.value} by {current_user.email}",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=utcnow(),
     )
     # Bug fix — audit_entry was constructed but never staged for commit
     db.add(audit_entry)

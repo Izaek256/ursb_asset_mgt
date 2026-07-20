@@ -4,6 +4,7 @@ Routers call these functions — no business logic lives in route handlers.
 """
 
 from datetime import datetime, date, timezone
+from app.utils.time import utcnow
 from typing import List
 
 from fastapi import HTTPException, status
@@ -364,7 +365,7 @@ def confirm_handover(db: Session, assignment_id: int, custodian_id: int) -> Assi
     try:
         # Custodian confirms handover - asset ready for final recipient pickup
         assignment.status = AssignmentStatus.ACTIVE
-        assignment.acknowledged_at = datetime.now(timezone.utc)
+        assignment.acknowledged_at = utcnow()
         asset.status = AssetStatus.ASSIGNED
 
         audit = AuditLog(
@@ -498,7 +499,7 @@ def request_asset_return(db: Session, assignment_id: int, custodian_id: int) -> 
 
     assignment.status = AssignmentStatus.RETURN_REQUESTED
     assignment.return_requested_by = str(custodian_id)
-    assignment.return_requested_at = datetime.now(timezone.utc)
+    assignment.return_requested_at = utcnow()
 
     audit = AuditLog(
         user_id=str(custodian_id),
@@ -559,7 +560,7 @@ def approve_return_request(db: Session, assignment_id: int, employee_id: int) ->
 
     assignment.status = AssignmentStatus.RETURN_APPROVED
     assignment.return_approved_by = str(employee_id)
-    assignment.return_approved_at = datetime.now(timezone.utc)
+    assignment.return_approved_at = utcnow()
 
     audit = AuditLog(
         user_id=str(employee_id),
@@ -683,7 +684,7 @@ def confirm_receipt(db: Session, assignment_id: int, employee_id: int) -> Assign
         )
 
     # Mark receipt confirmed timestamp
-    assignment.acknowledged_at = datetime.now(timezone.utc)
+    assignment.acknowledged_at = utcnow()
 
     audit = AuditLog(
         user_id=str(employee_id),

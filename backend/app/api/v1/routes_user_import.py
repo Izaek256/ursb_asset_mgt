@@ -5,6 +5,7 @@ import json
 import secrets
 import string
 from datetime import datetime, timedelta, timezone
+from app.utils.time import utcnow
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, WebSocket, WebSocketDisconnect, Query
@@ -28,7 +29,7 @@ _WS_TOKEN_TTL_SECONDS = 30
 
 def _cleanup_ws_tokens():
     """Remove expired tokens from the in-memory store."""
-    now = datetime.now(timezone.utc)
+    now = utcnow()
     expired = [t for t, v in _ws_tokens.items() if v["expires_at"] < now]
     for t in expired:
         del _ws_tokens[t]
@@ -47,7 +48,7 @@ async def get_ws_auth_token(
     _ws_tokens[token] = {
         "user_id": current_user.user_id,
         "email": current_user.email,
-        "expires_at": datetime.now(timezone.utc) + timedelta(seconds=_WS_TOKEN_TTL_SECONDS),
+        "expires_at": utcnow() + timedelta(seconds=_WS_TOKEN_TTL_SECONDS),
     }
     return {"token": token}
 
@@ -282,7 +283,7 @@ async def bulk_import_users(
 
             db.add(TemporaryPassword(
                 user_id=new_user.user_id,
-                expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+                expires_at=utcnow() + timedelta(days=7),
             ))
 
             created_accounts.append(BulkImportAccount(
@@ -299,7 +300,7 @@ async def bulk_import_users(
                 table_affected="users",
                 record_id="bulk",
                 details=f"Bulk import created {len(created_accounts)} user accounts by admin {current_user.email}",
-                timestamp=datetime.now(timezone.utc),
+                timestamp=utcnow(),
             ))
 
         db.commit()
@@ -340,7 +341,7 @@ async def bulk_import_ws(
     # Authenticate via one-time query-param token (avoids cross-origin cookie issues)
     _cleanup_ws_tokens()
     token_data = _ws_tokens.pop(token, None)
-    if token_data is None or token_data["expires_at"] < datetime.now(timezone.utc):
+    if token_data is None or token_data["expires_at"] < utcnow():
         await websocket.close(code=4001, reason="Not authenticated")
         return
 
@@ -388,7 +389,7 @@ async def bulk_import_ws(
             is_active=True,
         )
         temp_pw = TemporaryPassword(
-            expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+            expires_at=utcnow() + timedelta(days=7),
         )
         prepared.append((new_user, temp_pw, {
             'full_name': account_data['full_name'],
@@ -423,7 +424,7 @@ async def bulk_import_ws(
                         table_affected="users",
                         record_id="bulk",
                         details=f"Bulk import created {len(created_accounts)} user accounts by admin {admin_email}",
-                        timestamp=datetime.now(timezone.utc),
+                        timestamp=utcnow(),
                     ))
 
                 db.commit()
