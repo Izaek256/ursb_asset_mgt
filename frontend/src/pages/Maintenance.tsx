@@ -1,6 +1,7 @@
 import React from "react";
 import { apiFetch, useAuth } from "../AuthContext";
 import { ICONS } from "../utils/icons";
+import { fmtDateTime, fmtDate } from "../utils/formatDate";
 import Modal from "../components/Modal";
 import FormInput from "../components/common/FormInput";
 import StatusBadge from "../components/common/badges/StatusBadge";
@@ -305,7 +306,7 @@ export default function Maintenance() {
     },
     {
       header: "Service Date",
-      render: (r) => new Date(r.service_date).toLocaleDateString(),
+      render: (r) => <span className="text-xs">{fmtDateTime(r.service_date)}</span>,
     },
     {
       header: "Provider",
@@ -321,7 +322,7 @@ export default function Maintenance() {
     },
     {
       header: "Next Service",
-      render: (r) => (r.next_service_date ? new Date(r.next_service_date).toLocaleDateString() : "—"),
+      render: (r) => <span className="text-xs">{fmtDate(r.next_service_date)}</span>,
     },
     {
       header: "Status",

@@ -11,6 +11,7 @@ import ConfirmDialog from "../components/ConfirmDialog";
 import PageHeader from "../components/PageHeader";
 import Table, { Column } from "../components/common/Table";
 import Button from "../components/common/Button";
+import { fmtDateTime, fmtDate } from "../utils/formatDate";
 
 interface AssetOption {
   asset_id: string;
@@ -57,74 +58,16 @@ export default function Assignments() {
   const fetchAssignments = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      // Main tab: Show Active and Pending Acceptance assignments
-      let activeAssignments: Assignment[] = [];
-      let pendingAssignments: Assignment[] = [];
-      let acceptedAssignments: Assignment[] = [];
-      let returnApprovedAssignments: Assignment[] = [];
-      let returnRequestedAssignments: Assignment[] = [];
-      
-      if (isEmployee || isCustodian) {
-        // Fetch Active assignments
-        const activeEndpoint = `/assignments?user_id=${user?.user_id}&status=Active`;
-        const activeData = await apiFetch<{ assignments: Assignment[]; total: number }>(activeEndpoint, {});
-        activeAssignments = activeData.assignments;
-        
-        // Fetch Pending Acceptance assignments
-        const pendingEndpoint = `/assignments?user_id=${user?.user_id}&status=${encodeURIComponent("Pending Acceptance")}`;
-        const pendingData = await apiFetch<{ assignments: Assignment[]; total: number }>(pendingEndpoint, {});
-        pendingAssignments = pendingData.assignments;
-        
-        // Fetch Return Requested for Employees to approve/reject
-        if (isEmployee) {
-          const rrEndpoint = `/assignments?user_id=${user?.user_id}&status=${encodeURIComponent("Return Requested")}`;
-          const rrData = await apiFetch<{ assignments: Assignment[]; total: number }>(rrEndpoint, {});
-          returnRequestedAssignments = rrData.assignments;
-        }
-        
-        if (isCustodian) {
-          const acceptedEndpoint = `/assignments?user_id=${user?.user_id}&status=Accepted`;
-          const acceptedData = await apiFetch<{ assignments: Assignment[]; total: number }>(acceptedEndpoint, {});
-          acceptedAssignments = acceptedData.assignments;
-          
-          const raEndpoint = `/assignments?user_id=${user?.user_id}&status=${encodeURIComponent("Return Approved")}`;
-          const raData = await apiFetch<{ assignments: Assignment[]; total: number }>(raEndpoint, {});
-          returnApprovedAssignments = raData.assignments;
-        }
-      } else {
-        // Admin/Manager view
-        const activeEndpoint = `/assignments?status=Active`;
-        const activeData = await apiFetch<{ assignments: Assignment[]; total: number }>(activeEndpoint, {});
-        activeAssignments = activeData.assignments;
-        
-        const pendingEndpoint = `/assignments?status=${encodeURIComponent("Pending Acceptance")}`;
-        const pendingData = await apiFetch<{ assignments: Assignment[]; total: number }>(pendingEndpoint, {});
-        pendingAssignments = pendingData.assignments;
+      // Active tab: all in-flight statuses (Active, Pending Acceptance, Accepted,
+      // Return Requested, Return Approved) in one call
+      const activeEndpoint = isEmployee || isCustodian
+        ? `/assignments?tab=active`
+        : `/assignments?tab=active`;
+      const activeData = await apiFetch<{ assignments: Assignment[]; total: number }>(activeEndpoint, {});
+      setAssignments(activeData.assignments);
 
-        const acceptedEndpoint = `/assignments?status=Accepted`;
-        const acceptedData = await apiFetch<{ assignments: Assignment[]; total: number }>(acceptedEndpoint, {});
-        acceptedAssignments = acceptedData.assignments;
-        
-        const raEndpoint = `/assignments?status=${encodeURIComponent("Return Approved")}`;
-        const raData = await apiFetch<{ assignments: Assignment[]; total: number }>(raEndpoint, {});
-        returnApprovedAssignments = raData.assignments;
-        
-        const rrEndpoint = `/assignments?status=${encodeURIComponent("Return Requested")}`;
-        const rrData = await apiFetch<{ assignments: Assignment[]; total: number }>(rrEndpoint, {});
-        returnRequestedAssignments = rrData.assignments;
-      }
-      
-      // Combine without duplicates
-      const allAssignments = [...activeAssignments, ...pendingAssignments, ...acceptedAssignments, ...returnApprovedAssignments, ...returnRequestedAssignments];
-      const uniqueAssignments = allAssignments.filter((assignment, index, self) =>
-        index === self.findIndex(a => a.assignment_id === assignment.assignment_id)
-      );
-      setAssignments(uniqueAssignments);
-      
-      // History tab: Show Returned assignments
-      const historyEndpoint = isEmployee
-        ? `/assignments?user_id=${user?.user_id}&status=Returned`
-        : `/assignments?status=Returned`;
+      // History tab: terminal statuses (Returned, Declined, Return Rejected) in one call
+      const historyEndpoint = `/assignments?tab=history`;
       const historyData = await apiFetch<{ assignments: Assignment[]; total: number }>(historyEndpoint, {});
       setHistoryAssignments(historyData.assignments);
     } catch (err: any) {
@@ -346,11 +289,36 @@ export default function Assignments() {
   const handleConfirmAssetReturn = async (id: number) => {
     try {
       await apiFetch(`/assignments/${id}/confirm-return`, { method: "POST" });
-      (window as any).toast?.success("Return Confirmed", "Asset is now available.");
+      (window as any).toast?.success("Return Confirmed", "Asset is now available and assignment is closed.");
       fetchAssignments();
     } catch (err: any) {
       (window as any).toast?.error("Confirm Failed", err.message || "Failed to confirm return.");
     }
+  };
+
+  // ── Export helpers ───────────────────────────────────────────────────────────
+  const exportToCSV = (rows: Assignment[], filename: string) => {
+    const headers = ["Assignment ID", "Asset ID", "Asset Name", "Assigned To", "Assigned By", "Assignment Date", "Return Date", "Status", "Acknowledged", "Notes"];
+    const csvRows = rows.map((a) => [
+      a.assignment_id,
+      a.asset_id,
+      a.asset_name || "",
+      a.assigned_to_name || a.assigned_to,
+      a.assigned_by_name || a.assigned_by,
+      a.assignment_date || a.assigned_date || "",
+      a.return_date || "",
+      a.status,
+      a.acknowledged_at ? fmtDateTime(a.acknowledged_at) : "",
+      (a.notes || "").replace(/,/g, ";"),
+    ]);
+    const content = [headers, ...csvRows].map((r) => r.join(",")).join("\n");
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const historyColumns: Column<Assignment>[] = [
@@ -375,13 +343,12 @@ export default function Assignments() {
       header: "Assignment Date",
       render: (a) => {
         const d = a.assignment_date || a.assigned_date;
-        return d ? new Date(d).toLocaleDateString() : "—";
+        return <span className="text-xs">{fmtDateTime(d)}</span>;
       },
     },
     {
       header: "Return Date",
-      render: (a) =>
-        a.return_date ? new Date(a.return_date).toLocaleDateString() : "—",
+      render: (a) => <span className="text-xs">{fmtDate(a.return_date)}</span>,
     },
     {
       header: "Status",
@@ -415,77 +382,88 @@ export default function Assignments() {
       header: "Assignment Date",
       render: (a) => {
         const d = a.assignment_date || a.assigned_date;
-        return d ? new Date(d).toLocaleDateString() : "—";
+        return <span className="text-xs">{fmtDateTime(d)}</span>;
       },
     },
     {
       header: "Return Date",
-      render: (a) =>
-        a.return_date ? new Date(a.return_date).toLocaleDateString() : "—",
+      render: (a) => <span className="text-xs">{fmtDate(a.return_date)}</span>,
     },
     {
       header: "Status",
-      render: (a) => (
-        <div className="flex flex-col gap-1">
-          <StatusBadge status={a.status} />
-          {isEmployee && a.status === "Active" && !a.acknowledged_at && String(a.assigned_to) === String(user?.user_id) && (
-            <span className="text-[10px] text-amber-600 font-semibold">⏳ Awaiting your receipt</span>
-          )}
-        </div>
-      ),
+      render: (a) => <StatusBadge status={a.status} />,
     },
-    
     {
       header: "Actions",
-      render: (a) => (
-        <div className="flex gap-2 select-none">
-          {a.status === "Pending Acceptance" && String(a.assigned_to) === String(user?.user_id) && (
-            <>
+      render: (a) => {
+        // Employee: accept/decline pending assignments
+        if (isEmployee && a.status === "Pending Acceptance" && String(a.assigned_to) === String(user?.user_id)) {
+          return (
+            <div className="flex gap-2 select-none">
               <Button variant="success" className="!py-1.5 !px-3 text-xs" onClick={() => handleAccept(a.assignment_id)}>
                 Accept
               </Button>
               <Button variant="danger-outline" className="!py-1.5 !px-3 text-xs" onClick={() => handleDecline(a.assignment_id)}>
                 Decline
               </Button>
-            </>
-          )}
-          {isCustodian && a.status === "Accepted" && (
-            <Button variant="primary" className="!py-1.5 !px-3 text-xs" onClick={() => handleConfirmHandover(a.assignment_id)}>
-              Confirm Handover
-            </Button>
-          )}
-          {isEmployee && a.status === "Active" && !a.acknowledged_at && String(a.assigned_to) === String(user?.user_id) && (
+            </div>
+          );
+        }
+        // Employee: confirm receipt after custodian handover (Active but not yet acknowledged)
+        if (isEmployee && a.status === "Active" && !a.acknowledged_at && String(a.assigned_to) === String(user?.user_id)) {
+          return (
             <Button variant="success" className="!py-1.5 !px-3 text-xs" onClick={() => handleConfirmReceipt(a.assignment_id)}>
               Confirm Receipt
             </Button>
-          )}
-          {isCustodian && a.status === "Active" && (
-            <Button variant="danger-inverse" className="!py-1.5 !px-3 text-xs" onClick={() => handleRequestReturn(a.assignment_id)}>
-              Request Asset Return
-            </Button>
-          )}
-          {a.status === "Return Requested" && String(a.assigned_to) === String(user?.user_id) && (
-            <>
+          );
+        }
+        // Employee: approve/reject return requests
+        if (isEmployee && a.status === "Return Requested" && String(a.assigned_to) === String(user?.user_id)) {
+          return (
+            <div className="flex gap-2 select-none">
               <Button variant="success" className="!py-1.5 !px-3 text-xs" onClick={() => handleApproveReturn(a.assignment_id)}>
-                Approve
+                Approve Return
               </Button>
               <Button variant="danger-outline" className="!py-1.5 !px-3 text-xs" onClick={() => handleRejectReturn(a.assignment_id)}>
-                Reject
+                Reject Return
               </Button>
-            </>
-          )}
-          {isCustodian && a.status === "Return Approved" && (
+            </div>
+          );
+        }
+        // Custodian: confirm handover after employee accepts
+        if (isCustodian && a.status === "Accepted") {
+          return (
+            <Button variant="primary" className="!py-1.5 !px-3 text-xs" onClick={() => handleConfirmHandover(a.assignment_id)}>
+              Confirm Handover
+            </Button>
+          );
+        }
+        // Custodian: request asset return from an active assignment
+        if (isCustodian && a.status === "Active") {
+          return (
+            <Button variant="danger-inverse" className="!py-1.5 !px-3 text-xs" onClick={() => handleRequestReturn(a.assignment_id)}>
+              Request Return
+            </Button>
+          );
+        }
+        // Custodian: confirm return after employee approves
+        if (isCustodian && a.status === "Return Approved") {
+          return (
             <Button variant="primary" className="!py-1.5 !px-3 text-xs" onClick={() => handleConfirmAssetReturn(a.assignment_id)}>
               Confirm Return
             </Button>
-          )}
-          {isAdminOrManager && (a.status === "Pending Acceptance" || a.status === "Accepted") && (
+          );
+        }
+        // Admin/Manager: cancel assignments that haven't been handed over yet
+        if (isAdminOrManager && (a.status === "Pending Acceptance" || a.status === "Accepted")) {
+          return (
             <Button variant="danger-outline" className="!py-1.5 !px-3 text-xs" onClick={() => setCancelAssignConfirm(a)}>
-              Cancel
+              Cancel Assignment
             </Button>
-          )}
-        </div>
-      ),
+          );
+        }
+        return <span className="text-xs text-ink-dim">—</span>;
+      },
     },
   ];
 
@@ -540,6 +518,7 @@ export default function Assignments() {
         </Tab.List>
 
         <Tab.Panels className="mt-2">
+          {/* Active Assignments Tab */}
           <Tab.Panel>
             {isLoading ? (
               <div className="flex justify-center py-16">
@@ -552,15 +531,32 @@ export default function Assignments() {
                 icon={<ICONS.assignments className="w-6 h-6 text-ink-icon stroke-[2.2]" />}
               />
             ) : (
-              <Table
-                data={assignments}
-                columns={columns}
-                rowKey={(a) => a.assignment_id}
-                emptyMessage="No assignments found."
-              />
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-ink-dim font-medium">
+                    {assignments.length} assignment{assignments.length !== 1 ? "s" : ""}
+                  </span>
+                  <Button
+                    variant="outline"
+                    className="!py-1.5 !px-3 text-xs"
+                    onClick={() => exportToCSV(assignments, `active-assignments-${new Date().toISOString().slice(0, 10)}.csv`)}
+                  >
+                    <ICONS.download className="w-3.5 h-3.5 mr-1.5 stroke-[2.2]" />
+                    Export CSV
+                  </Button>
+                </div>
+                <Table
+                  data={assignments}
+                  columns={columns}
+                  rowKey={(a) => a.assignment_id}
+                  emptyMessage="No assignments found."
+                  pageSize={50}
+                />
+              </div>
             )}
           </Tab.Panel>
 
+          {/* History Tab */}
           <Tab.Panel>
             {isLoading ? (
               <div className="flex justify-center py-16">
@@ -569,16 +565,32 @@ export default function Assignments() {
             ) : historyAssignments.length === 0 ? (
               <EmptyState
                 title="No history found"
-                description="There are no returned assignments in the history."
+                description="There are no closed assignments in the history yet."
                 icon={<ICONS.assignments className="w-6 h-6 text-ink-icon stroke-[2.2]" />}
               />
             ) : (
-              <Table
-                data={historyAssignments}
-                columns={historyColumns}
-                rowKey={(a) => a.assignment_id}
-                emptyMessage="No history found."
-              />
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-ink-dim font-medium">
+                    {historyAssignments.length} record{historyAssignments.length !== 1 ? "s" : ""}
+                  </span>
+                  <Button
+                    variant="outline"
+                    className="!py-1.5 !px-3 text-xs"
+                    onClick={() => exportToCSV(historyAssignments, `assignment-history-${new Date().toISOString().slice(0, 10)}.csv`)}
+                  >
+                    <ICONS.download className="w-3.5 h-3.5 mr-1.5 stroke-[2.2]" />
+                    Export CSV
+                  </Button>
+                </div>
+                <Table
+                  data={historyAssignments}
+                  columns={historyColumns}
+                  rowKey={(a) => a.assignment_id}
+                  emptyMessage="No history found."
+                  pageSize={50}
+                />
+              </div>
             )}
           </Tab.Panel>
         </Tab.Panels>

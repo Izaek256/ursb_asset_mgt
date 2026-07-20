@@ -3,7 +3,7 @@ Assignment business logic service.
 Routers call these functions — no business logic lives in route handlers.
 """
 
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from typing import List
 
 from fastapi import HTTPException, status
@@ -364,7 +364,7 @@ def confirm_handover(db: Session, assignment_id: int, custodian_id: int) -> Assi
     try:
         # Custodian confirms handover - asset ready for final recipient pickup
         assignment.status = AssignmentStatus.ACTIVE
-        assignment.acknowledged_at = datetime.utcnow()
+        assignment.acknowledged_at = datetime.now(timezone.utc)
         asset.status = AssetStatus.ASSIGNED
 
         audit = AuditLog(
@@ -498,7 +498,7 @@ def request_asset_return(db: Session, assignment_id: int, custodian_id: int) -> 
 
     assignment.status = AssignmentStatus.RETURN_REQUESTED
     assignment.return_requested_by = str(custodian_id)
-    assignment.return_requested_at = datetime.utcnow()
+    assignment.return_requested_at = datetime.now(timezone.utc)
 
     audit = AuditLog(
         user_id=str(custodian_id),
@@ -559,7 +559,7 @@ def approve_return_request(db: Session, assignment_id: int, employee_id: int) ->
 
     assignment.status = AssignmentStatus.RETURN_APPROVED
     assignment.return_approved_by = str(employee_id)
-    assignment.return_approved_at = datetime.utcnow()
+    assignment.return_approved_at = datetime.now(timezone.utc)
 
     audit = AuditLog(
         user_id=str(employee_id),
@@ -683,7 +683,7 @@ def confirm_receipt(db: Session, assignment_id: int, employee_id: int) -> Assign
         )
 
     # Mark receipt confirmed timestamp
-    assignment.acknowledged_at = datetime.utcnow()
+    assignment.acknowledged_at = datetime.now(timezone.utc)
 
     audit = AuditLog(
         user_id=str(employee_id),
@@ -788,9 +788,12 @@ def confirm_asset_return(db: Session, assignment_id: int, custodian_id: int) -> 
         )
 
     try:
+        asset_name = asset.asset_name
+        asset_id_str = assignment.asset_id
+
         assignment.status = AssignmentStatus.RETURNED
         assignment.return_date = date.today()
-        
+
         validate_status_transition(asset.status, AssetStatus.AVAILABLE)
         asset.status = AssetStatus.AVAILABLE
         asset.current_custodian_id = None
@@ -800,9 +803,43 @@ def confirm_asset_return(db: Session, assignment_id: int, custodian_id: int) -> 
             action="RETURN_CONFIRMED",
             table_affected="assignments",
             record_id=str(assignment_id),
-            details=f"Return confirmed for assignment {assignment_id} by custodian {custodian_id}. Asset {assignment.asset_id} is now Available."
+            details=(
+                f"[RETURN_COMPLETION] Return confirmed for assignment {assignment_id} "
+                f"by custodian {custodian_id}. Asset {asset_id_str} ({asset_name}) "
+                f"returned by employee {assignment.assigned_to} and is now Available."
+            ),
         )
         db.add(audit)
+
+        # Notify all supervisory roles that the return is complete
+        from app.services.notification_service import create_notification
+        notify_message = (
+            f"Asset '{asset_name}' ({asset_id_str}) has been returned by the employee "
+            f"and confirmed by the custodian. Assignment #{assignment_id} is now closed. "
+            f"The asset is back in Available status."
+        )
+        for role in ("ASSET_MANAGER", "SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR"):
+            create_notification(
+                db=db,
+                user_id=role,
+                title="Asset Return Completed",
+                message=notify_message,
+                notification_type="RETURN_COMPLETED",
+                related_asset_id=asset_id_str,
+            )
+        # Notify the employee whose assignment was closed
+        create_notification(
+            db=db,
+            user_id=str(assignment.assigned_to),
+            title="Asset Return Confirmed",
+            message=(
+                f"Your return of asset '{asset_name}' ({asset_id_str}) has been "
+                f"confirmed by the custodian. Assignment #{assignment_id} is now closed."
+            ),
+            notification_type="RETURN_COMPLETED",
+            related_asset_id=asset_id_str,
+        )
+
         db.commit()
         db.refresh(assignment)
         return assignment

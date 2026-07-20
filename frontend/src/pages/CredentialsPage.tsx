@@ -13,6 +13,7 @@ import ErrorMessage from "../components/ErrorMessage";
 import { filterInputCls, filterSelectCls } from "../components/common/FilterBar";
 import Table, { Column } from "../components/common/Table";
 import Modal from "../components/Modal";
+import { fmtDateTime } from "../utils/formatDate";
 
 interface RecentAccount {
   user_id: string;
@@ -413,7 +414,7 @@ export default function CredentialsPage() {
     },
     {
       header: "Created At",
-      render: (a) => new Date(a.created_at).toLocaleString(),
+      render: (a) => <span className="text-xs">{fmtDateTime(a.created_at)}</span>,
     },
     {
       header: "Password Status",
@@ -658,7 +659,7 @@ export default function CredentialsPage() {
                 <div className="text-[10px] text-ink-dim font-bold uppercase tracking-widest mb-2 flex items-center justify-between">
                   <span>Temporary Password</span>
                   <span className="text-[9px] text-ink-dim/60 normal-case font-medium bg-sky-page/50 px-2 py-0.5 rounded-full">
-                    Active until {new Date(regenResult.expires_at).toLocaleDateString()}
+                    Active until {new Date(regenResult.expires_at).toLocaleString()}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 group">

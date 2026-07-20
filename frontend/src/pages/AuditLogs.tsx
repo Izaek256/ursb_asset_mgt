@@ -6,6 +6,7 @@ import Button from "../components/common/Button";
 import FilterBar, { FilterField, filterInputCls, filterSelectCls } from "../components/common/FilterBar";
 import ErrorMessage from "../components/ErrorMessage";
 import PageHeader from "../components/PageHeader";
+import { fmtDateTime } from "../utils/formatDate";
 
 function formatActionDescription(log: AuditLog): string {
   const action = log.action.replace(/_/g, " ");
@@ -71,7 +72,7 @@ export default function AuditLogs() {
     {
       header: "Timestamp",
       render: (l) => (
-        <span className="text-xs text-ink-dim">{new Date(l.timestamp).toLocaleString()}</span>
+        <span className="text-xs text-ink-dim">{fmtDateTime(l.timestamp)}</span>
       ),
     },
     { header: "Performed By", render: (l) => l.user_name },

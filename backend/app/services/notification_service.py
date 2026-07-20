@@ -33,10 +33,21 @@ def create_notification(
         related_asset_id (str, optional): ID of the related asset, if any.
     """
     try:
-        # Check if user_id is a role name (either matching enum values or string comparison)
+        # Check if user_id is a role name (either matching enum values or human-readable names)
         is_role = False
         try:
             role_values = [r.value for r in UserRole]
+            # Also map human-readable role names to enum values
+            role_aliases = {
+                "Asset Manager": UserRole.ASSET_MANAGER.value,
+                "Asset Custodian": UserRole.ASSET_CUSTODIAN.value,
+                "Employee": UserRole.EMPLOYEE.value,
+                "System Administrator": UserRole.SYSTEM_ADMINISTRATOR.value,
+                "Super System Administrator": UserRole.SUPER_SYSTEM_ADMINISTRATOR.value,
+            }
+            # Normalise alias → enum value before checking
+            if user_id in role_aliases:
+                user_id = role_aliases[user_id]
             if user_id in role_values:
                 is_role = True
         except Exception:

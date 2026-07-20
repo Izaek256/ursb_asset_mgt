@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import Column, DateTime, Integer
 from sqlalchemy.orm import Mapped, mapped_column
@@ -16,5 +16,5 @@ class TemporaryPassword(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    expires_at = Column(DateTime, default=lambda: datetime.utcnow() + timedelta(days=7), nullable=False)
+    expires_at = Column(DateTime, default=lambda: datetime.now(timezone.utc) + timedelta(days=7), nullable=False)
     viewed = Column(Integer, default=0, nullable=False)  # Track if password was shown

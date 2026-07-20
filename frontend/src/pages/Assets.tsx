@@ -16,6 +16,7 @@ import excelIcon from "../assets/icons8-export-excel-50.png";
 import pdfIcon from "../assets/icons8-export-pdf-50.png";
 import BulkImportModal from "../components/assets/BulkImportModal";
 import { hasActionPermission } from "../utils/rbac";
+import { fmtDate } from "../utils/formatDate";
 
 interface AssetRow {
   asset_id: string;
@@ -230,7 +231,7 @@ export default function Assets() {
     },
     {
       header: "Acquired",
-      render: (a) => <span className="text-xs text-ink-dim">{a.acquisition_date}</span>,
+      render: (a) => <span className="text-xs text-ink-dim">{fmtDate(a.acquisition_date)}</span>,
     },
     {
       header: "Actions",

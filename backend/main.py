@@ -1,12 +1,43 @@
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from sqlalchemy import text
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
 
 load_dotenv()
+
+
+def _utc_iso(obj):
+    """Recursively walk a JSON-serialisable object and ensure all naive datetime
+    strings are returned with a 'Z' suffix so browsers parse them as UTC."""
+    if isinstance(obj, datetime):
+        if obj.tzinfo is None:
+            return obj.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
+        return obj.isoformat().replace("+00:00", "Z")
+    if isinstance(obj, str):
+        # Stamp bare ISO datetime strings (no tz suffix) that came from the DB
+        # Pattern: YYYY-MM-DDTHH:MM:SS or YYYY-MM-DD HH:MM:SS (with optional micros)
+        import re
+        if re.match(r'^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}', obj) and not obj.endswith('Z') and '+' not in obj and obj.count('-') >= 2:
+            # Replace space separator with T and append Z
+            return obj.replace(' ', 'T') + 'Z'
+        return obj
+    if isinstance(obj, dict):
+        return {k: _utc_iso(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_utc_iso(i) for i in obj]
+    return obj
+
+
+class UTCJSONResponse(JSONResponse):
+    """JSONResponse subclass that stamps all naive datetimes with Z (UTC)."""
+    def render(self, content) -> bytes:
+        return super().render(_utc_iso(jsonable_encoder(content)))
 
 
 @asynccontextmanager
@@ -94,6 +125,7 @@ app = FastAPI(
     title=os.getenv("APP_NAME", "URSB Asset Management"),
     debug=os.getenv("DEBUG", "true").lower() == "true",
     lifespan=lifespan,
+    default_response_class=UTCJSONResponse,
 )
 
 cors_origins = os.getenv(

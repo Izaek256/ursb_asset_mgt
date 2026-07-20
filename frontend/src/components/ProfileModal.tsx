@@ -1,5 +1,6 @@
 import { useAuth } from "../AuthContext";
 import Button from "./common/Button";
+import { fmtDateTime } from "../utils/formatDate";
 
 interface Props {
   open: boolean;
@@ -64,7 +65,7 @@ export default function ProfileModal({ open, onClose }: Props) {
             <div className="profile-detail-row">
               <span className="profile-detail-label">Member Since</span>
               <span className="profile-detail-value">
-                {new Date(user.created_at).toLocaleDateString()}
+                {fmtDateTime(user.created_at)}
               </span>
             </div>
           )}

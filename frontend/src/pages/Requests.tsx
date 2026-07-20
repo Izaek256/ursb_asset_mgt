@@ -13,6 +13,7 @@ import PageHeader from "../components/PageHeader";
 import Table, { Column } from "../components/common/Table";
 import Button from "../components/common/Button";
 import FilterBar, { FilterField, filterInputCls, filterSelectCls } from "../components/common/FilterBar";
+import { fmtDateTime, fmtDate } from "../utils/formatDate";
 
 interface AssetOption {
   asset_id: string;
@@ -438,11 +439,11 @@ export default function Requests() {
     },
     {
       header: "Required By",
-      render: (r) => (r.required_by_date ? new Date(r.required_by_date).toLocaleDateString() : "—"),
+      render: (r) => <span className="text-xs">{fmtDate(r.required_by_date)}</span>,
     },
     {
       header: "Requested Date",
-      render: (r) => new Date(r.requested_date).toLocaleDateString(),
+      render: (r) => <span className="text-xs">{fmtDateTime(r.requested_date)}</span>,
     },
     {
       header: "Actions",

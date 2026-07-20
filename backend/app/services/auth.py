@@ -1,7 +1,7 @@
 import hashlib
 import hmac
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import HTTPException
@@ -73,7 +73,7 @@ LOCKOUT_DURATION = timedelta(minutes=15)
 
 
 def is_account_locked(user: User) -> bool:
-    return bool(user.locked_until and user.locked_until > datetime.utcnow())
+    return bool(user.locked_until and user.locked_until > datetime.now(timezone.utc))
 
 
 def reset_failed_login_attempts(db: DbSession, user: User) -> None:
@@ -87,7 +87,7 @@ def reset_failed_login_attempts(db: DbSession, user: User) -> None:
 def register_failed_login_attempt(db: DbSession, user: User) -> None:
     user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
     if user.failed_login_attempts >= LOCKOUT_THRESHOLD:
-        user.locked_until = datetime.utcnow() + LOCKOUT_DURATION
+        user.locked_until = datetime.now(timezone.utc) + LOCKOUT_DURATION
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -135,7 +135,7 @@ def authenticate_user(db: DbSession, email: str, password: str) -> Optional[User
 
 def create_session(db: DbSession, user: User) -> SessionModel:
     token = secrets.token_urlsafe(32)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     session = SessionModel(
         session_token=token,
         user_id=user.user_id,
@@ -159,7 +159,7 @@ def get_session(db: DbSession, token: str) -> Optional[SessionModel]:
     if not session:
         return None
     
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     if session.expires_at < now:
         db.delete(session)
         db.commit()

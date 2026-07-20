@@ -12,7 +12,7 @@ Access Control Rules:
 - PUT /api/requests/{id}/cancel — Employee (own pending requests), Asset Manager, Super System Administrator
 """
 
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -202,7 +202,7 @@ def create_request(
     from app.services.notification_service import create_notification
     create_notification(
         db=db,
-        user_id="Asset Manager",
+        user_id="ASSET_MANAGER",
         title="New Asset Request Submitted",
         message=f"A new asset request has been submitted by user {current_user.email} (Request ID: {request.request_id}).",
         notification_type="REQUEST_SUBMITTED",
@@ -311,7 +311,7 @@ def approve_request(
 
     request.status = RequestStatus.APPROVED
     request.reviewed_by = current_user.id
-    request.reviewed_at = datetime.utcnow()
+    request.reviewed_at = datetime.now(timezone.utc)
     _log(db, actor=current_user, action="APPROVE_REQUEST", record_id=str(request.request_id), details="Approved asset request")
     # S3-08: Notify Employee of Request Approval
     from app.services.notification_service import create_notification
@@ -347,7 +347,7 @@ def reject_request(
     request.status = RequestStatus.REJECTED
     request.notes = body.notes
     request.reviewed_by = current_user.id
-    request.reviewed_at = datetime.utcnow()
+    request.reviewed_at = datetime.now(timezone.utc)
     
     # If asset was assigned, return it to AVAILABLE
     if request.asset_id:
@@ -404,7 +404,7 @@ def assign_request(
     
     request.status = RequestStatus.ASSIGNED
     request.assigned_to = custodian_id
-    request.assigned_at = datetime.utcnow()
+    request.assigned_at = datetime.now(timezone.utc)
     
     # Create assignment to final recipient with custodian info in notes
     assignment = Assignment(
@@ -457,16 +457,15 @@ def custodian_cancel_request(
     # Return asset to AVAILABLE and clear custodian
     if request.asset_id:
         asset = db.query(Asset).filter(Asset.asset_id == request.asset_id).first()
-        if asset and asset.status in {AssetStatus.ASSIGNED, AssetStatus.PENDING_APPROVAL}:
-            validate_status_transition(asset.status, AssetStatus.AVAILABLE)
+        if asset and asset.status in {AssetStatus.ASSIGNED, AssetStatus.PENDING_APPROVAL, AssetStatus.PENDING_ACCEPTANCE, AssetStatus.PENDING_PICKUP}:
             asset.status = AssetStatus.AVAILABLE
             asset.current_custodian_id = None
             
-            # Close the active assignment
+            # Cancel the pending assignment for this request
             from app.models.assignment import Assignment, AssignmentStatus
             existing_assignment = db.query(Assignment).filter(
                 Assignment.asset_id == asset.asset_id,
-                Assignment.status == AssignmentStatus.ACTIVE
+                Assignment.status.in_([AssignmentStatus.PENDING_ACCEPTANCE, AssignmentStatus.ACCEPTED, AssignmentStatus.ACTIVE])
             ).first()
             if existing_assignment:
                 existing_assignment.status = AssignmentStatus.RETURNED
@@ -505,7 +504,7 @@ def handover_request(
         raise HTTPException(400, detail="Request must be in Assigned status for handover")
 
     request.status = RequestStatus.READY_FOR_PICKUP
-    request.handed_over_at = datetime.utcnow()
+    request.handed_over_at = datetime.now(timezone.utc)
     
     # Update asset status from PENDING_APPROVAL to PENDING_PICKUP to show it's awaiting pickup
     if request.asset_id:
@@ -546,7 +545,7 @@ def pickup_request(
         raise HTTPException(400, detail="Invalid status transition")
 
     request.status = RequestStatus.PICKED_UP
-    request.pickup_confirmed_at = datetime.utcnow()
+    request.pickup_confirmed_at = datetime.now(timezone.utc)
     
     # Update asset status to ASSIGNED and change custodian to requester
     if request.asset_id:
@@ -556,34 +555,40 @@ def pickup_request(
             asset.status = AssetStatus.ASSIGNED
             asset.current_custodian_id = str(request.requested_by)
             
-            # Update assignment record
+            # Update the existing assignment created from /assign endpoint
             from app.models.assignment import Assignment, AssignmentStatus
             existing_assignment = db.query(Assignment).filter(
                 Assignment.asset_id == asset.asset_id,
-                Assignment.status == AssignmentStatus.ACTIVE
+                Assignment.assigned_to == str(request.requested_by),
+                Assignment.status == AssignmentStatus.PENDING_ACCEPTANCE
             ).first()
-            if existing_assignment:
-                # Mark as returned since custody is being transferred to requester
-                existing_assignment.status = AssignmentStatus.RETURNED
-                existing_assignment.return_date = date.today()
-                existing_assignment.notes = f"{existing_assignment.notes or ''} - Handover completed to requester"
             
-            # Create new assignment to requester
-            db.add(Assignment(
-                asset_id=asset.asset_id,
-                assigned_to=str(request.requested_by),
-                assigned_by=str(request.assigned_to),  # Custodian who handed over
-                assignment_date=date.today(),
-                status=AssignmentStatus.ACTIVE,
-                notes="Asset handed over from request",
-            ))
+            if existing_assignment:
+                # Transition the assignment from PENDING_ACCEPTANCE to ACTIVE
+                # This prevents duplicate assignment records
+                existing_assignment.status = AssignmentStatus.ACTIVE
+                existing_assignment.acknowledged_at = datetime.now(timezone.utc)
+                existing_assignment.notes = f"{existing_assignment.notes or ''} - Pickup confirmed from request"
+            else:
+                # Fallback: create new assignment if no pending assignment found
+                # Include custodian reference so custodian can see it
+                custodian_ref = f" [Custodian: {request.assigned_to}:]" if request.assigned_to else ""
+                db.add(Assignment(
+                    asset_id=asset.asset_id,
+                    assigned_to=str(request.requested_by),
+                    assigned_by=str(request.assigned_to),  # Custodian who handed over
+                    assignment_date=date.today(),
+                    status=AssignmentStatus.ACTIVE,
+                    notes=f"Asset handed over from request{custodian_ref}",
+                    acknowledged_at=datetime.now(timezone.utc),
+                ))
     
     _log(db, actor=current_user, action="PICKUP_CONFIRMED", record_id=str(request.request_id), details="Pickup confirmed")
     # Notify Asset Managers and Super System Administrators that pickup was confirmed
     from app.services.notification_service import create_notification
     create_notification(
         db=db,
-        user_id="Asset Manager",
+        user_id="ASSET_MANAGER",
         title="Asset Pickup Confirmed",
         message=f"Request #{request.request_id} has been picked up by the requester. The asset is now assigned to them.",
         notification_type="PICKUP_CONFIRMED",
@@ -645,13 +650,21 @@ def cancel_request(
 
     request.status = RequestStatus.CANCELLED
     
-    # If asset was assigned, return it to AVAILABLE
+    # If asset was assigned, return it to AVAILABLE and close any pending assignment
     if request.asset_id:
         asset = db.query(Asset).filter(Asset.asset_id == request.asset_id).first()
-        if asset and asset.status in {AssetStatus.ASSIGNED, AssetStatus.PENDING_APPROVAL, AssetStatus.PENDING_PICKUP}:
-            validate_status_transition(asset.status, AssetStatus.AVAILABLE)
+        if asset and asset.status in {AssetStatus.ASSIGNED, AssetStatus.PENDING_APPROVAL, AssetStatus.PENDING_ACCEPTANCE, AssetStatus.PENDING_PICKUP}:
             asset.status = AssetStatus.AVAILABLE
             asset.current_custodian_id = None
+            
+            # Cancel the pending/accepted assignment
+            existing_assignment = db.query(Assignment).filter(
+                Assignment.asset_id == asset.asset_id,
+                Assignment.status.in_([AssignmentStatus.PENDING_ACCEPTANCE, AssignmentStatus.ACCEPTED, AssignmentStatus.ACTIVE])
+            ).first()
+            if existing_assignment:
+                existing_assignment.status = AssignmentStatus.RETURNED
+                existing_assignment.return_date = date.today()
     
     _log(db, actor=current_user, action="CANCEL_REQUEST", record_id=str(request.request_id), details="Cancelled asset request")
     db.commit()

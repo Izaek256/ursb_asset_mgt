@@ -7,7 +7,7 @@ Access Control Rules:
 - GET /api/assignments/{assignment_id} — Asset Manager, Super System Administrator, System Administrator (read-only)
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -155,77 +155,96 @@ def list_assignments(
     asset_id: Optional[str] = None,
     user_id: Optional[str] = None,
     status: Optional[str] = None,
-    assignment_type: Optional[str] = None,  # "final_handover" to show only handovers to requesters
+    tab: Optional[str] = None,  # "active" or "history" — returns correct status set for each tab
+    assignment_type: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List assignments with optional filters. All authenticated roles can view their own assignments. Admins/managers can view all. SRS AM-A04."""
+    """List assignments with optional filters. All authenticated roles can view their own assignments. Admins/managers can view all."""
     from app.models.asset import Asset
-    from sqlalchemy import exists
+    from sqlalchemy import exists, or_
 
-    # Helper: subquery that keeps only assignments whose asset still exists in the DB
+    # Keep only assignments whose asset still exists in the DB
     def _with_existing_asset(q):
-        return q.filter(
-            exists().where(Asset.asset_id == Assignment.asset_id)
-        )
+        return q.filter(exists().where(Asset.asset_id == Assignment.asset_id))
 
-    # Roles that can view all assignments
+    # Statuses that belong in the Active Assignments tab
+    ACTIVE_TAB_STATUSES = [
+        AssignmentStatus.ACTIVE,
+        AssignmentStatus.PENDING_ACCEPTANCE,
+        AssignmentStatus.ACCEPTED,
+        AssignmentStatus.RETURN_REQUESTED,
+        AssignmentStatus.RETURN_APPROVED,
+    ]
+
+    # Statuses that belong in the History tab
+    HISTORY_TAB_STATUSES = [
+        AssignmentStatus.RETURNED,
+        AssignmentStatus.DECLINED,
+        AssignmentStatus.RETURN_REJECTED,
+    ]
+
     can_view_all = current_user.role in {
         UserRole.SUPER_SYSTEM_ADMINISTRATOR,
         UserRole.SYSTEM_ADMINISTRATOR,
-        UserRole.ASSET_MANAGER
+        UserRole.ASSET_MANAGER,
     }
-    
-    # Employees and custodians can only view their own assignments by default
+
+    # Employees and custodians are always scoped to their own assignments
     if current_user.role in {UserRole.EMPLOYEE, UserRole.ASSET_CUSTODIAN}:
-        user_id = int(current_user.id)
-    elif user_id is not None and not can_view_all:
-        # Non-admin users cannot filter by other user IDs
-        raise HTTPException(403, detail="Not authorized to view other users' assignments")
-    
-    if asset_id:
-        assignments = assignment_service.get_assignment_history(db, asset_id)
-    elif user_id is not None:
-        # When user_id is provided, optionally filter by status
-        if status:
-            from sqlalchemy import or_
-            # Custom query to filter by both user_id and status
-            if current_user.role == UserRole.ASSET_CUSTODIAN:
-                query = db.query(Assignment).filter(
-                    or_(
-                        Assignment.assigned_to == str(user_id),
-                        Assignment.notes.like(f"%[Custodian: {user_id}:%")
-                    )
-                )
-            else:
-                query = db.query(Assignment).filter(Assignment.assigned_to == str(user_id))
-            try:
-                query = query.filter(Assignment.status == AssignmentStatus(status))
-            except ValueError:
-                raise HTTPException(400, detail="Invalid status")
-            assignments = _with_existing_asset(query).order_by(Assignment.assignment_date.desc(), Assignment.assignment_id.desc()).all()
-        else:
-            # get_user_assignments returns Active+ReturnRequested for the user;
-            # filter out orphaned assets inline
-            base = db.query(Assignment).filter(
-                Assignment.assigned_to == str(user_id),
-                Assignment.status.in_([AssignmentStatus.ACTIVE, AssignmentStatus.RETURN_REQUESTED]),
-            )
-            assignments = _with_existing_asset(base).order_by(Assignment.assignment_date.desc(), Assignment.assignment_id.desc()).all()
+        effective_user_id = str(current_user.id)
     else:
-        # Only admins/managers can view all assignments without filters
-        if not can_view_all:
-            raise HTTPException(403, detail="Not authorized to view all assignments")
-        query = db.query(Assignment)
-        if status:
-            try:
-                query = query.filter(Assignment.status == AssignmentStatus(status))
-            except ValueError:
-                raise HTTPException(400, detail="Invalid status")
-        # Filter to show only final handovers to requesters (not internal custodian assignments)
-        if assignment_type == "final_handover":
-            query = query.filter(Assignment.notes.like("%Asset handed over from request%"))
-        assignments = _with_existing_asset(query).order_by(Assignment.assignment_date.desc(), Assignment.assignment_id.desc()).all()
+        effective_user_id = str(user_id) if user_id is not None else None
+
+    if asset_id:
+        # Return full history for a specific asset (admin/manager use only)
+        assignments = assignment_service.get_assignment_history(db, asset_id)
+        return AssignmentListResponse(
+            assignments=[_serialize_assignment(a, db) for a in assignments],
+            total=len(assignments),
+        )
+
+    # Build base query scoped to the right user(s)
+    if effective_user_id is not None:
+        if current_user.role == UserRole.ASSET_CUSTODIAN:
+            # Custodians see assignments they are:
+            # 1. directly assigned to (assigned_to)
+            # 2. named as custodian in notes  [Custodian: <id>:...]
+            # 3. the one who created/handed-over the assignment (assigned_by)
+            base_query = db.query(Assignment).filter(
+                or_(
+                    Assignment.assigned_to == effective_user_id,
+                    Assignment.notes.like(f"%[Custodian: {effective_user_id}:%"),
+                    Assignment.assigned_by == effective_user_id,
+                )
+            )
+        else:
+            base_query = db.query(Assignment).filter(Assignment.assigned_to == effective_user_id)
+    elif can_view_all:
+        base_query = db.query(Assignment)
+    else:
+        raise HTTPException(403, detail="Not authorized to view all assignments")
+
+    # Apply tab filter (preferred over raw status param)
+    if tab == "active":
+        base_query = base_query.filter(Assignment.status.in_(ACTIVE_TAB_STATUSES))
+    elif tab == "history":
+        base_query = base_query.filter(Assignment.status.in_(HISTORY_TAB_STATUSES))
+    elif status:
+        # Legacy single-status filter (kept for backward compat)
+        try:
+            base_query = base_query.filter(Assignment.status == AssignmentStatus(status))
+        except ValueError:
+            raise HTTPException(400, detail=f"Invalid status '{status}'")
+
+    if assignment_type == "final_handover":
+        base_query = base_query.filter(Assignment.notes.like("%Asset handed over from request%"))
+
+    assignments = (
+        _with_existing_asset(base_query)
+        .order_by(Assignment.assignment_date.desc(), Assignment.assignment_id.desc())
+        .all()
+    )
 
     return AssignmentListResponse(
         assignments=[_serialize_assignment(a, db) for a in assignments],
@@ -479,7 +498,7 @@ def confirm_return_route(
     if asset:
         create_notification(
             db=db,
-            user_id="Asset Manager",
+            user_id="ASSET_MANAGER",
             title="Asset Return Completed",
             message=f"Asset '{asset.asset_name}' has been returned to custody and is now Available.",
             notification_type="RETURN_COMPLETED",

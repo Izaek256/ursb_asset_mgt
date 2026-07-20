@@ -12,6 +12,7 @@ import FilterBar, { FilterField, filterInputCls, filterSelectCls } from "../comp
 import StatusBadge from "../components/common/badges/StatusBadge";
 import EmptyState from "../components/EmptyState";
 import { ICONS } from "../utils/icons";
+import { fmtDateTime, fmtDate } from "../utils/formatDate";
 
 export default function Transfers() {
   const { user } = useAuth();
@@ -214,7 +215,7 @@ export default function Transfers() {
     { header: "To", render: (t) => t.to_user_name },
     {
       header: "Transfer Date",
-      render: (t) => new Date(t.transfer_date).toLocaleDateString(),
+      render: (t) => <span className="text-xs">{fmtDateTime(t.transfer_date)}</span>,
     },
     { header: "Reason", render: (t) => t.reason },
     { header: "Authorised By", render: (t) => t.authorised_by_name || "—" },
@@ -222,7 +223,7 @@ export default function Transfers() {
       header: "Acknowledged",
       render: (t) =>
         t.acknowledged_at ? (
-          <span className="text-xs text-ink-dim">{new Date(t.acknowledged_at).toLocaleString()}</span>
+          <span className="text-xs text-ink-dim">{fmtDateTime(t.acknowledged_at)}</span>
         ) : (
           <StatusBadge status="Pending" />
         ),

@@ -3,6 +3,7 @@ import Button from "../components/common/Button";
 import { apiFetch, useAuth } from "../AuthContext";
 import type { AssetDetail } from "../types";
 import ConfirmDialog from "../components/ConfirmDialog";
+import { fmtDateTime, fmtDate } from "../utils/formatDate";
 
 const STATUS_CLASS: Record<string, string> = {
   Available: "badge-info",
@@ -740,7 +741,7 @@ export default function AssetDetail() {
                 </div>
                 <div style={{ padding: "16px", background: "#f8fafc", borderRadius: "8px" }}>
                   <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "4px" }}>Acquisition Date</div>
-                  <div style={{ fontSize: "15px", fontWeight: "500", color: "#1e293b" }}>{asset.acquisition_date}</div>
+                  <div style={{ fontSize: "15px", fontWeight: "500", color: "#1e293b" }}>{fmtDate(asset.acquisition_date)}</div>
                 </div>
                 <div style={{ padding: "16px", background: "#f8fafc", borderRadius: "8px" }}>
                   <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "4px" }}>Supplier</div>
@@ -952,7 +953,7 @@ export default function AssetDetail() {
                           <span style={{ fontSize: "15px", fontWeight: "500", color: "#1e293b" }}>
                             {entry.service_provider}
                           </span>
-                          <span style={{ fontSize: "13px", color: "#64748b" }}>{entry.service_date}</span>
+                          <span style={{ fontSize: "13px", color: "#64748b" }}>{fmtDateTime(entry.service_date)}</span>
                         </div>
                         <div style={{ marginBottom: "8px" }}>{entry.description}</div>
                         <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -961,7 +962,7 @@ export default function AssetDetail() {
                           </div>
                           {entry.next_service_date && (
                             <div style={{ fontSize: "13px", color: "#64748b" }}>
-                              Next service: {entry.next_service_date}
+                              Next service: {fmtDate(entry.next_service_date)}
                             </div>
                           )}
                         </div>
