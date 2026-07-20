@@ -9,7 +9,6 @@ import PageHeader from "../components/PageHeader";
 import FilterBar, { FilterField, filterInputCls, filterSelectCls } from "../components/common/FilterBar";
 import StatusBadge from "../components/common/badges/StatusBadge";
 import RoleBadge from "../components/common/badges/RoleBadge";
-import SuccessBanner from "../components/common/SuccessBanner";
 import ErrorMessage from "../components/ErrorMessage";
 import Modal from "../components/Modal";
 
@@ -30,8 +29,6 @@ export default function UserManagement() {
   const [filter, setFilter] = React.useState<Role | "All">("All");
   const [search, setSearch] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(true);
-  const [successMsg, setSuccessMsg] = React.useState<string | null>(null);
-  const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
   const [page, setPage] = React.useState(1);
   const pageSize = 50;
 
@@ -90,8 +87,8 @@ export default function UserManagement() {
     currentUser?.role === "System Administrator" ||
     currentUser?.role === "Super System Administrator";
 
-  const flash = (msg: string) => { setSuccessMsg(msg); setErrorMsg(null); setTimeout(() => setSuccessMsg(null), 4000); };
-  const flashErr = (msg: string) => { setErrorMsg(msg); setSuccessMsg(null); setTimeout(() => setErrorMsg(null), 5000); };
+  const flash = (msg: string) => { (window as any).toast?.success("Success", msg); };
+  const flashErr = (msg: string) => { (window as any).toast?.error("Error", msg); };
 
   const fetchUsers = React.useCallback(async () => {
     setIsLoading(true);
@@ -194,9 +191,6 @@ export default function UserManagement() {
 
   return (
     <div className="w-full flex flex-col gap-6 select-none font-sans">
-      {successMsg && <SuccessBanner message={successMsg} onDismiss={() => setSuccessMsg(null)} />}
-      {errorMsg && <ErrorMessage message={errorMsg} />}
-
       <PageHeader
         title="User Management"
         subtitle="Manage staff accounts, roles, and access"

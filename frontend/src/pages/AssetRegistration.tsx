@@ -73,7 +73,8 @@ export default function AssetRegistration() {
         }),
       });
 
-      // Success — navigate back to assets list
+      // Success — show toast and navigate back to assets list
+      (window as any).toast?.success("Asset Registered", "The new asset has been saved successfully.");
       window.history.pushState({}, "", "/assets");
       window.dispatchEvent(new PopStateEvent("popstate"));
     } catch (err: any) {

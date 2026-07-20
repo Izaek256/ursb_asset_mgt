@@ -5,7 +5,6 @@ import Modal from "../components/Modal";
 import FormInput from "../components/common/FormInput";
 import ConfirmDialog from "../components/ConfirmDialog";
 import ErrorMessage from "../components/ErrorMessage";
-import SuccessBanner from "../components/common/SuccessBanner";
 import Table, { Column } from "../components/common/Table";
 import PageHeader from "../components/PageHeader";
 import Button from "../components/common/Button";
@@ -18,8 +17,6 @@ export default function Transfers() {
   const { user } = useAuth();
   const [transfers, setTransfers] = React.useState<Transfer[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
   const [assetIdFilter, setAssetIdFilter] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState<"All" | "Acknowledged" | "Pending">("All");
 
@@ -83,7 +80,6 @@ export default function Transfers() {
 
   const fetchTransfers = async () => {
     setIsLoading(true);
-    setError(null);
     try {
       const data = await apiFetch<TransferListResponse | Transfer[]>("/transfers");
       if (Array.isArray(data)) {
@@ -94,7 +90,7 @@ export default function Transfers() {
         setTransfers([]);
       }
     } catch (err: any) {
-      setError(err.message || "Failed to load transfers.");
+      (window as any).toast?.error("Failed to load transfers", err.message);
     } finally {
       setIsLoading(false);
     }
@@ -150,7 +146,7 @@ export default function Transfers() {
           reason: createForm.reason,
         }),
       });
-      setSuccessMessage("Transfer record created successfully.");
+      (window as any).toast?.success("Transfer Created", "Transfer record created successfully.");
       setShowCreateModal(false);
       setCreateForm({
         asset_id: "",
@@ -173,16 +169,15 @@ export default function Transfers() {
 
   const handleAcknowledgeConfirm = async () => {
     if (acknowledgeDialog.transferId === null) return;
-    setError(null);
     try {
       await apiFetch(`/transfers/${acknowledgeDialog.transferId}/acknowledge`, {
         method: "PUT",
       });
-      setSuccessMessage("Transfer acknowledged. Custody updated successfully.");
+      (window as any).toast?.success("Transfer Acknowledged", "Custody updated successfully.");
       setAcknowledgeDialog({ open: false, transferId: null });
       fetchTransfers();
     } catch (err: any) {
-      setError(err.message || "Failed to acknowledge transfer.");
+      (window as any).toast?.error("Acknowledge Failed", err.message || "Failed to acknowledge transfer.");
       setAcknowledgeDialog({ open: false, transferId: null });
     }
   };
@@ -258,9 +253,6 @@ export default function Transfers() {
 
   return (
     <div className="w-full flex flex-col gap-6 select-none font-sans">
-      {successMessage && <SuccessBanner message={successMessage} onDismiss={() => setSuccessMessage(null)} />}
-      {error && <ErrorMessage message={error} onRetry={fetchTransfers} />}
-
       <PageHeader
         title="Asset Transfers"
         subtitle="Custody change history between employees"
@@ -402,4 +394,3 @@ export default function Transfers() {
     </div>
   );
 }
-

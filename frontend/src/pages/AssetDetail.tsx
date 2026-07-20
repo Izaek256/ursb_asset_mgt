@@ -30,7 +30,6 @@ export default function AssetDetail() {
   const [asset, setAsset] = React.useState<AssetDetail | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
 
   // Edit mode
   const [isEditing, setIsEditing] = React.useState(false);
@@ -143,8 +142,7 @@ export default function AssetDetail() {
         method: "PUT",
         body: JSON.stringify(changes),
       }, token);
-      setSuccessMessage("Asset updated successfully");
-      setTimeout(() => setSuccessMessage(null), 3000);
+      (window as any).toast?.success("Asset Updated", "Asset saved successfully.");
       setIsEditing(false);
       // Re-fetch asset
       const updated = await apiFetch<AssetDetail>(`/assets/${assetId}`, {}, token);
@@ -168,8 +166,7 @@ export default function AssetDetail() {
       await apiFetch(`/assets/${assetId}/deactivate`, {
         method: "PATCH",
       }, token);
-      setSuccessMessage("Asset deactivated successfully");
-      setTimeout(() => setSuccessMessage(null), 3000);
+      (window as any).toast?.success("Asset Deactivated", "Asset deactivated successfully.");
       setShowDeactivateDialog(false);
       // Re-fetch asset
       const updated = await apiFetch<AssetDetail>(`/assets/${assetId}`, {}, token);
@@ -188,8 +185,7 @@ export default function AssetDetail() {
       await apiFetch(`/assets/${assetId}/reactivate`, {
         method: "PATCH",
       }, token);
-      setSuccessMessage("Asset reactivated successfully");
-      setTimeout(() => setSuccessMessage(null), 3000);
+      (window as any).toast?.success("Asset Reactivated", "Asset reactivated successfully.");
       // Re-fetch asset
       const updated = await apiFetch<AssetDetail>(`/assets/${assetId}`, {}, token);
       setAsset(updated);
@@ -212,8 +208,7 @@ export default function AssetDetail() {
           reason: disposalReason,
         }),
       }, token);
-      setSuccessMessage("Asset disposed successfully");
-      setTimeout(() => setSuccessMessage(null), 3000);
+      (window as any).toast?.success("Asset Disposed", "Asset disposed successfully.");
       setShowDisposeDialog(false);
       setDisposalReason("");
       // Re-fetch asset
@@ -236,8 +231,7 @@ export default function AssetDetail() {
         method: "POST",
         body: JSON.stringify({ reason: recommendReason }),
       }, token);
-      setSuccessMessage("Disposal recommendation submitted successfully");
-      setTimeout(() => setSuccessMessage(null), 3000);
+      (window as any).toast?.success("Recommendation Submitted", "Disposal recommendation submitted successfully.");
       setShowRecommendDialog(false);
       setRecommendReason("");
       const updated = await apiFetch<AssetDetail>(`/assets/${assetId}`, {}, token);
@@ -262,8 +256,7 @@ export default function AssetDetail() {
           disposal_date: approvalDate,
         }),
       }, token);
-      setSuccessMessage("Disposal approved successfully");
-      setTimeout(() => setSuccessMessage(null), 3000);
+      (window as any).toast?.success("Disposal Approved", "Disposal approved successfully.");
       setShowApproveDialog(false);
       setPendingDisposal(null);
       const updated = await apiFetch<AssetDetail>(`/assets/${assetId}`, {}, token);
@@ -285,8 +278,7 @@ export default function AssetDetail() {
         method: "POST",
         body: JSON.stringify({ reason: rejectReason }),
       }, token);
-      setSuccessMessage("Disposal recommendation rejected");
-      setTimeout(() => setSuccessMessage(null), 3000);
+      (window as any).toast?.success("Recommendation Rejected", "Disposal recommendation rejected.");
       setShowRejectDialog(false);
       setPendingDisposal(null);
       const updated = await apiFetch<AssetDetail>(`/assets/${assetId}`, {}, token);
@@ -321,22 +313,6 @@ export default function AssetDetail() {
 
   return (
     <div style={{ padding: "24px", maxWidth: "1200px", margin: "0 auto" }}>
-      {successMessage && (
-        <div style={{
-          backgroundColor: "#10b981",
-          color: "white",
-          padding: "12px 16px",
-          borderRadius: "8px",
-          marginBottom: "24px",
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-        }}>
-          <span>✓</span>
-          <span>{successMessage}</span>
-        </div>
-      )}
-
       {/* Header */}
       <div style={{
         marginBottom: "32px",

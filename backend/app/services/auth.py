@@ -164,12 +164,16 @@ def get_session(db: DbSession, token: str) -> Optional[SessionModel]:
         db.delete(session)
         db.commit()
         return None
-        
-    # Extend session expiration
-    session.expires_at = now + SESSION_DURATION
-    db.add(session)
-    db.commit()
-    
+
+    # Only extend the session when more than half its lifetime has elapsed.
+    # This avoids a DB write on every single request (which was causing
+    # "database is locked" contention with the bulk-import WebSocket).
+    half_duration = SESSION_DURATION / 2
+    if (session.expires_at - now) < half_duration:
+        session.expires_at = now + SESSION_DURATION
+        db.add(session)
+        db.commit()
+
     return session
 
 

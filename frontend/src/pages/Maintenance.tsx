@@ -5,7 +5,6 @@ import Modal from "../components/Modal";
 import FormInput from "../components/common/FormInput";
 import StatusBadge from "../components/common/badges/StatusBadge";
 import ErrorMessage from "../components/ErrorMessage";
-import SuccessBanner from "../components/common/SuccessBanner";
 import EmptyState from "../components/EmptyState";
 import ConfirmDialog from "../components/ConfirmDialog";
 import PageHeader from "../components/PageHeader";
@@ -32,8 +31,6 @@ export default function Maintenance() {
   const [records, setRecords] = React.useState<MaintenanceRecordResponse[]>([]);
   const [upcoming, setUpcoming] = React.useState<MaintenanceRecordResponse[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
-  const [success, setSuccess] = React.useState<string | null>(null);
 
   // Warning banner state
   const [showUpcomingBanner, setShowUpcomingBanner] = React.useState(true);
@@ -77,15 +74,13 @@ export default function Maintenance() {
 
   const fetchMaintenanceData = React.useCallback(async () => {
     setIsLoading(true);
-    setError(null);
     try {
       const recordsRes = await apiFetch<{ records: MaintenanceRecordResponse[]; total: number }>("/maintenance", {});
       const upcomingRes = await apiFetch<{ records: MaintenanceRecordResponse[]; total: number }>("/maintenance/upcoming", {});
-      
       setRecords(recordsRes.records);
       setUpcoming(upcomingRes.records);
     } catch (err: any) {
-      setError(err.message || "Failed to load maintenance records.");
+      (window as any).toast?.error("Failed to load maintenance records", err.message);
     } finally {
       setIsLoading(false);
     }
@@ -235,7 +230,7 @@ export default function Maintenance() {
           next_service_date: logForm.next_service_date || null,
         }),
       });
-      setSuccess("Maintenance record logged successfully.");
+      (window as any).toast?.success("Maintenance Logged", "Maintenance record logged successfully.");
       setShowLogModal(false);
       setLogForm({
         asset_id: "",
@@ -273,7 +268,7 @@ export default function Maintenance() {
           next_service_date: scheduleForm.next_service_date,
         }),
       });
-      setSuccess(`Next service date updated for asset "${selectedRecord.asset_id}".`);
+      (window as any).toast?.success("Schedule Updated", `Next service date updated for asset "${selectedRecord.asset_id}".`);
       setShowScheduleModal(false);
       setSelectedRecord(null);
       fetchMaintenanceData();
@@ -286,16 +281,15 @@ export default function Maintenance() {
 
   const handleCompleteConfirm = async () => {
     if (!completeConfirm) return;
-    setError(null);
     try {
       await apiFetch(`/maintenance/${completeConfirm.maintenance_id}/complete`, {
         method: "PUT",
       });
-      setSuccess(`Maintenance completed. Asset "${completeConfirm.asset_id}" is now Active.`);
+      (window as any).toast?.success("Maintenance Complete", `Asset "${completeConfirm.asset_id}" is now Active.`);
       setCompleteConfirm(null);
       fetchMaintenanceData();
     } catch (err: any) {
-      setError(err.message || "Failed to mark maintenance as complete.");
+      (window as any).toast?.error("Action Failed", err.message || "Failed to mark maintenance as complete.");
     }
   };
 
@@ -354,9 +348,6 @@ export default function Maintenance() {
 
   return (
     <div className="w-full flex flex-col gap-6 select-none font-sans">
-      {success && <SuccessBanner message={success} onDismiss={() => setSuccess(null)} />}
-      {error && <ErrorMessage message={error} />}
-
       {/* Upcoming maintenance alert */}
       {showUpcomingBanner && upcoming.length > 0 && (
         <div className="bg-badge-amberBg border border-badge-amberText/16 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">

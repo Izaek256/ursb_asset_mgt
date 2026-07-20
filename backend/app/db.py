@@ -13,11 +13,18 @@ DATABASE_URL = os.getenv(
 connect_args = {}
 if DATABASE_URL.startswith("sqlite"):
     connect_args["check_same_thread"] = False
+    # Wait up to 30 s when the DB is locked by another writer instead of
+    # failing immediately.  Pair with WAL mode (set in the event listener
+    # below) so readers never block writers and vice-versa.
+    connect_args["timeout"] = 30
 
 engine = create_engine(
     DATABASE_URL,
     connect_args=connect_args,
     pool_pre_ping=True,
+    # Limit the pool so we don't open many simultaneous SQLite connections.
+    pool_size=1,
+    max_overflow=4,
 )
 
 SessionLocal = sessionmaker(
@@ -42,9 +49,13 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def _enforce_sqlite_fks(dbapi_conn, connection_record):
-    """Enable foreign key constraints on SQLite connections."""
+    """Enable foreign key constraints and WAL journal mode on SQLite connections."""
     cursor = dbapi_conn.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
+    # WAL allows concurrent reads alongside a single writer — prevents
+    # "database is locked" when the bulk import holds a write transaction
+    # while notification polling and session refresh also need to write.
+    cursor.execute("PRAGMA journal_mode=WAL")
     cursor.close()
 
 

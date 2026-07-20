@@ -6,8 +6,6 @@ import { ICONS } from "../utils/icons";
 import Modal from "../components/Modal";
 import FormInput from "../components/common/FormInput";
 import StatusBadge from "../components/common/badges/StatusBadge";
-import ErrorMessage from "../components/ErrorMessage";
-import SuccessBanner from "../components/common/SuccessBanner";
 import EmptyState from "../components/EmptyState";
 import ConfirmDialog from "../components/ConfirmDialog";
 import PageHeader from "../components/PageHeader";
@@ -29,8 +27,6 @@ export default function Assignments() {
   const [assets, setAssets] = React.useState<AssetOption[]>([]);
   const [users, setUsers] = React.useState<UserRow[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
-  const [success, setSuccess] = React.useState<string | null>(null);
 
   // Modal & form states
   const [showAssignModal, setShowAssignModal] = React.useState(false);
@@ -60,7 +56,6 @@ export default function Assignments() {
 
   const fetchAssignments = React.useCallback(async () => {
     setIsLoading(true);
-    setError(null);
     try {
       // Main tab: Show Active and Pending Acceptance assignments
       let activeAssignments: Assignment[] = [];
@@ -133,7 +128,7 @@ export default function Assignments() {
       const historyData = await apiFetch<{ assignments: Assignment[]; total: number }>(historyEndpoint, {});
       setHistoryAssignments(historyData.assignments);
     } catch (err: any) {
-      setError(err.message || "Failed to load assignments.");
+      (window as any).toast?.error("Failed to load assignments", err.message);
     } finally {
       setIsLoading(false);
     }
@@ -152,14 +147,12 @@ export default function Assignments() {
   }, []);
 
   const handleAccept = async (id: number) => {
-    setError(null);
-    setSuccess(null);
     try {
       await apiFetch(`/assignments/${id}/accept`, { method: "POST" });
-      setSuccess("Assignment accepted successfully.");
+      (window as any).toast?.success("Assignment Accepted", "Assignment accepted successfully.");
       fetchAssignments();
     } catch (err: any) {
-      setError(err.message || "Failed to accept assignment.");
+      (window as any).toast?.error("Accept Failed", err.message || "Failed to accept assignment.");
     }
   };
 
@@ -169,50 +162,42 @@ export default function Assignments() {
   };
 
   const handleDecline = async (id: number) => {
-    setError(null);
-    setSuccess(null);
     try {
       await apiFetch(`/assignments/${id}/decline`, { method: "POST" });
-      setSuccess("Assignment declined successfully.");
+      (window as any).toast?.success("Assignment Declined", "Assignment declined successfully.");
       fetchAssignments();
     } catch (err: any) {
-      setError(err.message || "Failed to decline assignment.");
+      (window as any).toast?.error("Decline Failed", err.message || "Failed to decline assignment.");
     }
   };
 
   const handleConfirmHandover = async (id: number) => {
-    setError(null);
-    setSuccess(null);
     try {
       await apiFetch(`/assignments/${id}/confirm-handover`, { method: "POST" });
-      setSuccess("Handover confirmed successfully. Employee has been notified the asset is ready.");
+      (window as any).toast?.success("Handover Confirmed", "Employee has been notified the asset is ready.");
       fetchAssignments();
     } catch (err: any) {
-      setError(err.message || "Failed to confirm handover.");
+      (window as any).toast?.error("Handover Failed", err.message || "Failed to confirm handover.");
     }
   };
 
   const handleConfirmReceipt = async (id: number) => {
-    setError(null);
-    setSuccess(null);
     try {
       await apiFetch(`/assignments/${id}/confirm-receipt`, { method: "POST" });
-      setSuccess("Receipt confirmed. The asset is now fully active in your custody.");
+      (window as any).toast?.success("Receipt Confirmed", "The asset is now fully active in your custody.");
       fetchAssignments();
     } catch (err: any) {
-      setError(err.message || "Failed to confirm receipt.");
+      (window as any).toast?.error("Confirm Failed", err.message || "Failed to confirm receipt.");
     }
   };
 
   const handleCancelAssignment = async (id: number) => {
-    setError(null);
-    setSuccess(null);
     try {
       await apiFetch(`/assignments/${id}`, { method: "DELETE" });
-      setSuccess("Assignment cancelled. Asset returned to Available.");
+      (window as any).toast?.success("Assignment Cancelled", "Asset returned to Available.");
       fetchAssignments();
     } catch (err: any) {
-      setError(err.message || "Failed to cancel assignment.");
+      (window as any).toast?.error("Cancel Failed", err.message || "Failed to cancel assignment.");
     }
     setCancelAssignConfirm(null);
   };
@@ -274,13 +259,12 @@ export default function Assignments() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.asset_id || !form.assigned_to) {
-      setError("Please fill in all required fields.");
+      (window as any).toast?.error("Validation Error", "Please fill in all required fields.");
       return;
     }
     if (formErrors.return_date) return;
 
     setIsSubmitting(true);
-    setError(null);
     try {
       await apiFetch("/assignments", {
         method: "POST",
@@ -294,7 +278,7 @@ export default function Assignments() {
           notes: form.notes,
         }),
       });
-      setSuccess("Asset successfully assigned. Custodian will need to accept the assignment.");
+      (window as any).toast?.success("Asset Assigned", "Custodian will need to accept the assignment.");
       setShowAssignModal(false);
       setForm({
         asset_id: "",
@@ -306,11 +290,10 @@ export default function Assignments() {
       });
       fetchAssignments();
     } catch (err: any) {
-      // Provide more specific error message for asset status issues
       if (err.message && err.message.includes("Available status")) {
-        setError("Asset is not available for assignment. It may be assigned, under maintenance, or in another status.");
+        (window as any).toast?.error("Assignment Failed", "Asset is not available. It may be assigned, under maintenance, or in another status.");
       } else {
-        setError(err.message || "Failed to create assignment.");
+        (window as any).toast?.error("Assignment Failed", err.message || "Failed to create assignment.");
       }
     } finally {
       setIsSubmitting(false);
@@ -318,26 +301,22 @@ export default function Assignments() {
   };
 
   const handleRequestReturn = async (id: number) => {
-    setError(null);
-    setSuccess(null);
     try {
       await apiFetch(`/assignments/${id}/request-return`, { method: "POST" });
-      setSuccess("Asset return requested successfully.");
+      (window as any).toast?.success("Return Requested", "Asset return requested successfully.");
       fetchAssignments();
     } catch (err: any) {
-      setError(err.message || "Failed to request return.");
+      (window as any).toast?.error("Request Failed", err.message || "Failed to request return.");
     }
   };
 
   const handleApproveReturn = async (id: number) => {
-    setError(null);
-    setSuccess(null);
     try {
       await apiFetch(`/assignments/${id}/approve-return`, { method: "POST" });
-      setSuccess("Return approved successfully.");
+      (window as any).toast?.success("Return Approved", "Return approved successfully.");
       fetchAssignments();
     } catch (err: any) {
-      setError(err.message || "Failed to approve return.");
+      (window as any).toast?.error("Approve Failed", err.message || "Failed to approve return.");
     }
   };
 
@@ -348,34 +327,29 @@ export default function Assignments() {
   const confirmRejectReturn = async () => {
     if (!rejectReturnConfirm.assignment) return;
     if (!rejectReturnConfirm.reason.trim()) {
-      setError("Please provide a reason for rejecting the return request.");
+      (window as any).toast?.error("Validation Error", "Please provide a reason for rejecting the return request.");
       return;
     }
-    
-    setError(null);
-    setSuccess(null);
     try {
       await apiFetch(`/assignments/${rejectReturnConfirm.assignment.assignment_id}/reject-return`, {
         method: "POST",
         body: JSON.stringify({ reason: rejectReturnConfirm.reason }),
       });
-      setSuccess("Return rejected successfully.");
+      (window as any).toast?.success("Return Rejected", "Return rejected successfully.");
       setRejectReturnConfirm({ open: false, assignment: null, reason: "" });
       fetchAssignments();
     } catch (err: any) {
-      setError(err.message || "Failed to reject return.");
+      (window as any).toast?.error("Reject Failed", err.message || "Failed to reject return.");
     }
   };
 
   const handleConfirmAssetReturn = async (id: number) => {
-    setError(null);
-    setSuccess(null);
     try {
       await apiFetch(`/assignments/${id}/confirm-return`, { method: "POST" });
-      setSuccess("Asset return confirmed successfully. Asset is now available.");
+      (window as any).toast?.success("Return Confirmed", "Asset is now available.");
       fetchAssignments();
     } catch (err: any) {
-      setError(err.message || "Failed to confirm return.");
+      (window as any).toast?.error("Confirm Failed", err.message || "Failed to confirm return.");
     }
   };
 
@@ -532,9 +506,6 @@ export default function Assignments() {
 
   return (
     <div className="w-full flex flex-col gap-6 select-none font-sans">
-      {success && <SuccessBanner message={success} onDismiss={() => setSuccess(null)} />}
-      {error && <ErrorMessage message={error} />}
-
       <PageHeader
         title="Asset Assignments"
         subtitle="Track custody of assets allocated to employees"

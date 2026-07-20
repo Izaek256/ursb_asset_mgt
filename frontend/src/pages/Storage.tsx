@@ -4,8 +4,6 @@ import { StorageAsset, StorageListResponse, UserRow } from "../types";
 import { ICONS } from "../utils/icons";
 import Modal from "../components/Modal";
 import FormInput from "../components/common/FormInput";
-import ErrorMessage from "../components/ErrorMessage";
-import SuccessBanner from "../components/common/SuccessBanner";
 import EmptyState from "../components/EmptyState";
 import ConfirmDialog from "../components/ConfirmDialog";
 import PageHeader from "../components/PageHeader";
@@ -27,8 +25,6 @@ export default function Storage() {
   const [activeAssets, setActiveAssets] = React.useState<ActiveAssetOption[]>([]);
   const [users, setUsers] = React.useState<UserRow[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
-  const [success, setSuccess] = React.useState<string | null>(null);
 
   // Filters
   const [deptFilter, setDeptFilter] = React.useState("");
@@ -63,7 +59,6 @@ export default function Storage() {
 
   const fetchStorageData = React.useCallback(async () => {
     setIsLoading(true);
-    setError(null);
     try {
       const params = new URLSearchParams();
       if (deptFilter) params.set("department", deptFilter);
@@ -73,7 +68,7 @@ export default function Storage() {
       const res = await apiFetch<StorageListResponse>(`/storage?${params.toString()}`, {});
       setData(res);
     } catch (err: any) {
-      setError(err.message || "Failed to load storage assets.");
+      (window as any).toast?.error("Failed to load storage", err.message);
     } finally {
       setIsLoading(false);
     }
@@ -148,7 +143,6 @@ export default function Storage() {
     e.preventDefault();
     if (!assignModalAsset || !assignForm.assigned_to) return;
     setIsSubmitting(true);
-    setError(null);
     try {
       await apiFetch(`/storage/${assignModalAsset.asset_id}/assign`, {
         method: "POST",
@@ -157,12 +151,12 @@ export default function Storage() {
           notes: assignForm.notes,
         }),
       });
-      setSuccess(`Asset "${assignModalAsset.asset_name}" assigned successfully.`);
+      (window as any).toast?.success("Asset Assigned", `"${assignModalAsset.asset_name}" assigned successfully.`);
       setAssignModalAsset(null);
       setAssignForm({ assigned_to: "", notes: "" });
       fetchStorageData();
     } catch (err: any) {
-      setError(err.message || "Failed to assign asset.");
+      (window as any).toast?.error("Assign Failed", err.message || "Failed to assign asset.");
     } finally {
       setIsSubmitting(false);
     }
@@ -180,7 +174,6 @@ export default function Storage() {
   const handleReturnConfirm = async () => {
     if (!returnConfirmAsset) return;
     setIsSubmitting(true);
-    setError(null);
     try {
       await apiFetch(`/storage/return`, {
         method: "POST",
@@ -188,14 +181,14 @@ export default function Storage() {
           asset_id: returnConfirmAsset.asset_id,
         }),
       });
-      setSuccess(`Asset "${returnConfirmAsset.asset_name}" successfully returned to storage.`);
+      (window as any).toast?.success("Returned to Storage", `"${returnConfirmAsset.asset_name}" successfully returned to storage.`);
       setShowReturnModal(false);
       setReturnConfirmAsset(null);
       setReturnForm({ asset_id: "" });
       fetchStorageData();
       fetchContextData();
     } catch (err: any) {
-      setError(err.message || "Failed to return asset to storage.");
+      (window as any).toast?.error("Return Failed", err.message || "Failed to return asset to storage.");
     } finally {
       setIsSubmitting(false);
     }
@@ -204,16 +197,15 @@ export default function Storage() {
   const handleConfirmReturn = async () => {
     if (!confirmReturnAssignment) return;
     setIsSubmitting(true);
-    setError(null);
     try {
       await apiFetch(`/assignments/${confirmReturnAssignment.assignment_id}/confirm-return`, {
         method: "POST",
       });
-      setSuccess(`Return confirmed for "${confirmReturnAssignment.asset_name}".`);
+      (window as any).toast?.success("Return Confirmed", `Return confirmed for "${confirmReturnAssignment.asset_name}".`);
       setConfirmReturnAssignment(null);
       fetchStorageData();
     } catch (err: any) {
-      setError(err.message || "Failed to confirm return.");
+      (window as any).toast?.error("Confirm Failed", err.message || "Failed to confirm return.");
     } finally {
       setIsSubmitting(false);
     }
@@ -296,9 +288,6 @@ export default function Storage() {
 
   return (
     <div className="w-full flex flex-col gap-6 select-none font-sans">
-      {success && <SuccessBanner message={success} onDismiss={() => setSuccess(null)} />}
-      {error && <ErrorMessage message={error} />}
-
       <PageHeader
         title="Storage Management"
         subtitle="Manage assets kept in storage and allocate them to staff"

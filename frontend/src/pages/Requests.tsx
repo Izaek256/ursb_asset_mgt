@@ -7,7 +7,6 @@ import Modal from "../components/Modal";
 import FormInput from "../components/common/FormInput";
 import StatusBadge from "../components/common/badges/StatusBadge";
 import ErrorMessage from "../components/ErrorMessage";
-import SuccessBanner from "../components/common/SuccessBanner";
 import EmptyState from "../components/EmptyState";
 import ConfirmDialog from "../components/ConfirmDialog";
 import PageHeader from "../components/PageHeader";
@@ -30,8 +29,6 @@ export default function Requests() {
   const [assets, setAssets] = React.useState<AssetOption[]>([]);
   const [users, setUsers] = React.useState<UserRow[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
-  const [success, setSuccess] = React.useState<string | null>(null);
 
   // Filters (Admin/Manager only)
   const [statusFilter, setStatusFilter] = React.useState("All");
@@ -80,19 +77,16 @@ export default function Requests() {
 
   const fetchRequests = React.useCallback(async () => {
     setIsLoading(true);
-    setError(null);
     try {
       const data = await apiFetch<{ requests: AssetRequest[]; total: number }>("/requests", {});
-      // Filter for active requests in main tab (Pending, Approved, Assigned, ReadyForPickup - until pickup confirmed)
       setRequests(data.requests.filter(r => 
         ["Pending", "Approved", "Assigned", "ReadyForPickup"].includes(r.status)
       ));
-      // History tab shows requests after pickup confirmation or are completed/cancelled
       setHistoryRequests(data.requests.filter(r => 
         ["PickedUp", "Completed", "Rejected", "Cancelled"].includes(r.status)
       ));
     } catch (err: any) {
-      setError(err.message || "Failed to load requests.");
+      (window as any).toast?.error("Failed to load requests", err.message);
     } finally {
       setIsLoading(false);
     }
@@ -176,14 +170,13 @@ export default function Requests() {
   const handleSubmitRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!submitForm.asset_id && !submitForm.asset_type) {
-      setError("Please specify either a specific Asset or an Asset Type.");
+      (window as any).toast?.error("Validation Error", "Please specify either a specific Asset or an Asset Type.");
       return;
     }
     if (submitForm.reason.length < 10) {
       return;
     }
     setIsSubmitting(true);
-    setError(null);
     try {
       await apiFetch("/requests", {
         method: "POST",
@@ -195,12 +188,12 @@ export default function Requests() {
           required_by_date: submitForm.required_by_date || null,
         }),
       });
-      setSuccess("Asset request submitted successfully.");
+      (window as any).toast?.success("Request Submitted", "Asset request submitted successfully.");
       setShowSubmitModal(false);
       setSubmitForm({ asset_id: "", asset_type: "", reason: "", priority: "Normal", required_by_date: "" });
       fetchRequests();
     } catch (err: any) {
-      setError(err.message || "Failed to submit request.");
+      (window as any).toast?.error("Submit Failed", err.message || "Failed to submit request.");
     } finally {
       setIsSubmitting(false);
     }
@@ -224,11 +217,10 @@ export default function Requests() {
     e.preventDefault();
     if (!selectedRequest) return;
     if (!selectedRequest.asset_id && !approveForm.assigned_asset_id) {
-      setError("Please select an asset to assign for this request.");
+      (window as any).toast?.error("Validation Error", "Please select an asset to assign for this request.");
       return;
     }
     setIsSubmitting(true);
-    setError(null);
     try {
       await apiFetch(`/requests/${selectedRequest.request_id}/approve`, {
         method: "PUT",
@@ -236,12 +228,12 @@ export default function Requests() {
           assigned_asset_id: approveForm.assigned_asset_id || null,
         }),
       });
-      setSuccess(`Request #${selectedRequest.request_id} has been approved.`);
+      (window as any).toast?.success("Request Approved", `Request #${selectedRequest.request_id} has been approved.`);
       setShowApproveModal(false);
       setSelectedRequest(null);
       fetchRequests();
     } catch (err: any) {
-      setError(err.message || "Failed to approve request.");
+      (window as any).toast?.error("Approve Failed", err.message || "Failed to approve request.");
     } finally {
       setIsSubmitting(false);
     }
@@ -257,18 +249,17 @@ export default function Requests() {
     e.preventDefault();
     if (!selectedRequest || !rejectForm.notes.trim()) return;
     setIsSubmitting(true);
-    setError(null);
     try {
       await apiFetch(`/requests/${selectedRequest.request_id}/reject`, {
         method: "PUT",
         body: JSON.stringify({ notes: rejectForm.notes }),
       });
-      setSuccess(`Request #${selectedRequest.request_id} has been rejected.`);
+      (window as any).toast?.success("Request Rejected", `Request #${selectedRequest.request_id} has been rejected.`);
       setShowRejectModal(false);
       setSelectedRequest(null);
       fetchRequests();
     } catch (err: any) {
-      setError(err.message || "Failed to reject request.");
+      (window as any).toast?.error("Reject Failed", err.message || "Failed to reject request.");
     } finally {
       setIsSubmitting(false);
     }
@@ -287,7 +278,6 @@ export default function Requests() {
     e.preventDefault();
     if (!selectedRequest || !assignForm.asset_id) return;
     setIsSubmitting(true);
-    setError(null);
     try {
       await apiFetch(`/requests/${selectedRequest.request_id}/assign`, {
         method: "PUT",
@@ -296,36 +286,34 @@ export default function Requests() {
           custodian_id: assignForm.custodian_id ? parseInt(assignForm.custodian_id, 10) : null,
         }),
       });
-      setSuccess(`Request #${selectedRequest.request_id} assigned successfully.`);
+      (window as any).toast?.success("Request Assigned", `Request #${selectedRequest.request_id} assigned successfully.`);
       setShowAssignModal(false);
       setSelectedRequest(null);
       fetchRequests();
     } catch (err: any) {
-      setError(err.message || "Failed to assign request.");
+      (window as any).toast?.error("Assign Failed", err.message || "Failed to assign request.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleCancelClick = async (req: AssetRequest) => {
-    setError(null);
     try {
       await apiFetch(`/requests/${req.request_id}/cancel`, { method: "PUT" });
-      setSuccess(`Request #${req.request_id} cancelled.`);
+      (window as any).toast?.success("Request Cancelled", `Request #${req.request_id} cancelled.`);
       fetchRequests();
     } catch (err: any) {
-      setError(err.message || "Failed to cancel request.");
+      (window as any).toast?.error("Cancel Failed", err.message || "Failed to cancel request.");
     }
   };
 
   const handlePickupClick = async (req: AssetRequest) => {
-    setError(null);
     try {
       await apiFetch(`/requests/${req.request_id}/pickup`, { method: "PUT" });
-      setSuccess(`Pickup confirmed for request #${req.request_id}.`);
+      (window as any).toast?.success("Pickup Confirmed", `Pickup confirmed for request #${req.request_id}.`);
       fetchRequests();
     } catch (err: any) {
-      setError(err.message || "Failed to confirm pickup.");
+      (window as any).toast?.error("Pickup Failed", err.message || "Failed to confirm pickup.");
     }
   };
 
@@ -335,14 +323,13 @@ export default function Requests() {
 
   const handleHandOverConfirm = async () => {
     if (!showHandoverConfirm) return;
-    setError(null);
     try {
       await apiFetch(`/requests/${showHandoverConfirm.request_id}/handover`, { method: "PUT" });
-      setSuccess(`Asset handed over for request #${showHandoverConfirm.request_id}. Requester has been notified.`);
+      (window as any).toast?.success("Asset Handed Over", `Requester for request #${showHandoverConfirm.request_id} has been notified.`);
       setShowHandoverConfirm(null);
       fetchRequests();
     } catch (err: any) {
-      setError(err.message || "Failed to hand over asset.");
+      (window as any).toast?.error("Handover Failed", err.message || "Failed to hand over asset.");
     }
   };
 
@@ -352,27 +339,25 @@ export default function Requests() {
 
   const handleCustodianCancelConfirm = async () => {
     if (!showCustodianCancelConfirm) return;
-    setError(null);
     try {
       await apiFetch(`/requests/${showCustodianCancelConfirm.request_id}/custodian-cancel`, { method: "PUT" });
-      setSuccess(`Request #${showCustodianCancelConfirm.request_id} cancelled. Asset returned to available.`);
+      (window as any).toast?.success("Request Cancelled", `Asset returned to available.`);
       setShowCustodianCancelConfirm(null);
       fetchRequests();
     } catch (err: any) {
-      setError(err.message || "Failed to cancel request.");
+      (window as any).toast?.error("Cancel Failed", err.message || "Failed to cancel request.");
     }
   };
 
   const handleCompleteConfirm = async () => {
     if (!completeConfirm) return;
-    setError(null);
     try {
       await apiFetch(`/requests/${completeConfirm.request_id}/complete`, { method: "PUT" });
-      setSuccess(`Request #${completeConfirm.request_id} marked as completed.`);
+      (window as any).toast?.success("Request Completed", `Request #${completeConfirm.request_id} marked as completed.`);
       setCompleteConfirm(null);
       fetchRequests();
     } catch (err: any) {
-      setError(err.message || "Failed to complete request.");
+      (window as any).toast?.error("Complete Failed", err.message || "Failed to complete request.");
     }
   };
 
@@ -501,9 +486,6 @@ export default function Requests() {
 
   return (
     <div className="w-full flex flex-col gap-6 select-none font-sans">
-      {success && <SuccessBanner message={success} onDismiss={() => setSuccess(null)} />}
-      {error && <ErrorMessage message={error} />}
-
       <PageHeader
         title={canManageRequests || isCustodian ? "Asset Requests" : "My Asset Requests"}
         subtitle={

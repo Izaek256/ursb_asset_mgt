@@ -5,7 +5,6 @@ import { apiFetch } from "../AuthContext";
 import { UserSettings, SystemSettings } from "../types";
 import LoadingSpinner from "../components/LoadingSpinner";
 import ErrorMessage from "../components/ErrorMessage";
-import SuccessBanner from "../components/common/SuccessBanner";
 import Button from "../components/common/Button";
 import ToggleSwitch from "../components/common/ToggleSwitch";
 import PageHeader from "../components/PageHeader";
@@ -22,8 +21,6 @@ function splitName(fullName: string) {
 export default function Settings() {
   const { user, refreshUser } = useAuth();
   const [isLoadingSettings, setIsLoadingSettings] = React.useState(true);
-  const [settingsError, setSettingsError] = React.useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
 
   const [profileForm, setProfileForm] = React.useState({
     firstName: "",
@@ -53,16 +50,12 @@ export default function Settings() {
   const [isSavingGeneral, setIsSavingGeneral] = React.useState(false);
   const [isSavingNotifications, setIsSavingNotifications] = React.useState(false);
   const [isSavingSystem, setIsSavingSystem] = React.useState(false);
-  const [generalError, setGeneralError] = React.useState<string | null>(null);
-  const [notificationsError, setNotificationsError] = React.useState<string | null>(null);
-  const [systemFormError, setSystemFormError] = React.useState<string | null>(null);
 
   const [currentPassword, setCurrentPassword] = React.useState("");
   const [newPassword, setNewPassword] = React.useState("");
   const [confirmNewPassword, setConfirmNewPassword] = React.useState("");
   const [passwordError, setPasswordError] = React.useState<string | null>(null);
   const [isChangingPassword, setIsChangingPassword] = React.useState(false);
-  const [passwordSuccess, setPasswordSuccess] = React.useState<string | null>(null);
 
   const isAdmin = user?.role === "System Administrator";
 
@@ -107,7 +100,7 @@ export default function Settings() {
         }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Failed to load settings";
-        setSettingsError(message);
+        (window as any).toast?.error("Failed to load settings", message);
       } finally {
         setIsLoadingSettings(false);
       }
@@ -118,7 +111,6 @@ export default function Settings() {
 
   // ── General (profile) save ─────────────────────────────────────────────────
   const handleGeneralSave = async () => {
-    setGeneralError(null);
     setIsSavingGeneral(true);
     try {
       await apiFetch("/settings", {
@@ -130,12 +122,10 @@ export default function Settings() {
           language: "en",
         }),
       });
-      // Refresh the global user state so the sidebar, header, etc. update immediately
       await refreshUser();
-      setSuccessMessage("Profile updated successfully.");
-      setTimeout(() => setSuccessMessage(null), 5000);
+      (window as any).toast?.success("Profile Updated", "Your profile has been saved.");
     } catch (err: unknown) {
-      setGeneralError(err instanceof Error ? err.message : "Failed to save profile");
+      (window as any).toast?.error("Save Failed", err instanceof Error ? err.message : "Failed to save profile");
     } finally {
       setIsSavingGeneral(false);
     }
@@ -143,14 +133,12 @@ export default function Settings() {
 
   // ── Notifications save ─────────────────────────────────────────────────────
   const handleNotificationsSave = async () => {
-    setNotificationsError(null);
     setIsSavingNotifications(true);
     try {
       await apiFetch("/settings", { method: "PUT", body: JSON.stringify(notificationsForm) });
-      setSuccessMessage("Notification preferences saved.");
-      setTimeout(() => setSuccessMessage(null), 5000);
+      (window as any).toast?.success("Preferences Saved", "Notification preferences updated.");
     } catch (err: unknown) {
-      setNotificationsError(err instanceof Error ? err.message : "Failed to save notification preferences");
+      (window as any).toast?.error("Save Failed", err instanceof Error ? err.message : "Failed to save notification preferences");
     } finally {
       setIsSavingNotifications(false);
     }
@@ -158,31 +146,22 @@ export default function Settings() {
 
   // ── System save ────────────────────────────────────────────────────────────
   const handleSystemSave = async () => {
-    setSystemFormError(null);
     setIsSavingSystem(true);
     try {
-      // Always persist the theme preference (user-level setting)
       await apiFetch("/settings", {
         method: "PUT",
-        body: JSON.stringify({
-          theme: darkMode ? "dark" : "light",
-        }),
+        body: JSON.stringify({ theme: darkMode ? "dark" : "light" }),
       });
-
-      // Persist organisation-level settings (admin only)
       if (isAdmin) {
         await apiFetch("/settings/system", {
           method: "PUT",
           body: JSON.stringify(systemForm),
         });
       }
-
-      // Refresh user so dark-mode class is applied system-wide immediately
       await refreshUser();
-      setSuccessMessage("System settings saved.");
-      setTimeout(() => setSuccessMessage(null), 5000);
+      (window as any).toast?.success("Settings Saved", "System settings saved successfully.");
     } catch (err: unknown) {
-      setSystemFormError(err instanceof Error ? err.message : "Failed to save system settings");
+      (window as any).toast?.error("Save Failed", err instanceof Error ? err.message : "Failed to save system settings");
     } finally {
       setIsSavingSystem(false);
     }
@@ -192,7 +171,6 @@ export default function Settings() {
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError(null);
-    setPasswordSuccess(null);
     if (!currentPassword || !newPassword || !confirmNewPassword) {
       setPasswordError("Please fill in all fields.");
       return;
@@ -211,11 +189,11 @@ export default function Settings() {
           confirm_new_password: confirmNewPassword,
         }),
       });
-      setPasswordSuccess("Password changed successfully.");
+      (window as any).toast?.success("Password Changed", "Your password has been updated successfully.");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmNewPassword("");
-      setTimeout(() => setPasswordSuccess(null), 5000);
+      setPasswordError(null);
     } catch (err: unknown) {
       setPasswordError(err instanceof Error ? err.message : "Password change failed.");
     } finally {
@@ -263,9 +241,6 @@ export default function Settings() {
 
   return (
     <div className="w-full flex flex-col gap-5 select-none font-sans">
-      {successMessage && <SuccessBanner message={successMessage} onDismiss={() => setSuccessMessage(null)} />}
-      {settingsError && <ErrorMessage message={settingsError} />}
-
       <PageHeader
         title="Settings"
         subtitle="Configure your account and system preferences"
@@ -346,7 +321,6 @@ export default function Settings() {
                 <p className="text-[10px] text-ink-dim mt-0.5">Email is managed by your administrator and cannot be changed here.</p>
               </FormField>
             </div>
-            {generalError && <div className="mt-4"><ErrorMessage message={generalError} /></div>}
             <div className="flex justify-end pt-6 mt-6 border-t border-sky-page/30">
               <Button onClick={handleGeneralSave} isLoading={isSavingGeneral}>Save Changes</Button>
             </div>
@@ -362,7 +336,6 @@ export default function Settings() {
               <ToggleRow label="Transfer Alerts" description="Notify when a new asset transfer is requested" checked={notificationsForm.notifications_transfer_alerts} onChange={(v) => setNotificationsForm({ ...notificationsForm, notifications_transfer_alerts: v })} />
               <ToggleRow label="Request Updates" description="Notify about asset request status updates" checked={notificationsForm.notifications_request_updates} onChange={(v) => setNotificationsForm({ ...notificationsForm, notifications_request_updates: v })} />
             </div>
-            {notificationsError && <div className="mt-4"><ErrorMessage message={notificationsError} /></div>}
             <div className="flex justify-end pt-6 mt-6 border-t border-sky-page/30">
               <Button onClick={handleNotificationsSave} isLoading={isSavingNotifications}>Save Changes</Button>
             </div>
@@ -373,7 +346,6 @@ export default function Settings() {
             <h3 className="font-bold text-base text-ink">Change Password</h3>
             <p className="text-sm text-ink-dim mt-1 mb-6">Use at least 8 characters, including a number and a special character.</p>
             {passwordError && <ErrorMessage message={passwordError} />}
-            {passwordSuccess && <SuccessBanner message={passwordSuccess} onDismiss={() => setPasswordSuccess(null)} />}
             <form onSubmit={handlePasswordChange} className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6 max-w-3xl">
               <div className="flex flex-col gap-2 md:col-span-2">
                 <label htmlFor="current-password" className="text-[10px] font-bold uppercase tracking-wider text-ink-dim">Current password</label>
@@ -469,7 +441,6 @@ export default function Settings() {
               </>
             )}
 
-            {systemFormError && <div className="mt-4"><ErrorMessage message={systemFormError} /></div>}
             <div className="flex justify-end pt-6 mt-6 border-t border-sky-page/30">
               <Button onClick={handleSystemSave} isLoading={isSavingSystem}>Save Changes</Button>
             </div>

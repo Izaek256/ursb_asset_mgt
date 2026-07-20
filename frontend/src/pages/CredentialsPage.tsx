@@ -63,7 +63,6 @@ export default function CredentialsPage() {
 
   const [accounts, setAccounts] = React.useState<RecentAccount[]>([]);
   const [isLoadingAccounts, setIsLoadingAccounts] = React.useState(false);
-  const [accountsError, setAccountsError] = React.useState<string | null>(null);
 
   const [search, setSearch] = React.useState("");
   const [page, setPage] = React.useState(1);
@@ -97,7 +96,6 @@ export default function CredentialsPage() {
   const [isRegenerating, setIsRegenerating] = React.useState(false);
   const [regenResult, setRegenResult] = React.useState<RegenResult | null>(null);
   const [showRegenModal, setShowRegenModal] = React.useState(false);
-  const [regenError, setRegenError] = React.useState<string | null>(null);
 
   const handleAuthenticate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,7 +118,6 @@ export default function CredentialsPage() {
   const fetchAccounts = React.useCallback(async () => {
     if (!isAuthenticated) return;
     setIsLoadingAccounts(true);
-    setAccountsError(null);
     try {
       const data = await apiFetch<RecentAccountsResponse>(
         `/credentials/recent-accounts?page=${page}&page_size=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ""}`,
@@ -129,7 +126,7 @@ export default function CredentialsPage() {
       setAccounts(data.accounts);
       setTotal(data.total);
     } catch (err: any) {
-      setAccountsError(err.message || "Failed to fetch accounts");
+      (window as any).toast?.error("Failed to fetch accounts", err.message || "Could not load account list.");
     } finally {
       setIsLoadingAccounts(false);
     }
@@ -148,7 +145,7 @@ export default function CredentialsPage() {
 
   const handleExportAccounts = (format: "pdf" | "xlsx") => {
     if (accounts.length === 0) {
-      alert("No accounts to export.");
+      (window as any).toast?.warning("Nothing to export", "No accounts to export.");
       return;
     }
 
@@ -198,7 +195,7 @@ export default function CredentialsPage() {
     }
   };
 
-  const handleImport = () => {
+  const handleImport = async () => {
     if (!file) return;
     setImportError(null);
     setImportProgress(0);
@@ -206,80 +203,115 @@ export default function CredentialsPage() {
     setImportTotal(0);
     setIsImporting(true);
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      let rows: Record<string, string>[] = [];
-      try {
-        const data = e.target?.result;
-        const wb = XLSX.read(data, { type: "binary" });
-        const sheet = wb.Sheets[wb.SheetNames[0]];
-        rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: "" });
-      } catch {
-        setImportError("Failed to parse file. Ensure it is a valid CSV or XLSX.");
-        setIsImporting(false);
-        return;
-      }
+    // Parse the file synchronously using a Promise wrapper so we can await it
+    let rows: Record<string, string>[] = [];
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const wb = XLSX.read(arrayBuffer, { type: "array" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: "" });
+    } catch {
+      setImportError("Failed to parse file. Ensure it is a valid CSV or XLSX.");
+      setIsImporting(false);
+      return;
+    }
 
-      if (rows.length === 0) {
-        setImportError("The file contains no data rows.");
-        setIsImporting(false);
-        return;
-      }
+    if (rows.length === 0) {
+      setImportError("The file contains no data rows.");
+      setIsImporting(false);
+      return;
+    }
 
-      const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const backendPort = import.meta.env.VITE_BACKEND_PORT || "8001";
-      const wsHost = `${window.location.hostname}:${backendPort}`;
-      const ws = new WebSocket(`${wsProtocol}//${wsHost}/api/v1/users/bulk-import-ws`);
-      wsRef.current = ws;
+    // Obtain a short-lived one-time token before opening the WebSocket.
+    // Browsers don't reliably send cookies on cross-origin WS upgrades,
+    // so we exchange the session cookie for a query-param token here via
+    // a normal credentialed HTTP request.
+    let wsToken: string;
+    try {
+      const tokenData = await apiFetch<{ token: string }>("/users/ws-auth-token", {
+        method: "POST",
+      });
+      wsToken = tokenData.token;
+    } catch {
+      setImportError("Failed to authenticate for import. Please try again.");
+      setIsImporting(false);
+      return;
+    }
 
-      ws.onopen = () => {
-        ws.send(JSON.stringify(rows));
-      };
+    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const backendPort = import.meta.env.VITE_BACKEND_PORT || "8001";
+    const wsHost = `${window.location.hostname}:${backendPort}`;
+    const ws = new WebSocket(`${wsProtocol}//${wsHost}/api/v1/users/bulk-import-ws?token=${encodeURIComponent(wsToken)}`);
+    wsRef.current = ws;
 
-      ws.onmessage = (event) => {
-        const msg = JSON.parse(event.data);
-        if (msg.type === "progress") {
-          setImportProgress(msg.progress);
-          setImportProcessed(msg.processed);
-          setImportTotal(msg.total);
-        } else if (msg.type === "complete") {
-          setImportProgress(100);
-          setIsImporting(false);
-          wsRef.current = null;
-
-          const result: BulkImportResponse = msg;
-          setImportResults(result);
-          setShowResults(result.accounts && result.accounts.length > 0);
-          setFile(null);
-          const fileInput = document.getElementById("import-file") as HTMLInputElement;
-          if (fileInput) fileInput.value = "";
-
-          if (result.errors && result.errors.length > 0) {
-            setShowErrorsModal(true);
-          }
-        } else if (msg.type === "error") {
-          setImportError(msg.message || "Import failed on server.");
-          setIsImporting(false);
-          wsRef.current = null;
-        }
-      };
-
-      ws.onerror = () => {
-        setImportError("Connection error. Please try again.");
-        setIsImporting(false);
-        wsRef.current = null;
-      };
-
-      ws.onclose = (event) => {
-        if (isImporting && event.code !== 1000) {
-          setImportError("Import was interrupted.");
-          setIsImporting(false);
-          wsRef.current = null;
-        }
-      };
+    ws.onopen = () => {
+      ws.send(JSON.stringify(rows));
     };
 
-    reader.readAsBinaryString(file);
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.type === "progress") {
+        setImportProgress(msg.progress);
+        setImportProcessed(msg.processed);
+        setImportTotal(msg.total);
+      } else if (msg.type === "complete") {
+        setImportProgress(100);
+        setIsImporting(false);
+        wsRef.current = null;
+
+        const result: BulkImportResponse = msg;
+        setImportResults(result);
+        setShowResults(result.accounts && result.accounts.length > 0);
+        setFile(null);
+        const fileInput = document.getElementById("import-file") as HTMLInputElement;
+        if (fileInput) fileInput.value = "";
+
+        if (result.errors && result.errors.length > 0) {
+          setShowErrorsModal(true);
+        }
+      } else if (msg.type === "error") {
+        setImportError(msg.message || "Import failed on server.");
+        setIsImporting(false);
+        wsRef.current = null;
+      }
+    };
+
+    ws.onerror = () => {
+      setImportError("Connection error. Please try again.");
+      setIsImporting(false);
+      wsRef.current = null;
+    };
+
+    ws.onclose = (event) => {
+      if (isImporting && event.code !== 1000) {
+        setImportError("Import was interrupted.");
+        setIsImporting(false);
+        wsRef.current = null;
+      }
+    };
+  };
+
+  const handleDownloadTemplate = () => {
+    const templateData = [
+      {
+        full_name: "John Doe",
+        email: "johndoe@ursb.go.ug",
+        role: "EMPLOYEE",
+        department: "Finance",
+      },
+      {
+        full_name: "Jane Smith",
+        email: "janesmith@ursb.go.ug",
+        role: "ASSET_MANAGER",
+        department: "IT",
+      },
+    ];
+    const ws = XLSX.utils.json_to_sheet(templateData);
+    // Set column widths
+    ws["!cols"] = [{ wch: 25 }, { wch: 30 }, { wch: 28 }, { wch: 20 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Users");
+    XLSX.writeFile(wb, "user_import_template.xlsx");
   };
 
   const handleCancelImport = () => {
@@ -337,7 +369,6 @@ export default function CredentialsPage() {
   };
 
   const handleRegeneratePassword = async (account: RecentAccount) => {
-    setRegenError(null);
     setIsRegenerating(true);
     try {
       const data = await apiFetch<{ generated_password: string; expires_at: string }>(
@@ -355,10 +386,9 @@ export default function CredentialsPage() {
         expires_at: data.expires_at,
       });
       setShowRegenModal(true);
-      // Refresh the list so the new password shows as active
       fetchAccounts();
     } catch (err: any) {
-      setRegenError(err.message || "Failed to regenerate password");
+      (window as any).toast?.error("Regenerate Failed", err.message || "Failed to regenerate password");
     } finally {
       setIsRegenerating(false);
     }
@@ -428,7 +458,6 @@ export default function CredentialsPage() {
                 icon: ICONS.regenerate,
                 disabled: isRegenerating,
                 onClick: () => {
-                  setRegenError(null);
                   handleRegeneratePassword(a);
                 },
               },
@@ -748,17 +777,6 @@ export default function CredentialsPage() {
         subtitle="Create user accounts and regenerate passwords. Passwords are shown once at creation and never stored."
       />
 
-      {/* Regenerate error inline */}
-      {regenError && (
-        <div className="bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 flex items-center gap-2 text-sm text-rose-700">
-          <ICONS.alertCircle className="w-4 h-4 shrink-0" />
-          <span>{regenError}</span>
-          <button className="ml-auto text-rose-400 hover:text-rose-600" onClick={() => setRegenError(null)}>
-            <ICONS.close className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
       {/* Top Section: Create User & Bulk Import Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
@@ -845,6 +863,33 @@ export default function CredentialsPage() {
               </div>
             </div>
 
+            {/* Required columns hint + template download */}
+            <div className="mb-4 bg-sky-page/40 border border-sky-cardBorder rounded-xl px-4 py-3 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-ink-dim mb-1.5">Required columns</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {["full_name", "email", "role", "department"].map((col) => (
+                    <code key={col} className="text-[11px] bg-white border border-sky-cardBorder px-2 py-0.5 rounded-md font-mono text-ink">
+                      {col}
+                    </code>
+                  ))}
+                </div>
+                <p className="text-[10px] text-ink-dim mt-2">
+                  Valid roles: <span className="font-mono">EMPLOYEE, ASSET_CUSTODIAN, ASSET_MANAGER, SYSTEM_ADMINISTRATOR</span>
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDownloadTemplate}
+                className="shrink-0 text-[#6a94d4] text-xs gap-1.5 whitespace-nowrap"
+                title="Download sample template"
+              >
+                <ICONS.download className="w-3.5 h-3.5" />
+                Template
+              </Button>
+            </div>
+
             <div className="flex items-center justify-between pt-5 border-t border-sky-page/50 relative">
               <DropdownButton
                 label="Export Credentials"
@@ -904,7 +949,6 @@ export default function CredentialsPage() {
             />
           </div>
         </div>
-        {accountsError && <ErrorMessage message={accountsError} />}
         {isLoadingAccounts ? (
           <div className="text-center py-8 text-ink-dim">Loading...</div>
         ) : accounts.length === 0 ? (

@@ -69,3 +69,5 @@ frontend/.env.*.local
 # ─── Agent / Kiro internals ───────────────────────────────────────────────────
 .agents/skills/
 skills-lock.json
+backend/ursb_asset.db-shm
+backend/ursb_asset.db-wal
