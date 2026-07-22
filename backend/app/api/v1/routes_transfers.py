@@ -10,7 +10,7 @@ from typing import List, Optional
 
 from datetime import datetime, date
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from pydantic import BaseModel, constr
 from sqlalchemy.orm import Session
 
@@ -231,6 +231,7 @@ def create_transfer(
 @router.put("/{transfer_id}/acknowledge", response_model=TransferResponse)
 def acknowledge_transfer(
     transfer_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -251,19 +252,6 @@ def acknowledge_transfer(
     db.add(transfer)
     db.commit()
     
-    # Notify sender that transfer was acknowledged
-    from app.services.notification_service import create_notification
-    asset = db.query(Asset).filter(Asset.asset_id == transfer.asset_id).first()
-    if asset:
-        create_notification(
-            db=db,
-            user_id=str(transfer.from_user_id),
-            title="Transfer Acknowledged",
-            message=f"Transfer of asset '{asset.asset_name}' to {transfer.to_user_id} has been acknowledged.",
-            notification_type="TRANSFER_ACKNOWLEDGED",
-            related_asset_id=asset.asset_id,
-        )
-
     # Transition asset status from Under Transfer to Assigned upon acknowledgment
     asset = db.query(Asset).filter(Asset.asset_id == transfer.asset_id).first()
     if asset:
@@ -282,6 +270,19 @@ def acknowledge_transfer(
     )
     db.add(audit)
     db.commit()
+
+    # Notify sender that transfer was acknowledged
+    from app.services.notification_service import create_notification
+    asset = db.query(Asset).filter(Asset.asset_id == transfer.asset_id).first()
+    if asset:
+        background_tasks.add_task(
+            create_notification,
+            user_id=str(transfer.from_user_id),
+            title="Transfer Acknowledged",
+            message=f"Transfer of asset '{asset.asset_name}' to {transfer.to_user_id} has been acknowledged.",
+            notification_type="TRANSFER_ACKNOWLEDGED",
+            related_asset_id=asset.asset_id,
+        )
 
     asset = db.query(Asset).filter(Asset.asset_id == transfer.asset_id).first()
     auth_u = db.query(User).filter(User.user_id == transfer.authorised_by).first()

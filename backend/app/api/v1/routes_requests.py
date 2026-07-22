@@ -15,7 +15,7 @@ Access Control Rules:
 from datetime import datetime, date
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -150,6 +150,7 @@ def _can_transition(current: RequestStatus, target: RequestStatus) -> bool:
 @router.post("", response_model=AssetRequestResponse, status_code=status.HTTP_201_CREATED)
 def create_request(
     body: AssetRequestCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -198,18 +199,18 @@ def create_request(
     db.add(request)
     db.flush()
     _log(db, actor=current_user, action="SUBMIT_REQUEST", record_id=str(request.request_id), details="Submitted asset request")
+    db.commit()
+    db.refresh(request)
     # S3-08: Notify Asset Managers of New Request
     from app.services.notification_service import create_notification
-    create_notification(
-        db=db,
+    background_tasks.add_task(
+        create_notification,
         user_id="Asset Manager",
         title="New Asset Request Submitted",
         message=f"A new asset request has been submitted by user {current_user.email} (Request ID: {request.request_id}).",
         notification_type="REQUEST_SUBMITTED",
         related_asset_id=request.asset_id,
     )
-    db.commit()
-    db.refresh(request)
     return _serialize_request(request)
 
 
@@ -285,6 +286,7 @@ def get_request(
 def approve_request(
     request_id: int,
     body: AssetRequestApprove,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR)),
     _guard: None = Depends(require_not_self_approval),
@@ -313,18 +315,18 @@ def approve_request(
     request.reviewed_by = current_user.id
     request.reviewed_at = datetime.utcnow()
     _log(db, actor=current_user, action="APPROVE_REQUEST", record_id=str(request.request_id), details="Approved asset request")
+    db.commit()
+    db.refresh(request)
     # S3-08: Notify Employee of Request Approval
     from app.services.notification_service import create_notification
-    create_notification(
-        db=db,
+    background_tasks.add_task(
+        create_notification,
         user_id=str(request.requested_by),
         title="Asset Request Approved",
         message=f"Your request for asset/type '{request.asset_type or request.asset_id}' has been approved.",
         notification_type="REQUEST_APPROVED",
         related_asset_id=request.asset_id,
     )
-    db.commit()
-    db.refresh(request)
     return _serialize_request(request)
 
 
@@ -367,6 +369,7 @@ def reject_request(
 def assign_request(
     request_id: int,
     body: AssetRequestAssign,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR)),
 ):
@@ -422,24 +425,25 @@ def assign_request(
     asset.current_custodian_id = str(custodian_id)
     _log(db, actor=current_user, action="ASSIGN_FROM_REQUEST", record_id=str(request.request_id), details=f"Assigned request to asset for final recipient {final_recipient_id} with custodian {custodian_id}")
     
+    db.commit()
+    db.refresh(request)
     # Notify final recipient of assignment
     from app.services.notification_service import create_notification
-    create_notification(
-        db=db,
+    background_tasks.add_task(
+        create_notification,
         user_id=str(final_recipient_id),
         title="New Asset Assignment",
         message=f"You have been assigned asset {asset.asset_name} ({asset.asset_id}). Please accept or decline this assignment.",
         notification_type="ASSIGNMENT_SENT",
         related_asset_id=asset.asset_id,
     )
-    db.commit()
-    db.refresh(request)
     return _serialize_request(request)
 
 
 @router.put("/{request_id}/custodian-cancel", response_model=AssetRequestResponse)
 def custodian_cancel_request(
     request_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -473,25 +477,26 @@ def custodian_cancel_request(
                 existing_assignment.return_date = date.today()
     
     _log(db, actor=current_user, action="CUSTODIAN_CANCEL", record_id=str(request.request_id), details="Custodian cancelled assigned request")
+    db.commit()
+    db.refresh(request)
     # Notify requester that their request was cancelled by custodian
     from app.services.notification_service import create_notification
     asset_name = request.asset.asset_name if request.asset else request.asset_type
-    create_notification(
-        db=db,
+    background_tasks.add_task(
+        create_notification,
         user_id=str(request.requested_by),
         title="Request Cancelled by Custodian",
         message=f"Your asset request for {asset_name} has been cancelled by the custodian.",
         notification_type="REQUEST_CANCELLED",
         related_asset_id=request.asset_id,
     )
-    db.commit()
-    db.refresh(request)
     return _serialize_request(request)
 
 
 @router.put("/{request_id}/handover", response_model=AssetRequestResponse)
 def handover_request(
     request_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -515,25 +520,26 @@ def handover_request(
             asset.status = AssetStatus.PENDING_PICKUP
     
     _log(db, actor=current_user, action="HANDOVER_ASSET", record_id=str(request.request_id), details="Asset handed over to requester")
+    db.commit()
+    db.refresh(request)
     # Notify requester that asset is ready for pickup
     from app.services.notification_service import create_notification
     asset_name = request.asset.asset_name if request.asset else request.asset_type
-    create_notification(
-        db=db,
+    background_tasks.add_task(
+        create_notification,
         user_id=str(request.requested_by),
         title="Asset Ready for Pickup",
         message=f"Your requested asset {asset_name} is ready for pickup. Please confirm receipt.",
         notification_type="ASSET_READY_PICKUP",
         related_asset_id=request.asset_id,
     )
-    db.commit()
-    db.refresh(request)
     return _serialize_request(request)
 
 
 @router.put("/{request_id}/pickup", response_model=AssetRequestResponse)
 def pickup_request(
     request_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -579,26 +585,26 @@ def pickup_request(
             ))
     
     _log(db, actor=current_user, action="PICKUP_CONFIRMED", record_id=str(request.request_id), details="Pickup confirmed")
+    db.commit()
+    db.refresh(request)
     # Notify Asset Managers and Super System Administrators that pickup was confirmed
     from app.services.notification_service import create_notification
-    create_notification(
-        db=db,
+    background_tasks.add_task(
+        create_notification,
         user_id="Asset Manager",
         title="Asset Pickup Confirmed",
         message=f"Request #{request.request_id} has been picked up by the requester. The asset is now assigned to them.",
         notification_type="PICKUP_CONFIRMED",
         related_asset_id=request.asset_id,
     )
-    create_notification(
-        db=db,
+    background_tasks.add_task(
+        create_notification,
         user_id="SUPER_SYSTEM_ADMINISTRATOR",
         title="Asset Pickup Confirmed",
         message=f"Request #{request.request_id} has been picked up by the requester. The asset is now assigned to them.",
         notification_type="PICKUP_CONFIRMED",
         related_asset_id=request.asset_id,
     )
-    db.commit()
-    db.refresh(request)
     return _serialize_request(request)
 
 

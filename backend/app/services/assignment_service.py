@@ -188,42 +188,7 @@ def accept_assignment(db: Session, assignment_id: int, current_user_id: int) -> 
     )
     db.add(audit)
     
-    # Notify custodian if specified in notes (new workflow)
-    if assignment.notes and "[Custodian:" in assignment.notes:
-        from app.services.notification_service import create_notification
-        import re
-        match = re.search(r'\[Custodian: (\d+):([^\]]+)\]', assignment.notes)
-        if match:
-            custodian_id = int(match.group(1))
-            custodian_email = match.group(2)
-            custodian = db.query(User).filter(User.id == custodian_id).first()
-            if custodian:
-                create_notification(
-                    db=db,
-                    user_id=str(custodian_id),
-                    title="Asset Approved for Pickup",
-                    message=f"Asset '{asset.asset_name}' has been approved by the recipient. Please handle pickup and handover.",
-                    notification_type="ASSET_APPROVED_PICKUP",
-                    related_asset_id=asset.asset_id,
-                )
-    elif assignment.notes and "[Final recipient:" in assignment.notes:
-        # Handle old format for backward compatibility
-        from app.services.notification_service import create_notification
-        import re
-        match = re.search(r'\[Final recipient: ([^\]]+)\]', assignment.notes)
-        if match:
-            final_recipient_email = match.group(1)
-            final_recipient = db.query(User).filter(User.email == final_recipient_email).first()
-            if final_recipient:
-                # In old format, assignment was to custodian, so notify custodian that recipient approved
-                create_notification(
-                    db=db,
-                    user_id=assignment.assigned_to,
-                    title="Asset Approved for Pickup",
-                    message=f"Asset '{asset.asset_name}' has been approved by {final_recipient.email}. Please handle pickup and handover.",
-                    notification_type="ASSET_APPROVED_PICKUP",
-                    related_asset_id=asset.asset_id,
-                )
+
     
     db.commit()
     db.refresh(assignment)
@@ -296,16 +261,7 @@ def decline_assignment(db: Session, assignment_id: int, current_user_id: int) ->
     )
     db.add(audit)
 
-    # Notify Asset Manager that asset is back to Available
-    from app.services.notification_service import create_notification
-    create_notification(
-        db=db,
-        user_id="ASSET_MANAGER",
-        title="Assignment Declined",
-        message=f"Employee declined the assignment for asset '{asset.asset_name}' ({asset.asset_id}). The asset is now Available.",
-        notification_type="ASSIGNMENT_DECLINED",
-        related_asset_id=asset.asset_id,
-    )
+
 
     db.commit()
     db.refresh(assignment)
@@ -376,16 +332,7 @@ def confirm_handover(db: Session, assignment_id: int, custodian_id: int) -> Assi
         )
         db.add(audit)
         
-        # Notify final recipient that asset is ready for pickup
-        from app.services.notification_service import create_notification
-        create_notification(
-            db=db,
-            user_id=assignment.assigned_to,
-            title="Asset Ready for Pickup",
-            message=f"Asset '{asset.asset_name}' has been prepared by custodian and is ready for pickup. Please confirm receipt.",
-            notification_type="ASSET_READY_PICKUP",
-            related_asset_id=asset.asset_id,
-        )
+
         
         db.commit()
         db.refresh(assignment)
@@ -694,43 +641,7 @@ def confirm_receipt(db: Session, assignment_id: int, employee_id: int) -> Assign
     )
     db.add(audit)
 
-    # Notify Asset Manager and custodian that asset has been received by the employee
-    asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
-    from app.services.notification_service import create_notification
-    if asset:
-        # Notify all Asset Managers
-        create_notification(
-            db=db,
-            user_id="ASSET_MANAGER",
-            title="Asset Receipt Confirmed",
-            message=f"Employee has confirmed receipt of asset '{asset.asset_name}' ({asset.asset_id}). Assignment #{assignment_id} is now fully active.",
-            notification_type="RECEIPT_CONFIRMED",
-            related_asset_id=asset.asset_id,
-        )
-        # Notify the custodian who handled the handover (stored in notes)
-        if assignment.notes and "[Custodian:" in assignment.notes:
-            import re
-            match = re.search(r'\[Custodian: (\d+):', assignment.notes)
-            if match:
-                custodian_id_from_notes = int(match.group(1))
-                create_notification(
-                    db=db,
-                    user_id=str(custodian_id_from_notes),
-                    title="Asset Receipt Confirmed",
-                    message=f"The employee has confirmed receipt of asset '{asset.asset_name}' ({asset.asset_id}). Handover is complete.",
-                    notification_type="RECEIPT_CONFIRMED",
-                    related_asset_id=asset.asset_id,
-                )
-    else:
-        # Asset record missing but still notify managers
-        create_notification(
-            db=db,
-            user_id="ASSET_MANAGER",
-            title="Asset Receipt Confirmed",
-            message=f"Employee has confirmed receipt of asset (ID: {assignment.asset_id}). Assignment #{assignment_id} is now fully active.",
-            notification_type="RECEIPT_CONFIRMED",
-            related_asset_id=None,
-        )
+
 
     db.commit()
     db.refresh(assignment)

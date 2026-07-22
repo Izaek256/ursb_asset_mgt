@@ -10,7 +10,7 @@ Access Control Rules:
 from datetime import date, datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -115,6 +115,7 @@ def _log(db: Session, *, actor: User, action: str, record_id: str, details: str,
 @router.post("", response_model=AssignmentResponse, status_code=status.HTTP_201_CREATED)
 def create_assignment(
     body: AssignmentCreateRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
 ):
@@ -139,8 +140,8 @@ def create_assignment(
         if body.custodian_id:
             message += " A custodian will handle pickup after your approval."
         
-        create_notification(
-            db=db,
+        background_tasks.add_task(
+            create_notification,
             user_id=recipient_id,
             title="New Asset Assignment",
             message=message,
@@ -247,6 +248,7 @@ def get_assignment(
 @router.delete("/{assignment_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_assignment(
     assignment_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
 ):
@@ -284,17 +286,18 @@ def delete_assignment(
     # Notify the employee who was assigned
     from app.services.notification_service import create_notification
     asset_label = asset.asset_name if asset else assignment.asset_id
-    create_notification(
-        db=db,
+
+    db.delete(assignment)
+    db.commit()
+
+    background_tasks.add_task(
+        create_notification,
         user_id=str(assignment.assigned_to),
         title="Assignment Cancelled",
         message=f"Your pending assignment for asset '{asset_label}' has been cancelled by the administrator.",
         notification_type="ASSIGNMENT_CANCELLED",
         related_asset_id=assignment.asset_id,
     )
-
-    db.delete(assignment)
-    db.commit()
 
 
 
@@ -303,16 +306,52 @@ def delete_assignment(
 @router.post("/{assignment_id}/accept", response_model=AssignmentResponse)
 def accept_assignment_route(
     assignment_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.EMPLOYEE)),
 ):
     """Step 1 of 2: Employee accepts assignment offer. Employee only. SRS §3 — Assignment Workflows."""
     from app.services.assignment_service import accept_assignment as service_accept
+    from app.services.notification_service import create_notification
     assignment = service_accept(db, assignment_id, current_user.id)
     
     # Enhanced audit log with workflow step
     _log(db, actor=current_user, action="ACCEPT_ASSIGNMENT", record_id=str(assignment_id), 
           details=f"Assignment {assignment_id} accepted by user {current_user.id}", workflow_step="USER_CONFIRMATION")
+    db.commit()
+
+    # S3-08: Notify custodian if specified in notes, or final recipient
+    asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
+    if asset:
+        if assignment.notes and "[Custodian:" in assignment.notes:
+            import re
+            match = re.search(r'\[Custodian: (\d+):([^\]]+)\]', assignment.notes)
+            if match:
+                custodian_id = int(match.group(1))
+                background_tasks.add_task(
+                    create_notification,
+                    user_id=str(custodian_id),
+                    title="Asset Approved for Pickup",
+                    message=f"Asset '{asset.asset_name}' has been approved by the recipient. Please handle pickup and handover.",
+                    notification_type="ASSET_APPROVED_PICKUP",
+                    related_asset_id=asset.asset_id,
+                )
+        elif assignment.notes and "[Final recipient:" in assignment.notes:
+            # Handle old format for backward compatibility
+            import re
+            match = re.search(r'\[Final recipient: ([^\]]+)\]', assignment.notes)
+            if match:
+                final_recipient_email = match.group(1)
+                final_recipient = db.query(User).filter(User.email == final_recipient_email).first()
+                if final_recipient:
+                    background_tasks.add_task(
+                        create_notification,
+                        user_id=assignment.assigned_to,
+                        title="Asset Approved for Pickup",
+                        message=f"Asset '{asset.asset_name}' has been approved by {final_recipient.email}. Please handle pickup and handover.",
+                        notification_type="ASSET_APPROVED_PICKUP",
+                        related_asset_id=asset.asset_id,
+                    )
     
     return _serialize_assignment(assignment, db)
 
@@ -320,28 +359,56 @@ def accept_assignment_route(
 @router.post("/{assignment_id}/decline", response_model=AssignmentResponse)
 def decline_assignment_route(
     assignment_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.EMPLOYEE)),
 ):
     """Step 1 of 2: Employee declines assignment offer. Employee only. SRS §3 — Assignment Workflows."""
     from app.services.assignment_service import decline_assignment as service_decline
+    from app.services.notification_service import create_notification
     assignment = service_decline(db, assignment_id, current_user.id)
+
+    # S3-08: Notify Asset Manager that asset is back to Available
+    asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
+    if asset:
+        background_tasks.add_task(
+            create_notification,
+            user_id="ASSET_MANAGER",
+            title="Assignment Declined",
+            message=f"Employee declined the assignment for asset '{asset.asset_name}' ({asset.asset_id}). The asset is now Available.",
+            notification_type="ASSIGNMENT_DECLINED",
+            related_asset_id=asset.asset_id,
+        )
     return _serialize_assignment(assignment, db)
 
 
 @router.post("/{assignment_id}/confirm-handover", response_model=AssignmentResponse)
 def confirm_handover_route(
     assignment_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ASSET_CUSTODIAN)),
 ):
     """Step 2 of 2: Custodian confirms physical handover. Custodian only. SRS §3 — Handover Workflows."""
     from app.services.assignment_service import confirm_handover as service_confirm
+    from app.services.notification_service import create_notification
     assignment = service_confirm(db, assignment_id, current_user.id)
     
     # Enhanced audit log with workflow step
     _log(db, actor=current_user, action="CONFIRM_HANDOVER", record_id=str(assignment_id), 
           details=f"Physical handover confirmed by custodian {current_user.id}", workflow_step="CUSTODIAN_CONFIRMATION")
+    db.commit()
+
+    asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
+    if asset:
+        background_tasks.add_task(
+            create_notification,
+            user_id=assignment.assigned_to,
+            title="Asset Ready for Pickup",
+            message=f"Asset '{asset.asset_name}' has been prepared by custodian and is ready for pickup. Please confirm receipt.",
+            notification_type="ASSET_READY_PICKUP",
+            related_asset_id=asset.asset_id,
+        )
     
     return _serialize_assignment(assignment, db)
 
@@ -349,17 +416,53 @@ def confirm_handover_route(
 @router.post("/{assignment_id}/confirm-receipt", response_model=AssignmentResponse)
 def confirm_receipt_route(
     assignment_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.EMPLOYEE)),
 ):
     """Step 3: Employee confirms physical receipt of asset after custodian handover. Employee only."""
     from app.services.assignment_service import confirm_receipt as service_confirm_receipt
+    from app.services.notification_service import create_notification
 
     assignment = service_confirm_receipt(db, assignment_id, current_user.id)
 
     # Enhanced audit log with workflow step
     _log(db, actor=current_user, action="CONFIRM_RECEIPT", record_id=str(assignment_id),
           details=f"Receipt confirmed by employee {current_user.id}", workflow_step="RECEIPT_CONFIRMATION")
+    db.commit()
+
+    asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
+    if asset:
+        background_tasks.add_task(
+            create_notification,
+            user_id="ASSET_MANAGER",
+            title="Asset Receipt Confirmed",
+            message=f"Employee has confirmed receipt of asset '{asset.asset_name}' ({asset.asset_id}). Assignment #{assignment_id} is now fully active.",
+            notification_type="RECEIPT_CONFIRMED",
+            related_asset_id=asset.asset_id,
+        )
+        if assignment.notes and "[Custodian:" in assignment.notes:
+            import re
+            match = re.search(r'\[Custodian: (\d+):', assignment.notes)
+            if match:
+                custodian_id_from_notes = int(match.group(1))
+                background_tasks.add_task(
+                    create_notification,
+                    user_id=str(custodian_id_from_notes),
+                    title="Asset Receipt Confirmed",
+                    message=f"The employee has confirmed receipt of asset '{asset.asset_name}' ({asset.asset_id}). Handover is complete.",
+                    notification_type="RECEIPT_CONFIRMED",
+                    related_asset_id=asset.asset_id,
+                )
+    else:
+        background_tasks.add_task(
+            create_notification,
+            user_id="ASSET_MANAGER",
+            title="Asset Receipt Confirmed",
+            message=f"Employee has confirmed receipt of asset (ID: {assignment.asset_id}). Assignment #{assignment_id} is now fully active.",
+            notification_type="RECEIPT_CONFIRMED",
+            related_asset_id=None,
+        )
 
     return _serialize_assignment(assignment, db)
 
@@ -367,6 +470,7 @@ def confirm_receipt_route(
 @router.post("/{assignment_id}/request-return", response_model=AssignmentResponse)
 def request_return_route(
     assignment_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ASSET_CUSTODIAN)),
 ):
@@ -379,12 +483,13 @@ def request_return_route(
     # Enhanced audit log with workflow step
     _log(db, actor=current_user, action="REQUEST_RETURN", record_id=str(assignment_id), 
           details=f"Return requested by custodian {current_user.id}", workflow_step="RETURN_INITIATION")
+    db.commit()
     
     # Notify employee of return request
     asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
     if asset:
-        create_notification(
-            db=db,
+        background_tasks.add_task(
+            create_notification,
             user_id=str(assignment.assigned_to),
             title="Asset Return Requested",
             message=f"The custodian has requested return of asset '{asset.asset_name}'. Please approve or reject this request.",
@@ -398,6 +503,7 @@ def request_return_route(
 @router.post("/{assignment_id}/approve-return", response_model=AssignmentResponse)
 def approve_return_route(
     assignment_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.EMPLOYEE)),
 ):
@@ -410,12 +516,13 @@ def approve_return_route(
     # Enhanced audit log with workflow step
     _log(db, actor=current_user, action="APPROVE_RETURN", record_id=str(assignment_id), 
           details=f"Return approved by employee {current_user.id}", workflow_step="RETURN_APPROVAL")
+    db.commit()
     
     # Notify custodian that return is approved
     asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
     if asset and assignment.return_requested_by:
-        create_notification(
-            db=db,
+        background_tasks.add_task(
+            create_notification,
             user_id=str(assignment.return_requested_by),
             title="Asset Return Approved",
             message=f"Employee has approved return of asset '{asset.asset_name}'. Please confirm receipt to complete the return.",
@@ -430,6 +537,7 @@ def approve_return_route(
 def reject_return_route(
     assignment_id: int,
     body: ReturnRejectRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.EMPLOYEE)),
 ):
@@ -442,12 +550,13 @@ def reject_return_route(
     # Enhanced audit log with workflow step
     _log(db, actor=current_user, action="REJECT_RETURN", record_id=str(assignment_id), 
           details=f"Return rejected by employee {current_user.id}. Reason: {body.reason}", workflow_step="RETURN_REJECTION")
+    db.commit()
     
     # Notify custodian that return is rejected
     asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
     if asset and assignment.return_requested_by:
-        create_notification(
-            db=db,
+        background_tasks.add_task(
+            create_notification,
             user_id=str(assignment.return_requested_by),
             title="Asset Return Rejected",
             message=f"Employee has rejected the return request for asset '{asset.asset_name}'. Reason: {body.reason}",
@@ -461,6 +570,7 @@ def reject_return_route(
 @router.post("/{assignment_id}/confirm-return", response_model=AssignmentResponse)
 def confirm_return_route(
     assignment_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ASSET_CUSTODIAN)),
 ):
@@ -473,12 +583,13 @@ def confirm_return_route(
     # Enhanced audit log with workflow step
     _log(db, actor=current_user, action="CONFIRM_RETURN", record_id=str(assignment_id), 
           details=f"Physical return confirmed by custodian {current_user.id}", workflow_step="RETURN_COMPLETION")
+    db.commit()
     
     # Notify asset manager that return is complete
     asset = db.query(Asset).filter(Asset.asset_id == assignment.asset_id).first()
     if asset:
-        create_notification(
-            db=db,
+        background_tasks.add_task(
+            create_notification,
             user_id="Asset Manager",
             title="Asset Return Completed",
             message=f"Asset '{asset.asset_name}' has been returned to custody and is now Available.",
