@@ -323,9 +323,9 @@ def delete_assignment(
 def accept_assignment_route(
     assignment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.EMPLOYEE)),
+    current_user: User = Depends(get_current_user),
 ):
-    """Step 1 of 2: Employee accepts assignment offer. Employee only. SRS §3 — Assignment Workflows."""
+    """Step 1 of 2: Employee or Asset Manager accepts assignment offer when they are the assigned recipient."""
     from app.services.assignment_service import accept_assignment as service_accept
     assignment = service_accept(db, assignment_id, current_user.id)
     
@@ -340,9 +340,9 @@ def accept_assignment_route(
 def decline_assignment_route(
     assignment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.EMPLOYEE)),
+    current_user: User = Depends(get_current_user),
 ):
-    """Step 1 of 2: Employee declines assignment offer. Employee only. SRS §3 — Assignment Workflows."""
+    """Step 1 of 2: Employee or Asset Manager declines assignment offer when they are the assigned recipient."""
     from app.services.assignment_service import decline_assignment as service_decline
     assignment = service_decline(db, assignment_id, current_user.id)
     return _serialize_assignment(assignment, db)

@@ -186,11 +186,13 @@ def accept_assignment(db: Session, assignment_id: int, current_user_id: int) -> 
             detail="Assignment not found"
         )
 
-    # Check ownership
-    if assignment.assigned_to != str(current_user_id):
+    # Check ownership - the assigned recipient must accept
+    # This is dynamic and works for any role (Employee, Asset Manager, Custodian, etc.)
+    # Handle both string and integer IDs for robustness
+    if str(assignment.assigned_to) != str(current_user_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not authorized to accept this assignment."
+            detail="You are not authorized to accept this assignment. Only the assigned recipient can accept."
         )
 
     if assignment.status != AssignmentStatus.PENDING_ACCEPTANCE:
@@ -293,11 +295,13 @@ def decline_assignment(db: Session, assignment_id: int, current_user_id: int) ->
             detail="Assignment not found"
         )
 
-    # Check ownership
-    if assignment.assigned_to != str(current_user_id):
+    # Check ownership - the assigned recipient must decline
+    # This is dynamic and works for any role (Employee, Asset Manager, Custodian, etc.)
+    # Handle both string and integer IDs for robustness
+    if str(assignment.assigned_to) != str(current_user_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not authorized to decline this assignment."
+            detail="You are not authorized to decline this assignment. Only the assigned recipient can decline."
         )
 
     if assignment.status != AssignmentStatus.PENDING_ACCEPTANCE:

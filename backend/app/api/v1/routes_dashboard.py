@@ -1,7 +1,7 @@
 """Dashboard routes: aggregated stats for the main dashboard view."""
 
 from datetime import datetime, date
-from app.utils.time import today_eat
+from app.utils.time import today_eat, utcnow
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -100,7 +100,7 @@ def get_dashboard_stats(
     """
 
     # Use provided year or default to current year
-    current_year = datetime.now().year
+    current_year = utcnow().year
     filter_year = year if year is not None else current_year
     filter_month = month if month is not None else None
 
@@ -132,7 +132,7 @@ def get_dashboard_stats(
     recent_assets = []
     for a in recent_rows:
         color = _TYPE_COLORS.get(a.asset_type.value, "#6b7280")
-        days_ago = (datetime.now() - a.created_at).days if a.created_at else 0
+        days_ago = (utcnow() - a.created_at).days if a.created_at else 0
         if days_ago == 0:
             date_str = "Today"
         elif days_ago == 1:

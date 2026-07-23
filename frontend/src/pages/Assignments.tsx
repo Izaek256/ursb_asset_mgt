@@ -127,10 +127,10 @@ export default function Assignments() {
   const handleConfirmReceipt = async (id: number) => {
     try {
       await apiFetch(`/assignments/${id}/confirm-receipt`, { method: "POST" });
-      (window as any).toast?.success("Receipt Confirmed", "The asset is now fully active in your custody.");
+      (window as any).toast?.success("Pickup Confirmed", "The asset is now fully active in your custody.");
       fetchAssignments();
     } catch (err: any) {
-      (window as any).toast?.error("Confirm Failed", err.message || "Failed to confirm receipt.");
+      (window as any).toast?.error("Confirm Failed", err.message || "Failed to confirm pickup.");
     }
   };
 
@@ -397,8 +397,8 @@ export default function Assignments() {
     {
       header: "Actions",
       render: (a) => {
-        // Employee: accept/decline pending assignments
-        if (isEmployee && a.status === "Pending Acceptance" && String(a.assigned_to) === String(user?.user_id)) {
+        // Any user: accept/decline pending assignments when they are the assigned recipient
+        if (a.status === "Pending Acceptance" && String(a.assigned_to) === String(user?.user_id)) {
           return (
             <div className="flex gap-2 select-none">
               <Button variant="success" className="!py-1.5 !px-3 text-xs" onClick={() => handleAccept(a.assignment_id)}>
@@ -410,16 +410,16 @@ export default function Assignments() {
             </div>
           );
         }
-        // Employee: confirm receipt after custodian handover (Active but not yet acknowledged)
-        if (isEmployee && a.status === "Active" && !a.acknowledged_at && String(a.assigned_to) === String(user?.user_id)) {
+        // Any user: confirm pickup after custodian handover (Active but not yet acknowledged)
+        if (a.status === "Active" && !a.acknowledged_at && String(a.assigned_to) === String(user?.user_id)) {
           return (
             <Button variant="success" className="!py-1.5 !px-3 text-xs" onClick={() => handleConfirmReceipt(a.assignment_id)}>
-              Confirm Receipt
+              Confirm Pickup
             </Button>
           );
         }
-        // Employee: approve/reject return requests
-        if (isEmployee && a.status === "Return Requested" && String(a.assigned_to) === String(user?.user_id)) {
+        // Any user: approve/reject return requests when they are the assigned recipient
+        if (a.status === "Return Requested" && String(a.assigned_to) === String(user?.user_id)) {
           return (
             <div className="flex gap-2 select-none">
               <Button variant="success" className="!py-1.5 !px-3 text-xs" onClick={() => handleApproveReturn(a.assignment_id)}>
@@ -478,10 +478,13 @@ export default function Assignments() {
     label: `${u.name} (${u.role})`,
   }));
 
-  const custodianOptions = users.filter(u => u.isActive && (u.role === "Asset Custodian" || u.role === "ASSET_CUSTODIAN")).map(u => ({
-    value: String(u.id),
-    label: `${u.name} (${u.role})`,
-  }));
+  const custodianOptions = users
+    .filter(u => u.isActive && (u.role === "Asset Custodian" || u.role === "ASSET_CUSTODIAN"))
+    .filter(u => form.assigned_to !== String(u.id)) // Filter out the final recipient from custodian options
+    .map(u => ({
+      value: String(u.id),
+      label: `${u.name} (${u.role})`,
+    }));
 
   return (
     <div className="w-full flex flex-col gap-6 select-none font-sans">

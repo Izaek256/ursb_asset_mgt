@@ -76,7 +76,7 @@ class AssetUpdate(BaseModel):
     @classmethod
     def validate_acquisition_date_not_future(cls, v: date | None) -> date | None:
         """Validate that acquisition_date is not in the future if provided."""
-        if v is not None and v > date.today():
+        if v is not None and v > today_eat():
             raise ValueError("acquisition_date cannot be in the future")
         return v
 

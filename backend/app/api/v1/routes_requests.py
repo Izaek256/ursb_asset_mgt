@@ -13,7 +13,7 @@ Access Control Rules:
 """
 
 from datetime import datetime, date, timezone
-from app.utils.time import utcnow
+from app.utils.time import utcnow, today_eat
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status

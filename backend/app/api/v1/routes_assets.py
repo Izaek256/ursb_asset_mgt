@@ -15,6 +15,7 @@ Access Control Rules:
 import io
 import uuid
 from datetime import date, datetime
+from app.utils.time import utcnow
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -633,7 +634,7 @@ def export_assets_pdf(
     elements.append(title)
 
     # Date
-    date_str = datetime.now().strftime("%B %d, %Y at %I:%M %p")
+    date_str = utcnow().strftime("%B %d, %Y at %I:%M %p")
     date_para = Paragraph(f"Generated on: {date_str}", date_style)
     elements.append(date_para)
     elements.append(Spacer(1, 0.2*inch))

@@ -372,10 +372,12 @@ export default function Requests() {
 
   const renderActions = (r: AssetRequest) => (
     <div className="flex flex-wrap gap-1.5 select-none">
-      {(user?.role === "Employee" || user?.role === "EMPLOYEE") && r.status === "Pending" && (
+      {/* Requester can cancel their own pending requests */}
+      {r.requested_by === parseInt(user.user_id) && r.status === "Pending" && (
         <Button variant="danger-outline" onClick={() => handleCancelClick(r)}>Cancel</Button>
       )}
-      {(user?.role === "Employee" || user?.role === "EMPLOYEE") && r.status === "ReadyForPickup" && (
+      {/* Requester can confirm pickup when asset is ready */}
+      {r.requested_by === parseInt(user.user_id) && r.status === "ReadyForPickup" && (
         <Button variant="outline" onClick={() => handlePickupClick(r)}>Confirm Pickup</Button>
       )}
       {isCustodian && r.assigned_to === parseInt(user.user_id) && r.status === "Assigned" && (
@@ -480,6 +482,7 @@ export default function Requests() {
 
   const custodianOptions = users
     .filter(u => u.isActive && (u.role === "Asset Custodian" || u.role === "ASSET_CUSTODIAN"))
+    .filter(u => selectedRequest?.assigned_to !== u.id) // Filter out the already assigned custodian
     .map(u => ({
       value: String(u.id),
       label: `${u.name} (${u.role})`,
