@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey
 from app.db import Base
+from app.utils.time import utcnow
 
 class Notification(Base):
     """
@@ -28,7 +29,7 @@ class Notification(Base):
     message = Column(String(500), nullable=False)
     notification_type = Column(String(50), nullable=False)
     is_read = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
     related_asset_id = Column(
         String(100),
         ForeignKey("assets.asset_id", ondelete="SET NULL"),

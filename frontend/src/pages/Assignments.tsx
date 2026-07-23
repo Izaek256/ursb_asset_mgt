@@ -37,7 +37,7 @@ export default function Assignments() {
     asset_id: "",
     assigned_to: "",
     custodian_id: "",
-    assignment_date: new Date().toISOString().substring(0, 10),
+    assignment_date: new Date().toISOString().slice(0, 10),
     return_date: "",
     notes: "",
   });
@@ -165,7 +165,7 @@ export default function Assignments() {
             asset_id: "",
             assigned_to: "",
             custodian_id: "",
-            assignment_date: new Date().toISOString().substring(0, 10),
+            assignment_date: new Date().toISOString().slice(0, 10),
             return_date: "",
             notes: "",
           });
@@ -209,6 +209,7 @@ export default function Assignments() {
 
     setIsSubmitting(true);
     try {
+      // Send only date, backend will capture current time
       await apiFetch("/assignments", {
         method: "POST",
         body: JSON.stringify({
@@ -227,7 +228,7 @@ export default function Assignments() {
         asset_id: "",
         assigned_to: "",
         custodian_id: "",
-        assignment_date: new Date().toISOString().substring(0, 10),
+        assignment_date: new Date().toISOString().slice(0, 10),
         return_date: "",
         notes: "",
       });

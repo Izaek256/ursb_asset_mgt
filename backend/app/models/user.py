@@ -7,6 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.ext.hybrid import hybrid_property
 
 from app.db import Base
+from app.utils.time import utcnow
 
 
 class UserRole(str, enum.Enum):
@@ -45,7 +46,7 @@ class User(Base):
     locked_until = Column(DateTime, nullable=True)
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
     # Stamped whenever a user successfully changes their own password.
     # Used by the credentials page to detect if the generated/temp password is still active.
     password_changed_at = Column(DateTime, nullable=True)

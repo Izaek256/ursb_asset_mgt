@@ -105,6 +105,10 @@ export async function apiFetch<T>(
     }
     throw new Error(body.detail || `Request failed (${res.status})`);
   }
+  // Handle 204 No Content responses (no body to parse)
+  if (res.status === 204) {
+    return null as T;
+  }
   return res.json();
 }
 

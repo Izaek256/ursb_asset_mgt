@@ -39,7 +39,7 @@ class Assignment(Base):
         ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    assignment_date: Mapped[date] = mapped_column(Date, nullable=False)
+    assignment_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     return_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[AssignmentStatus] = mapped_column(
         Enum(AssignmentStatus, native_enum=False, length=50, values_callable=lambda x: [e.name for e in x]),

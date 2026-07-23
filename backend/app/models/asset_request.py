@@ -10,6 +10,7 @@ from sqlalchemy.orm import relationship
 
 from app.db import Base
 from app.models.asset import AssetType
+from app.utils.time import today_eat, utcnow
 
 
 class RequestStatus(str, enum.Enum):
@@ -80,14 +81,14 @@ class AssetRequest(Base):
     notes = Column(Text, nullable=True)  # reviewer notes
 
     # Dates
-    requested_date = Column(Date, nullable=False, default=date.today)
+    requested_date = Column(Date, nullable=False, default=today_eat)
     required_by_date = Column(Date, nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
     assigned_at = Column(DateTime, nullable=True)
     handed_over_at = Column(DateTime, nullable=True)
     pickup_confirmed_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=True, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=True, onupdate=utcnow)
 
     # Relationships
     asset = relationship("Asset", back_populates="asset_requests", foreign_keys=[asset_id])

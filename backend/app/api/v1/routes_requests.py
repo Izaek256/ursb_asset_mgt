@@ -412,7 +412,7 @@ def assign_request(
         asset_id=asset.asset_id,
         assigned_to=str(final_recipient_id),
         assigned_by=str(current_user.id),
-        assignment_date=date.today(),
+        assignment_date=utcnow(),
         status=AssignmentStatus.PENDING_ACCEPTANCE,
         notes=f"Assigned from asset request [Custodian: {custodian_id}:{custodian.email}]",
     )
@@ -470,7 +470,7 @@ def custodian_cancel_request(
             ).first()
             if existing_assignment:
                 existing_assignment.status = AssignmentStatus.RETURNED
-                existing_assignment.return_date = date.today()
+                existing_assignment.return_date = today_eat()
     
     _log(db, actor=current_user, action="CUSTODIAN_CANCEL", record_id=str(request.request_id), details="Custodian cancelled assigned request")
     # Notify requester that their request was cancelled by custodian
@@ -578,7 +578,7 @@ def pickup_request(
                     asset_id=asset.asset_id,
                     assigned_to=str(request.requested_by),
                     assigned_by=str(request.assigned_to),  # Custodian who handed over
-                    assignment_date=date.today(),
+                    assignment_date=utcnow(),
                     status=AssignmentStatus.ACTIVE,
                     notes=f"Asset handed over from request{custodian_ref}",
                     acknowledged_at=utcnow(),
@@ -665,7 +665,7 @@ def cancel_request(
             ).first()
             if existing_assignment:
                 existing_assignment.status = AssignmentStatus.RETURNED
-                existing_assignment.return_date = date.today()
+                existing_assignment.return_date = today_eat()
     
     _log(db, actor=current_user, action="CANCEL_REQUEST", record_id=str(request.request_id), details="Cancelled asset request")
     db.commit()

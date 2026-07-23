@@ -5,6 +5,9 @@ Routers call these functions — no business logic lives in route handlers.
 
 from datetime import datetime, date, timezone
 from app.utils.time import utcnow
+import logging
+
+logger = logging.getLogger(__name__)
 from typing import List
 
 from fastapi import HTTPException, status
@@ -79,11 +82,24 @@ def assign_asset(db: Session, asset_id: str, data, assigned_by_id: int) -> Assig
             raise HTTPException(400, detail="Custodian is invalid or inactive")
         
         # Store custodian info in notes for later workflow steps
+        assignment_date_value = data.assignment_date or utcnow()
+        logger.info(f"Creating assignment with assignment_date: {assignment_date_value}, type: {type(assignment_date_value)}")
+        
+        # If assignment_date is a string (date only), combine with current time
+        if isinstance(assignment_date_value, str):
+            from datetime import datetime
+            # Parse the date string
+            date_part = datetime.strptime(assignment_date_value, '%Y-%m-%d').date()
+            # Combine with current UTC time
+            current_time = utcnow()
+            assignment_date_value = datetime.combine(date_part, current_time.time())
+            logger.info(f"Combined date with current time: {assignment_date_value}")
+        
         assignment = Assignment(
             asset_id=asset_id,
             assigned_to=final_recipient_id,
             assigned_by=str(assigned_by_id),
-            assignment_date=data.assignment_date or date.today(),
+            assignment_date=assignment_date_value,
             return_date=data.return_date,
             status=AssignmentStatus.PENDING_ACCEPTANCE,
             notes=f"{data.notes or ''} [Custodian: {custodian.id}:{custodian.email}]",
@@ -93,11 +109,24 @@ def assign_asset(db: Session, asset_id: str, data, assigned_by_id: int) -> Assig
         audit_details = f"Asset {asset_id} assigned to final recipient {target_user.id} with custodian {custodian.id} for pickup, status set to Pending Acceptance"
     else:
         # Direct assignment to employee without custodian
+        assignment_date_value = data.assignment_date or utcnow()
+        logger.info(f"Creating assignment with assignment_date: {assignment_date_value}, type: {type(assignment_date_value)}")
+        
+        # If assignment_date is a string (date only), combine with current time
+        if isinstance(assignment_date_value, str):
+            from datetime import datetime
+            # Parse the date string
+            date_part = datetime.strptime(assignment_date_value, '%Y-%m-%d').date()
+            # Combine with current UTC time
+            current_time = utcnow()
+            assignment_date_value = datetime.combine(date_part, current_time.time())
+            logger.info(f"Combined date with current time: {assignment_date_value}")
+        
         assignment = Assignment(
             asset_id=asset_id,
             assigned_to=final_recipient_id,
             assigned_by=str(assigned_by_id),
-            assignment_date=data.assignment_date or date.today(),
+            assignment_date=assignment_date_value,
             return_date=data.return_date,
             status=AssignmentStatus.PENDING_ACCEPTANCE,
             notes=data.notes,
@@ -793,7 +822,7 @@ def confirm_asset_return(db: Session, assignment_id: int, custodian_id: int) -> 
         asset_id_str = assignment.asset_id
 
         assignment.status = AssignmentStatus.RETURNED
-        assignment.return_date = date.today()
+        assignment.return_date = today_eat()
 
         validate_status_transition(asset.status, AssetStatus.AVAILABLE)
         asset.status = AssetStatus.AVAILABLE

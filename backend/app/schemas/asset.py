@@ -1,5 +1,6 @@
 import enum
 from datetime import date, datetime
+from app.utils.time import today_eat
 from decimal import Decimal
 
 from pydantic import BaseModel, Field, field_validator
@@ -31,7 +32,7 @@ class AssetBase(BaseModel):
     @classmethod
     def validate_acquisition_date_not_future(cls, v: date) -> date:
         """Validate that acquisition_date is not in the future."""
-        if v > date.today():
+        if v > today_eat():
             raise ValueError("acquisition_date cannot be in the future")
         return v
 

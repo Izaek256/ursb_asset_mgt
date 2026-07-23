@@ -1,6 +1,7 @@
 """Storage management endpoints."""
 
 from datetime import date
+from app.utils.time import utcnow
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -138,7 +139,7 @@ def assign_from_storage(
             asset_id=asset.asset_id,
             assigned_to=str(body.assigned_to),
             assigned_by=str(current_user.id),
-            assignment_date=date.today(),
+            assignment_date=utcnow(),
             status=AssignmentStatus.ACTIVE,
             notes=body.notes,
         )
@@ -181,7 +182,7 @@ def return_to_storage(
         raise HTTPException(400, detail="No active assignment found")
 
     assignment.status = AssignmentStatus.RETURNED
-    assignment.return_date = date.today()
+    assignment.return_date = today_eat()
     validate_status_transition(asset.status, AssetStatus.AVAILABLE)
     asset.status = AssetStatus.AVAILABLE
     asset.current_custodian_id = None

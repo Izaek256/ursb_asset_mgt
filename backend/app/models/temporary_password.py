@@ -16,6 +16,6 @@ class TemporaryPassword(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
     expires_at = Column(DateTime, default=lambda: utcnow() + timedelta(days=7), nullable=False)
     viewed = Column(Integer, default=0, nullable=False)  # Track if password was shown

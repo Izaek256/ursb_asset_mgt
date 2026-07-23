@@ -11,6 +11,7 @@ Endpoints:
 """
 
 from datetime import date, datetime, timedelta
+from app.utils.time import today_eat
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -108,7 +109,7 @@ def log_maintenance(
         raise HTTPException(
             status_code=400, detail="Cannot log maintenance for a disposed or deactivated asset."
         )
-    if body.service_date > date.today():
+    if body.service_date > today_eat():
         raise HTTPException(
             status_code=400, detail="Service date cannot be in the future."
         )
@@ -191,7 +192,7 @@ def schedule_maintenance(
     """Schedule the next maintenance date."""
     record = _get_record_or_404(db, maintenance_id)
 
-    if body.next_service_date <= date.today():
+    if body.next_service_date <= today_eat():
         raise HTTPException(
             status_code=400,
             detail="Next service date must be in the future.",
@@ -215,7 +216,7 @@ def upcoming_maintenance(
     current_user: User = Depends(get_current_user),
 ):
     """Return maintenance records due within the next 30 days."""
-    today = date.today()
+    today = today_eat()
     cutoff = today + timedelta(days=30)
 
     records = (

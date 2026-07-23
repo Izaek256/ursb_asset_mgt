@@ -31,7 +31,7 @@ class AssignmentCreateRequest(BaseModel):
     asset_id: str
     assigned_to: str
     custodian_id: Optional[str] = None
-    assignment_date: Optional[date] = None
+    assignment_date: Optional[str] = None  # Date string YYYY-MM-DD
     return_date: Optional[date] = None
     expected_return_date: Optional[date] = None
     notes: Optional[str] = None
@@ -49,7 +49,7 @@ class AssignmentResponse(BaseModel):
     assigned_to_name: Optional[str] = None
     assigned_by: str
     assigned_by_name: Optional[str] = None
-    assignment_date: date
+    assignment_date: datetime
     return_date: Optional[date] = None
     status: str
     notes: Optional[str] = None

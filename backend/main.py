@@ -14,14 +14,18 @@ load_dotenv()
 
 def _utc_iso(obj):
     """Recursively walk a JSON-serialisable object and ensure all naive datetime
-    strings are returned with a 'Z' suffix so browsers parse them as UTC."""
+    strings are returned with a 'Z' suffix so browsers parse them as UTC.
+    
+    Date-only strings (YYYY-MM-DD) are left unchanged to avoid timezone issues.
+    """
     if isinstance(obj, datetime):
         if obj.tzinfo is None:
             return obj.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
         return obj.isoformat().replace("+00:00", "Z")
     if isinstance(obj, str):
-        # Stamp bare ISO datetime strings (no tz suffix) that came from the DB
+        # Only process datetime strings, not date-only strings
         # Pattern: YYYY-MM-DDTHH:MM:SS or YYYY-MM-DD HH:MM:SS (with optional micros)
+        # Skip date-only strings (YYYY-MM-DD)
         import re
         if re.match(r'^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}', obj) and not obj.endswith('Z') and '+' not in obj and obj.count('-') >= 2:
             # Replace space separator with T and append Z

@@ -6,6 +6,7 @@ import uuid
 import json
 import asyncio
 from datetime import datetime, date
+from app.utils.time import today_eat
 from typing import List, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request
@@ -203,7 +204,7 @@ async def bulk_import_assets(
                             else:
                                 acq_date = datetime.strptime(acquisition_date_str, "%Y-%m-%d").date()
                             
-                            if acq_date > date.today():
+                            if acq_date > today_eat():
                                 skipped += 1
                                 errors.append({"row": idx, "serial_number": serial_number, "reason": "acquisition_date cannot be in the future"})
                                 yield json.dumps({"type": "progress", "current": idx, "total": total_rows}) + "\n"

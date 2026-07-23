@@ -1,6 +1,7 @@
 """Dashboard routes: aggregated stats for the main dashboard view."""
 
 from datetime import datetime, date
+from app.utils.time import today_eat
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -204,7 +205,7 @@ def get_dashboard_stats(
 
     # --- Maintenance due count ---
     maintenance_due = db.query(func.count(MaintenanceRecord.asset_id)).filter(
-        MaintenanceRecord.next_service_date <= date.today()
+        MaintenanceRecord.next_service_date <= today_eat()
     ).scalar() or 0
 
     return DashboardData(

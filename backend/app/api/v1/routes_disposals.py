@@ -6,6 +6,7 @@ Access Control Rules:
 """
 
 from datetime import date
+from app.utils.time import today_eat
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -127,7 +128,7 @@ def create_disposal(
     # Create disposal record
     disposal = DisposalRecord(
         asset_id=body.asset_id,
-        disposal_date=date.today(),
+        disposal_date=today_eat(),
         disposal_method=disposal_method_enum,
         reason=body.reason,
         authorised_by=str(current_user.user_id),
@@ -227,7 +228,7 @@ def recommend_disposal(
     # This is a proposal only, not a finalised disposal action
     disposal = DisposalRecord(
         asset_id=asset_id,
-        disposal_date=date.today(),
+        disposal_date=today_eat(),
         disposal_method=DisposalMethod.WRITE_OFF,
         reason=body.reason,
         authorised_by=str(current_user.user_id),
