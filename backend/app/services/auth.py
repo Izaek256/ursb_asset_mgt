@@ -182,3 +182,17 @@ def delete_session(db: DbSession, token: str) -> None:
     if session:
         db.delete(session)
         db.commit()
+
+
+def get_user_or_404(db: DbSession, user_id: int) -> User:
+    """
+    Fetch a single user by ID, raising a 404 if not found.
+    """
+    try:
+        user_id_int = int(user_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=404, detail="User not found")
+    user = db.query(User).filter(User.id == user_id_int).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user

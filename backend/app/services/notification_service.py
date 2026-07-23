@@ -2,6 +2,7 @@
 
 import logging
 from typing import Optional
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 from app.models.notification import Notification
 from app.models.user import User, UserRole
@@ -137,3 +138,16 @@ def mark_all_as_read(
         Notification.is_read == False
     ).update({Notification.is_read: True}, synchronize_session=False)
     db.commit()
+
+
+def get_notification_or_404(db: Session, notification_id: str) -> Notification:
+    """
+    Fetch a single notification by ID, raising a 404 if not found.
+    """
+    notification = db.query(Notification).filter(Notification.notification_id == notification_id).first()
+    if not notification:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Notification not found",
+        )
+    return notification

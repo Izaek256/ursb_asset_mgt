@@ -143,6 +143,19 @@ def get_asset(db: Session, asset_id: str) -> Asset:
         )
     return asset
 
+
+def get_asset_or_404(db: Session, asset_id: str) -> Asset:
+    """
+    Fetch a single asset by ID, raising a 404 if not found.
+    """
+    asset = db.query(Asset).filter(Asset.asset_id == asset_id).first()
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset not found",
+        )
+    return asset
+
 def list_assets(
     db: Session,
     status: Optional[str] = None,

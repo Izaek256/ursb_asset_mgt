@@ -16,7 +16,28 @@ from app.models.user import User
 from app.services.asset_service import validate_status_transition
 
 
+def get_assignment_or_404(db: Session, assignment_id: int) -> Assignment:
+    """
+    Fetch a single assignment by ID, raising a 404 if not found.
+    """
+    try:
+        assignment_id_int = int(assignment_id)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Assignment not found",
+        )
+    assignment = db.query(Assignment).filter(Assignment.assignment_id == assignment_id_int).first()
+    if not assignment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Assignment not found",
+        )
+    return assignment
+
+
 def assign_asset(db: Session, asset_id: str, data, assigned_by_id: int) -> Assignment:
+
     """
     Create an assignment record for an asset.
 

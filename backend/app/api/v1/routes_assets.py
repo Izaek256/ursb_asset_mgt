@@ -27,7 +27,7 @@ from app.models.asset import Asset, AssetCondition, AssetStatus, AssetType, Sour
 from app.models.audit_log import AuditLog
 from app.api.v1.auth import get_current_user, require_role, require_roles
 from app.models.user import UserRole
-from app.services.asset_service import VALID_TRANSITIONS, validate_status_transition, get_asset, list_assets, create_asset, update_asset, export_assets_csv
+from app.services.asset_service import VALID_TRANSITIONS, validate_status_transition, get_asset, get_asset_or_404, list_assets, create_asset, update_asset, export_assets_csv
 
 router = APIRouter(prefix="/api/v1/assets", tags=["assets"])
 
@@ -262,12 +262,7 @@ def get_asset_detail(
     from app.models.transfer import Transfer
     from app.models.disposal_record import DisposalRecord
 
-    asset = db.query(Asset).filter(Asset.asset_id == asset_id).first()
-    if not asset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Asset with ID {asset_id} not found"
-        )
+    asset = get_asset_or_404(db, asset_id)
 
     # Current custodian
     current_custodian = None
@@ -365,12 +360,7 @@ def update_asset(
     Update an asset. Only Asset Manager, Super System Administrator, and Asset Custodian may call this endpoint.
     Validates status transitions and checks if asset is active and not disposed.
     """
-    asset = db.query(Asset).filter(Asset.asset_id == asset_id).first()
-    if not asset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Asset with ID {asset_id} not found"
-        )
+    asset = get_asset_or_404(db, asset_id)
 
     # Check if asset is disposed (terminal state)
     if asset.status == AssetStatus.DISPOSED:
@@ -450,12 +440,7 @@ def deactivate_asset(
     """
     from app.models.assignment import Assignment, AssignmentStatus
 
-    asset = db.query(Asset).filter(Asset.asset_id == asset_id).first()
-    if not asset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Asset with ID {asset_id} not found"
-        )
+    asset = get_asset_or_404(db, asset_id)
 
     # Check if already inactive
     if not asset.is_active:
@@ -507,7 +492,7 @@ def reactivate_asset(
     """
     Reactivate an asset. Sets is_active = True.
     """
-    asset = db.query(Asset).filter(Asset.asset_id == asset_id).first()
+    asset = get_asset_or_404(db, asset_id)
     
     # Check if already active
     if asset.is_active:
@@ -541,8 +526,8 @@ def activate_asset(
     """
     Activate a newly registered asset. Sets is_active = True.
     """
-    asset = get_asset(db, asset_id).filter(Asset.asset_id == asset_id).first()
-        # Check if already active
+    asset = get_asset_or_404(db, asset_id)
+    # Check if already active
     if asset.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

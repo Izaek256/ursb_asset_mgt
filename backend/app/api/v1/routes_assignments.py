@@ -22,7 +22,8 @@ from app.models.assignment import Assignment, AssignmentStatus
 from app.models.audit_log import AuditLog
 from app.models.user import User
 from app.services import assignment_service
-from app.services.asset_service import validate_status_transition
+from app.services.assignment_service import get_assignment_or_404
+from app.services.asset_service import validate_status_transition, get_asset_or_404
 
 router = APIRouter(prefix="/api/v1/assignments", tags=["assignments"])
 
@@ -131,7 +132,7 @@ def create_assignment(
     
     # S3-08: Notify final recipient of assignment
     from app.services.notification_service import create_notification
-    asset = db.query(Asset).filter(Asset.asset_id == body.asset_id).first()
+    asset = get_asset_or_404(db, body.asset_id)
     if asset:
         # Notify the final recipient who needs to accept the assignment
         recipient_id = str(body.assigned_to)
@@ -238,9 +239,7 @@ def get_assignment(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ASSET_MANAGER, UserRole.SUPER_SYSTEM_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR)),
 ):
-    assignment = db.query(Assignment).filter(Assignment.assignment_id == assignment_id).first()
-    if not assignment:
-        raise HTTPException(404, detail="Assignment not found")
+    assignment = get_assignment_or_404(db, assignment_id)
     return _serialize_assignment(assignment, db)
 
 
@@ -255,9 +254,7 @@ def delete_assignment(
     Returns the asset to Available and clears the custodian.
     Asset Manager and Super System Administrator only.
     """
-    assignment = db.query(Assignment).filter(Assignment.assignment_id == assignment_id).first()
-    if not assignment:
-        raise HTTPException(404, detail="Assignment not found")
+    assignment = get_assignment_or_404(db, assignment_id)
 
     # Only allow deletion of pre-handover assignments
     if assignment.status not in {AssignmentStatus.PENDING_ACCEPTANCE, AssignmentStatus.ACCEPTED}:
