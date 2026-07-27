@@ -2,39 +2,49 @@ import React, { useState, useRef, useCallback } from "react";
 import { ICONS } from "../../utils/icons";
 import Button from "../common/Button";
 import Modal from "../Modal";
+import { apiFetch } from "../../AuthContext";
 import { useImportProgress } from "../../context/ImportProgressContext";
 
-const CSV_TEMPLATE = `asset_name,asset_type,category,serial_number,condition,source_type,procurement_ref,cost,acquisition_date,supplier,department
-Dell Latitude 7420,ICT Equipment,Laptops,SN-DELL-001,New,Procurement,PR-2026-001,4500000,2026-05-10,Dell Uganda,IT
-Executive Office Chair,Furniture,Chairs,SN-FURN-099,Good,Procurement,PR-2026-002,850000,2026-06-15,Furniture City,HR`;
+const CSV_TEMPLATE = `full_name,email,role,department
+John Doe,john.doe@ursb.go.ug,EMPLOYEE,ICT
+Jane Smith,jane.smith@ursb.go.ug,ASSET_MANAGER,Finance`;
+
+interface CreatedAccount {
+  full_name: string;
+  email: string;
+  role: string;
+  generated_password: string;
+}
+
+interface ImportError {
+  row: number;
+  email: string | null;
+  reason: string;
+}
 
 interface ImportSummary {
   total_rows: number;
-  imported: number;
+  created: number;
   skipped: number;
-  errors: Array<{
-    row: number;
-    serial_number: string | null;
-    reason: string;
-  }>;
+  errors: ImportError[];
+  accounts: CreatedAccount[];
 }
 
-interface BulkImportModalProps {
+interface BulkUserImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   onImportSuccess: () => void;
   onMinimize?: () => void;
 }
 
-export default function BulkImportModal({
+export default function BulkUserImportModal({
   isOpen,
   onClose,
   onImportSuccess,
   onMinimize,
-}: BulkImportModalProps) {
+}: BulkUserImportModalProps) {
   const { startJob, updateJob } = useImportProgress();
 
-  const [importMode, setImportMode] = useState<"add" | "update">("add");
   const [file, setFile] = useState<File | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -42,14 +52,16 @@ export default function BulkImportModal({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
   const [showErrors, setShowErrors] = useState(false);
+  const [showPasswords, setShowPasswords] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  // Streaming progress states
+  // Progress tracking
   const [progress, setProgress] = useState(0);
-  const [totalRows, setTotalRows] = useState(0);
-  const [startTime, setStartTime] = useState<number | null>(null);
+  const [processed, setProcessed] = useState(0);
+  const [total, setTotal] = useState(0);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   const jobIdRef = useRef<string | null>(null);
 
   const handleDownloadTemplate = () => {
@@ -57,7 +69,7 @@ export default function BulkImportModal({
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", "asset_import_template.csv");
+    link.setAttribute("download", "user_import_template.csv");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -69,8 +81,8 @@ export default function BulkImportModal({
       setErrorMsg("Unsupported file type. Please upload a CSV or XLSX file.");
       return;
     }
-    if (selectedFile.size > 5 * 1024 * 1024) {
-      setErrorMsg("File too large. Maximum size is 5 MB.");
+    if (selectedFile.size > 2 * 1024 * 1024) {
+      setErrorMsg("File too large. Maximum size is 2 MB.");
       return;
     }
     setErrorMsg(null);
@@ -91,115 +103,55 @@ export default function BulkImportModal({
     }
   };
 
+  /** Parse the CSV/XLSX file into row objects in the browser */
+  const parseFile = async (f: File): Promise<Record<string, string>[]> => {
+    const ext = f.name.split(".").pop()?.toLowerCase();
+    if (ext === "csv") {
+      const text = await f.text();
+      const lines = text.split(/\r?\n/).filter((l) => l.trim());
+      if (lines.length < 2) return [];
+      const headers = lines[0].split(",").map((h) => h.trim());
+      return lines.slice(1).map((line) => {
+        const values = line.split(",").map((v) => v.trim());
+        return Object.fromEntries(headers.map((h, i) => [h, values[i] ?? ""]));
+      });
+    } else {
+      // XLSX — use the server-side HTTP endpoint instead for xlsx
+      // We switch to multipart upload for xlsx files
+      return [];
+    }
+  };
+
   const handleImport = async () => {
     if (!file) return;
 
-    const modeLabel =
-      importMode === "add" ? "Importing assets" : "Updating assets";
-    const jobId = startJob("asset", `${modeLabel} — ${file.name}`);
-    jobIdRef.current = jobId;
+    const ext = file.name.split(".").pop()?.toLowerCase();
 
     setIsLoading(true);
     setIsProcessing(true);
     setErrorMsg(null);
     setSummary(null);
     setProgress(0);
-    setTotalRows(0);
-    setStartTime(Date.now());
+    setProcessed(0);
+    setTotal(0);
 
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("import_mode", importMode);
+    const jobId = startJob("user", `Importing users — ${file.name}`);
+    jobIdRef.current = jobId;
 
     try {
-      const response = await fetch("/api/v1/assets/import", {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        let msg = "An error occurred during import.";
-        if (response.status === 403) {
-          msg =
-            errorData?.detail ||
-            "You don't have permission to perform bulk import. Contact your administrator.";
-          if ((window as any).toast) {
-            (window as any).toast.error("Access Denied", msg);
-          }
-        } else if (
-          response.status === 400 ||
-          response.status === 413 ||
-          response.status === 500
-        ) {
-          msg = errorData?.detail || `HTTP ${response.status} error`;
+      if (ext === "xlsx") {
+        // XLSX: use HTTP endpoint (no streaming for xlsx, but still runs in "background" visually)
+        await runHttpImport(file, jobId);
+      } else {
+        // CSV: use WebSocket streaming endpoint
+        const rows = await parseFile(file);
+        if (rows.length === 0) {
+          throw new Error("File is empty or could not be parsed.");
         }
-        throw new Error(msg);
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error("Unable to read progress stream.");
-      }
-
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          const msg = JSON.parse(line);
-
-          if (msg.type === "start") {
-            setTotalRows(msg.total_rows);
-            setProgress(0);
-            updateJob(jobId, { total: msg.total_rows, processed: 0, progress: 0 });
-          } else if (msg.type === "progress") {
-            const pct =
-              msg.total > 0 ? Math.round((msg.current / msg.total) * 100) : 0;
-            setProgress(msg.current);
-            setTotalRows(msg.total);
-            updateJob(jobId, {
-              processed: msg.current,
-              total: msg.total,
-              progress: pct,
-            });
-          } else if (msg.type === "summary") {
-            setSummary(msg);
-            updateJob(jobId, {
-              status: "done",
-              progress: 100,
-              summary: {
-                imported: msg.imported,
-                skipped: msg.skipped,
-                total: msg.total_rows,
-              },
-            });
-            if (msg.imported > 0) {
-              onImportSuccess();
-            }
-          } else if (msg.type === "error") {
-            throw new Error(msg.detail);
-          }
-        }
+        await runWebSocketImport(rows, jobId);
       }
     } catch (err: any) {
-      const msg =
-        err.name === "AbortError"
-          ? "Import cancelled. All database changes have been rolled back."
-          : err.message || "Failed to connect to the server.";
+      const msg = err.message || "Import failed.";
       setErrorMsg(msg);
       if (jobIdRef.current) {
         updateJob(jobIdRef.current, { status: "error", errorMsg: msg });
@@ -207,8 +159,116 @@ export default function BulkImportModal({
     } finally {
       setIsLoading(false);
       setIsProcessing(false);
-      abortControllerRef.current = null;
+      wsRef.current = null;
     }
+  };
+
+  /** HTTP (non-streaming) path — used for XLSX files */
+  const runHttpImport = async (f: File, jobId: string) => {
+    updateJob(jobId, { progress: 30, processed: 0, total: 1 });
+
+    const formData = new FormData();
+    formData.append("file", f);
+
+    const result = await apiFetch<ImportSummary>("/users/bulk-import", {
+      method: "POST",
+      body: formData,
+    });
+
+    updateJob(jobId, {
+      status: "done",
+      progress: 100,
+      processed: result.created,
+      total: result.total_rows,
+      summary: {
+        imported: result.created,
+        skipped: result.skipped,
+        total: result.total_rows,
+      },
+    });
+
+    setSummary(result);
+    if (result.created > 0) onImportSuccess();
+  };
+
+  /** WebSocket streaming path — used for CSV files */
+  const runWebSocketImport = async (
+    rows: Record<string, string>[],
+    jobId: string
+  ) => {
+    // 1. Get a one-time WS auth token
+    const { token } = await apiFetch<{ token: string }>(
+      "/users/ws-auth-token",
+      { method: "POST" }
+    );
+
+    return new Promise<void>((resolve, reject) => {
+      const proto = window.location.protocol === "https:" ? "wss" : "ws";
+      const wsUrl = `${proto}://${window.location.host}/api/v1/users/bulk-import-ws?token=${token}`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify(rows));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+
+          if (msg.type === "progress") {
+            const pct = msg.progress ?? 0;
+            setProgress(pct);
+            setProcessed(msg.processed ?? 0);
+            setTotal(msg.total ?? 0);
+            updateJob(jobId, {
+              progress: pct,
+              processed: msg.processed ?? 0,
+              total: msg.total ?? 0,
+            });
+          } else if (msg.type === "complete") {
+            const result: ImportSummary = {
+              total_rows: msg.total_rows,
+              created: msg.created,
+              skipped: msg.skipped,
+              errors: msg.errors ?? [],
+              accounts: msg.accounts ?? [],
+            };
+            setSummary(result);
+            updateJob(jobId, {
+              status: "done",
+              progress: 100,
+              processed: msg.created,
+              total: msg.total_rows,
+              summary: {
+                imported: msg.created,
+                skipped: msg.skipped,
+                total: msg.total_rows,
+              },
+            });
+            if (msg.created > 0) onImportSuccess();
+            ws.close();
+            resolve();
+          } else if (msg.type === "error") {
+            reject(new Error(msg.message || "Server error during import."));
+            ws.close();
+          }
+        } catch {
+          // ignore parse errors
+        }
+      };
+
+      ws.onerror = () => {
+        reject(new Error("WebSocket connection failed."));
+      };
+
+      ws.onclose = (e) => {
+        if (e.code === 4001) {
+          reject(new Error("Authentication failed. Please try again."));
+        }
+        // Other close codes are handled via onmessage/onerror
+      };
+    });
   };
 
   const resetForm = () => {
@@ -216,13 +276,13 @@ export default function BulkImportModal({
     setSummary(null);
     setErrorMsg(null);
     setShowErrors(false);
+    setShowPasswords(false);
+    setCopied(false);
     setProgress(0);
-    setTotalRows(0);
-    setStartTime(null);
+    setProcessed(0);
+    setTotal(0);
     jobIdRef.current = null;
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleClose = () => {
@@ -231,7 +291,7 @@ export default function BulkImportModal({
     onClose();
   };
 
-  /** Minimize: hide the modal but keep the stream running */
+  /** Minimize: hide modal, keep WS running */
   const handleMinimize = () => {
     if (onMinimize) {
       onMinimize();
@@ -240,39 +300,49 @@ export default function BulkImportModal({
     }
   };
 
+  const handleCancelImport = () => {
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    const msg = "Import cancelled by user.";
+    setErrorMsg(msg);
+    if (jobIdRef.current) {
+      updateJob(jobIdRef.current, { status: "error", errorMsg: msg });
+    }
+    setIsLoading(false);
+    setIsProcessing(false);
+  };
+
+  const copyCredentials = () => {
+    if (!summary) return;
+    const text = summary.accounts
+      .map(
+        (a) =>
+          `${a.full_name} | ${a.email} | ${a.role} | Password: ${a.generated_password}`
+      )
+      .join("\n");
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  };
+
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return bytes + " B";
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
     return (bytes / (1024 * 1024)).toFixed(2) + " MB";
   };
 
-  // Circular progress helper values
-  const percentage =
-    totalRows > 0 ? Math.round((progress / totalRows) * 100) : 0;
   const radius = 54;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset =
-    circumference - (percentage / 100) * circumference;
-
-  let etaText = "Calculating time remaining…";
-  if (startTime && progress > 0 && totalRows > 0) {
-    const elapsed = Date.now() - startTime;
-    const speed = progress / elapsed;
-    const remainingItems = totalRows - progress;
-    const remainingTimeMs = remainingItems / speed;
-    const remainingSeconds = Math.round(remainingTimeMs / 1000);
-    if (remainingSeconds > 0) {
-      etaText = `${remainingSeconds} seconds remaining`;
-    } else {
-      etaText = "Finishing up…";
-    }
-  }
+  const strokeDashoffset = circumference - (progress / 100) * circumference;
 
   return (
-    <Modal open={isOpen} onClose={handleClose} title="Bulk Import & Update Assets">
+    <Modal open={isOpen} onClose={handleClose} title="Bulk User Import">
       <div className="mt-2 text-ink">
         {isProcessing ? (
-          /* ── Circular Progress View ── */
+          /* ── Progress View ── */
           <div className="flex flex-col items-center justify-center py-6 gap-6 select-none">
             <div className="relative w-36 h-36 flex items-center justify-center">
               <svg className="w-full h-full transform -rotate-90">
@@ -299,24 +369,22 @@ export default function BulkImportModal({
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-3xl font-extrabold text-ink">
-                  {percentage}%
-                </span>
-                <span className="text-[11px] text-ink-dim font-semibold mt-0.5">
-                  {progress} / {totalRows}
-                </span>
+                <span className="text-3xl font-extrabold text-ink">{progress}%</span>
+                {total > 0 && (
+                  <span className="text-[11px] text-ink-dim font-semibold mt-0.5">
+                    {processed} / {total}
+                  </span>
+                )}
               </div>
             </div>
             <div className="text-center">
               <h4 className="text-base font-bold text-ink mb-1">
-                {importMode === "add"
-                  ? "Importing new assets…"
-                  : "Updating existing assets…"}
+                Creating user accounts…
               </h4>
-              <p className="text-sm text-ink-dim">{etaText}</p>
+              <p className="text-sm text-ink-dim">
+                Generating secure passwords and setting up accounts.
+              </p>
             </div>
-
-            {/* Minimize hint */}
             <p className="text-xs text-ink-dim text-center">
               You can minimize this dialog — the import continues in the background.
             </p>
@@ -326,7 +394,7 @@ export default function BulkImportModal({
           <div className="flex flex-col gap-5">
             <div className="flex items-center justify-between">
               <div className="text-xs sm:text-sm text-ink-dim">
-                Upload a CSV or XLSX file containing assets.
+                Upload a CSV or XLSX file with user details.
               </div>
               <Button
                 variant="outline"
@@ -338,36 +406,19 @@ export default function BulkImportModal({
               </Button>
             </div>
 
-            {/* Mode Selection */}
-            <div className="flex gap-4 border-b border-sky-page/10 pb-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="importMode"
-                  value="add"
-                  checked={importMode === "add"}
-                  onChange={() => setImportMode("add")}
-                  className="text-ursb focus:ring-ursb"
-                  disabled={isLoading}
-                />
-                <span className="text-xs sm:text-sm font-medium text-ink">
-                  Add New Assets
-                </span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="importMode"
-                  value="update"
-                  checked={importMode === "update"}
-                  onChange={() => setImportMode("update")}
-                  className="text-ursb focus:ring-ursb"
-                  disabled={isLoading}
-                />
-                <span className="text-xs sm:text-sm font-medium text-ink">
-                  Update Existing Assets
-                </span>
-              </label>
+            {/* Required columns hint */}
+            <div className="bg-sky-page border border-sky-border rounded-xl p-3 text-xs text-ink-dim">
+              <p className="font-semibold text-ink mb-1">Required columns</p>
+              <p>
+                <code className="text-ursb">full_name</code>,{" "}
+                <code className="text-ursb">email</code>,{" "}
+                <code className="text-ursb">role</code>,{" "}
+                <code className="text-ursb">department</code> (optional)
+              </p>
+              <p className="mt-1">
+                Email must be <code className="text-ursb">@ursb.go.ug</code>.
+                Passwords are auto-generated.
+              </p>
             </div>
 
             <div
@@ -401,7 +452,7 @@ export default function BulkImportModal({
               <p className="text-xs sm:text-sm font-semibold text-ink mb-1">
                 Click to browse or drag & drop
               </p>
-              <p className="text-[10px] text-ink-dim">CSV or XLSX, max 5 MB</p>
+              <p className="text-[10px] text-ink-dim">CSV or XLSX, max 2 MB</p>
             </div>
 
             {file && (
@@ -435,13 +486,13 @@ export default function BulkImportModal({
             )}
           </div>
         ) : (
-          /* ── Final Summary View ── */
+          /* ── Summary View ── */
           <div className="flex flex-col gap-5">
             <div className="flex items-center gap-4">
               <div
                 className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0
                 ${
-                  summary.imported > 0 && summary.skipped === 0
+                  summary.created > 0 && summary.skipped === 0
                     ? "bg-green-100 text-green-600"
                     : "bg-orange-100 text-orange-600"
                 }`}
@@ -453,8 +504,8 @@ export default function BulkImportModal({
                   Import Complete
                 </h2>
                 <p className="text-ink-dim text-xs mt-0.5">
-                  {summary.imported} of {summary.total_rows} rows processed
-                  successfully. {summary.skipped} rows skipped.
+                  {summary.created} of {summary.total_rows} accounts created.{" "}
+                  {summary.skipped} rows skipped.
                 </p>
               </div>
             </div>
@@ -462,22 +513,88 @@ export default function BulkImportModal({
             <div className="flex gap-4">
               <div className="flex-1 bg-green-50 border border-green-100 rounded-xl p-3 flex flex-col items-center">
                 <span className="text-2xl font-bold text-green-600">
-                  {summary.imported}
+                  {summary.created}
                 </span>
-                <span className="text-xs font-medium text-green-700">
-                  Successful
-                </span>
+                <span className="text-xs font-medium text-green-700">Created</span>
               </div>
               <div className="flex-1 bg-orange-50 border border-orange-100 rounded-xl p-3 flex flex-col items-center">
                 <span className="text-2xl font-bold text-orange-600">
                   {summary.skipped}
                 </span>
                 <span className="text-xs font-medium text-orange-700">
-                  Skipped (Errors)
+                  Skipped
                 </span>
               </div>
             </div>
 
+            {/* Generated credentials */}
+            {summary.accounts.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-ink">
+                    Generated Credentials
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      className="text-xs py-1 gap-1"
+                      onClick={() => setShowPasswords((v) => !v)}
+                    >
+                      {showPasswords ? (
+                        <ICONS.eyeOff className="w-3.5 h-3.5" />
+                      ) : (
+                        <ICONS.eye className="w-3.5 h-3.5" />
+                      )}
+                      {showPasswords ? "Hide" : "Show"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="text-xs py-1 gap-1"
+                      onClick={copyCredentials}
+                    >
+                      <ICONS.copy className="w-3.5 h-3.5" />
+                      {copied ? "Copied!" : "Copy All"}
+                    </Button>
+                  </div>
+                </div>
+                <div className="overflow-hidden rounded-xl border border-sky-border max-h-52 overflow-y-auto custom-scrollbar">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-sky-page border-b border-sky-border text-[10px] uppercase tracking-wider text-ink-dim sticky top-0">
+                        <th className="p-2 font-semibold">Name</th>
+                        <th className="p-2 font-semibold">Email</th>
+                        <th className="p-2 font-semibold">Role</th>
+                        <th className="p-2 font-semibold">Password</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-xs">
+                      {summary.accounts.map((acc, i) => (
+                        <tr
+                          key={i}
+                          className="border-b border-sky-border last:border-0 hover:bg-sky-50/50"
+                        >
+                          <td className="p-2 font-medium text-ink truncate max-w-28">
+                            {acc.full_name}
+                          </td>
+                          <td className="p-2 text-ink-dim truncate max-w-36">
+                            {acc.email}
+                          </td>
+                          <td className="p-2 text-ink-dim">{acc.role}</td>
+                          <td className="p-2 font-mono text-ink">
+                            {showPasswords ? acc.generated_password : "••••••••••••"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-[10px] text-ink-dim">
+                  These passwords are only shown once. Share them securely with each user.
+                </p>
+              </div>
+            )}
+
+            {/* Errors */}
             {summary.errors.length > 0 && (
               <div className="flex flex-col gap-3">
                 <Button
@@ -494,14 +611,13 @@ export default function BulkImportModal({
                     }`}
                   />
                 </Button>
-
                 {showErrors && (
-                  <div className="overflow-hidden rounded-xl border border-sky-border max-h-48 overflow-y-auto custom-scrollbar">
+                  <div className="overflow-hidden rounded-xl border border-sky-border max-h-40 overflow-y-auto custom-scrollbar">
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-sky-page border-b border-sky-border text-[10px] uppercase tracking-wider text-ink-dim sticky top-0">
                           <th className="p-2 font-semibold">Row</th>
-                          <th className="p-2 font-semibold">Serial</th>
+                          <th className="p-2 font-semibold">Email</th>
                           <th className="p-2 font-semibold">Reason</th>
                         </tr>
                       </thead>
@@ -512,8 +628,8 @@ export default function BulkImportModal({
                             className="border-b border-sky-border last:border-0 hover:bg-sky-50/50"
                           >
                             <td className="p-2 text-ink-dim">{err.row}</td>
-                            <td className="p-2 font-medium text-ink truncate max-w-24">
-                              {err.serial_number || "—"}
+                            <td className="p-2 font-medium text-ink truncate max-w-32">
+                              {err.email || "—"}
                             </td>
                             <td className="p-2 text-red-600">{err.reason}</td>
                           </tr>
@@ -544,11 +660,8 @@ export default function BulkImportModal({
               </svg>
               Minimize
             </Button>
-            <Button
-              variant="danger-outline"
-              onClick={() => abortControllerRef.current?.abort()}
-            >
-              Cancel & Rollback
+            <Button variant="danger-outline" onClick={handleCancelImport}>
+              Cancel Import
             </Button>
           </>
         ) : !summary ? (
@@ -561,9 +674,7 @@ export default function BulkImportModal({
               onClick={handleImport}
               disabled={!file || isLoading}
             >
-              {isLoading
-                ? "Processing…"
-                : `Start ${importMode === "add" ? "Import" : "Update"}`}
+              {isLoading ? "Processing…" : "Start Import"}
             </Button>
           </>
         ) : (

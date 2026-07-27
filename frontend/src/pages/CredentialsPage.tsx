@@ -14,6 +14,7 @@ import { filterInputCls, filterSelectCls } from "../components/common/FilterBar"
 import Table, { Column } from "../components/common/Table";
 import Modal from "../components/Modal";
 import { fmtDateTime } from "../utils/formatDate";
+import { useImportProgress } from "../context/ImportProgressContext";
 
 interface RecentAccount {
   user_id: string;
@@ -73,6 +74,7 @@ export default function CredentialsPage() {
   // Bulk import state
   const [file, setFile] = React.useState<File | null>(null);
   const [isImporting, setIsImporting] = React.useState(false);
+  const [isImportMinimized, setIsImportMinimized] = React.useState(false);
   const [importProgress, setImportProgress] = React.useState(0);
   const [importProcessed, setImportProcessed] = React.useState(0);
   const [importTotal, setImportTotal] = React.useState(0);
@@ -81,6 +83,16 @@ export default function CredentialsPage() {
   const [showResults, setShowResults] = React.useState(false);
   const [showErrorsModal, setShowErrorsModal] = React.useState(false);
   const wsRef = React.useRef<WebSocket | null>(null);
+  const importJobIdRef = React.useRef<string | null>(null);
+
+  const { startJob, updateJob, setOpenCredentialsImportModal } = useImportProgress();
+
+  // Register re-open callback so the bottom bar can restore the modal
+  React.useEffect(() => {
+    setOpenCredentialsImportModal(() => () => setIsImportMinimized(false));
+    return () => setOpenCredentialsImportModal(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Single user creation state
   const [singleFullName, setSingleFullName] = React.useState("");
@@ -202,7 +214,12 @@ export default function CredentialsPage() {
     setImportProgress(0);
     setImportProcessed(0);
     setImportTotal(0);
+    setIsImportMinimized(false);
     setIsImporting(true);
+
+    // Start a background job so the bottom bar tracks this import
+    const jobId = startJob("credentials", `Bulk credentials import — ${file.name}`);
+    importJobIdRef.current = jobId;
 
     // Parse the file synchronously using a Promise wrapper so we can await it
     let rows: Record<string, string>[] = [];
@@ -212,21 +229,22 @@ export default function CredentialsPage() {
       const sheet = wb.Sheets[wb.SheetNames[0]];
       rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: "" });
     } catch {
-      setImportError("Failed to parse file. Ensure it is a valid CSV or XLSX.");
+      const msg = "Failed to parse file. Ensure it is a valid CSV or XLSX.";
+      setImportError(msg);
       setIsImporting(false);
+      updateJob(jobId, { status: "error", errorMsg: msg });
       return;
     }
 
     if (rows.length === 0) {
-      setImportError("The file contains no data rows.");
+      const msg = "The file contains no data rows.";
+      setImportError(msg);
       setIsImporting(false);
+      updateJob(jobId, { status: "error", errorMsg: msg });
       return;
     }
 
     // Obtain a short-lived one-time token before opening the WebSocket.
-    // Browsers don't reliably send cookies on cross-origin WS upgrades,
-    // so we exchange the session cookie for a query-param token here via
-    // a normal credentialed HTTP request.
     let wsToken: string;
     try {
       const tokenData = await apiFetch<{ token: string }>("/users/ws-auth-token", {
@@ -234,8 +252,10 @@ export default function CredentialsPage() {
       });
       wsToken = tokenData.token;
     } catch {
-      setImportError("Failed to authenticate for import. Please try again.");
+      const msg = "Failed to authenticate for import. Please try again.";
+      setImportError(msg);
       setIsImporting(false);
+      updateJob(jobId, { status: "error", errorMsg: msg });
       return;
     }
 
@@ -255,6 +275,11 @@ export default function CredentialsPage() {
         setImportProgress(msg.progress);
         setImportProcessed(msg.processed);
         setImportTotal(msg.total);
+        updateJob(jobId, {
+          progress: msg.progress,
+          processed: msg.processed,
+          total: msg.total,
+        });
       } else if (msg.type === "complete") {
         setImportProgress(100);
         setIsImporting(false);
@@ -267,27 +292,44 @@ export default function CredentialsPage() {
         const fileInput = document.getElementById("import-file") as HTMLInputElement;
         if (fileInput) fileInput.value = "";
 
-        if (result.errors && result.errors.length > 0) {
+        updateJob(jobId, {
+          status: "done",
+          progress: 100,
+          summary: {
+            imported: result.created,
+            skipped: result.skipped,
+            total: result.total_rows,
+          },
+        });
+
+        // If minimized, keep bar visible; otherwise open errors modal if needed
+        if (!isImportMinimized && result.errors && result.errors.length > 0) {
           setShowErrorsModal(true);
         }
       } else if (msg.type === "error") {
-        setImportError(msg.message || "Import failed on server.");
+        const errMsg = msg.message || "Import failed on server.";
+        setImportError(errMsg);
         setIsImporting(false);
         wsRef.current = null;
+        updateJob(jobId, { status: "error", errorMsg: errMsg });
       }
     };
 
     ws.onerror = () => {
-      setImportError("Connection error. Please try again.");
+      const errMsg = "Connection error. Please try again.";
+      setImportError(errMsg);
       setIsImporting(false);
       wsRef.current = null;
+      updateJob(jobId, { status: "error", errorMsg: errMsg });
     };
 
     ws.onclose = (event) => {
       if (isImporting && event.code !== 1000) {
-        setImportError("Import was interrupted.");
+        const errMsg = "Import was interrupted.";
+        setImportError(errMsg);
         setIsImporting(false);
         wsRef.current = null;
+        updateJob(jobId, { status: "error", errorMsg: errMsg });
       }
     };
   };
@@ -321,10 +363,16 @@ export default function CredentialsPage() {
       wsRef.current = null;
     }
     setIsImporting(false);
+    setIsImportMinimized(false);
     setImportProgress(0);
     setImportProcessed(0);
     setImportTotal(0);
-    setImportError("Import cancelled. All changes have been rolled back.");
+    const msg = "Import cancelled. All changes have been rolled back.";
+    setImportError(msg);
+    if (importJobIdRef.current) {
+      updateJob(importJobIdRef.current, { status: "error", errorMsg: msg });
+      importJobIdRef.current = null;
+    }
   };
 
   const copyToClipboard = (text: string) => {
@@ -509,8 +557,8 @@ export default function CredentialsPage() {
   return (
     <div className="w-full flex flex-col gap-6 select-none font-sans">
       {/* Import Progress Modal */}
-      <Modal open={isImporting} onClose={() => {}} title="">
-        <div className="flex flex-col items-center px-4 pb-6 pt-2 select-none font-sans min-w-[320px]">
+      <Modal open={isImporting && !isImportMinimized} onClose={() => {}} title="Creating User Accounts">
+        <div className="flex flex-col items-center px-4 pb-4 pt-2 select-none font-sans min-w-[320px]">
           <div className="relative flex items-center justify-center mb-6 mt-2">
             <svg className="w-40 h-40 -rotate-90" viewBox="0 0 120 120">
               <circle cx="60" cy="60" r="52" fill="none" stroke="#e8eef8" strokeWidth="8" />
@@ -546,28 +594,40 @@ export default function CredentialsPage() {
             {importProgress < 100 ? "Creating accounts…" : "Finalising import…"}
           </p>
           {importTotal > 0 && (
-            <p className="text-xs text-ink-dim mb-5">
+            <p className="text-xs text-ink-dim mb-4">
               {importProcessed} of {importTotal} accounts processed
             </p>
           )}
 
-          <div className="w-full bg-sky-page/50 rounded-full h-2 mb-6 overflow-hidden border border-sky-cardBorder">
+          <div className="w-full bg-sky-page/50 rounded-full h-2 mb-5 overflow-hidden border border-sky-cardBorder">
             <div
               className="bg-gradient-to-r from-[#6a94d4] to-[#3b6abf] h-full rounded-full"
               style={{ width: `${importProgress}%`, transition: "width 0.4s cubic-bezier(0.4,0,0.2,1)" }}
             />
           </div>
 
-          <Button
-            variant="danger-outline"
-            onClick={handleCancelImport}
-            className="w-full justify-center"
-          >
-            Cancel Import
-          </Button>
-          <p className="text-[10px] text-ink-dim mt-3 text-center leading-relaxed">
-            Cancelling will roll back all changes made so far.
+          {/* Minimize hint */}
+          <p className="text-[11px] text-ink-dim mb-4 text-center leading-relaxed">
+            You can minimize this dialog — the import continues in the background.
           </p>
+
+          <div className="flex gap-2 w-full">
+            <Button
+              variant="outline"
+              onClick={() => setIsImportMinimized(true)}
+              className="flex-1 justify-center gap-1.5"
+            >
+              <ICONS.chevronDown className="w-3.5 h-3.5" />
+              Minimize
+            </Button>
+            <Button
+              variant="danger-outline"
+              onClick={handleCancelImport}
+              className="flex-1 justify-center"
+            >
+              Cancel & Rollback
+            </Button>
+          </div>
         </div>
       </Modal>
 

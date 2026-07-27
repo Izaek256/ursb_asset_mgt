@@ -17,6 +17,7 @@ import pdfIcon from "../assets/icons8-export-pdf-50.png";
 import BulkImportModal from "../components/assets/BulkImportModal";
 import { hasActionPermission } from "../utils/rbac";
 import { fmtDate } from "../utils/formatDate";
+import { useImportProgress } from "../context/ImportProgressContext";
 
 interface AssetRow {
   asset_id: string;
@@ -129,6 +130,7 @@ function exportAssetsExcel(rows: AssetRow[]) {
 
 export default function Assets() {
   const { user } = useAuth();
+  const { activeJob, setOpenImportModal } = useImportProgress();
   const [assets, setAssets] = React.useState<AssetRow[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isExporting, setIsExporting] = React.useState(false);
@@ -139,8 +141,17 @@ export default function Assets() {
   const [page, setPage] = React.useState(1);
   const pageSize = 50;
 
-  // Check if user has permission to bulk import assets
   const canBulkImport = user && hasActionPermission(user.role, "bulkImportAssets");
+
+  // Register the "open asset import modal" callback with the progress bar context.
+  // Re-registers whenever canBulkImport or the setter reference changes.
+  React.useEffect(() => {
+    if (canBulkImport) {
+      setOpenImportModal(() => () => setIsImportModalOpen(true));
+    }
+    return () => setOpenImportModal(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canBulkImport]);
 
   React.useEffect(() => {
     setPage(1);
@@ -424,6 +435,7 @@ export default function Assets() {
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
         onImportSuccess={() => fetchAssets()}
+        onMinimize={() => setIsImportModalOpen(false)}
       />
     </div>
   );

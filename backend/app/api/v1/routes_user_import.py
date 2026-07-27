@@ -37,7 +37,7 @@ def _cleanup_ws_tokens():
 
 @router.post("/ws-auth-token")
 async def get_ws_auth_token(
-    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
+    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
 ):
     """
     Issue a short-lived one-time token for the bulk-import WebSocket.
@@ -221,7 +221,7 @@ def _validate_rows(rows: list, db: Session) -> tuple[list, list]:
 async def bulk_import_users(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR)),
+    current_user: User = Depends(require_role(UserRole.SYSTEM_ADMINISTRATOR, UserRole.SUPER_SYSTEM_ADMINISTRATOR)),
 ):
     """
     Bulk import users from CSV or XLSX file.

@@ -23,7 +23,11 @@ const ROLE_FILTER_OPTIONS: { label: string; value: Role | "All" }[] = [
 
 
 
-export default function UserManagement() {
+interface UserManagementProps {
+  refreshKey?: number;
+}
+
+export default function UserManagement({ refreshKey }: UserManagementProps) {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = React.useState<UserRow[]>([]);
   const [filter, setFilter] = React.useState<Role | "All">("All");
@@ -99,7 +103,7 @@ export default function UserManagement() {
     finally { setIsLoading(false); }
   }, []);
 
-  React.useEffect(() => { fetchUsers(); }, [fetchUsers]);
+  React.useEffect(() => { fetchUsers(); }, [fetchUsers, refreshKey]);
 
   // ── Role change flow ──
   const openRoleEdit = (u: UserRow) => { setEditing(u); setEditOpen(true); };
@@ -331,6 +335,7 @@ export default function UserManagement() {
         onCancel={() => setStatusAction(null)}
         onConfirm={confirmStatusChange}
       />
+
     </div>
   );
 }

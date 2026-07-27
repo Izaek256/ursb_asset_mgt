@@ -1,8 +1,11 @@
 import React from "react";
 import { AuthProvider, useAuth } from "./AuthContext";
+import { ImportProgressProvider, useImportProgress } from "./context/ImportProgressContext";
 import AppLayout from "./components/AppLayout";
 import RoleGuard from "./components/RoleGuard";
 import ToastContainer from "./components/Toast";
+import ImportProgressBar from "./components/ImportProgressBar";
+import BulkUserImportModal from "./components/users/BulkUserImportModal";
 import UserManagement from "./pages/UserManagement";
 import AuditLogs from "./pages/AuditLogs";
 import Assets from "./pages/Assets";
@@ -38,7 +41,15 @@ const NAV_LABELS: Record<string, string> = {
 
 function AppShell() {
   const { user } = useAuth();
+  const { setOpenUserImportModal } = useImportProgress();
   const [path, setPath] = React.useState(window.location.pathname || "/dashboard");
+  const [isUserImportModalOpen, setIsUserImportModalOpen] = React.useState(false);
+  const [userManagementRefreshKey, setUserManagementRefreshKey] = React.useState(0);
+
+  // Register the user import modal opener with the context
+  React.useEffect(() => {
+    setOpenUserImportModal(() => setIsUserImportModalOpen(true));
+  }, [setOpenUserImportModal]);
 
   React.useEffect(() => {
     const onPop = () => setPath(window.location.pathname);
@@ -152,7 +163,7 @@ function AppShell() {
       case "/admin/users":
         return (
           <RoleGuard requiredPath="/admin/users">
-            <UserManagement />
+            <UserManagement refreshKey={userManagementRefreshKey} />
           </RoleGuard>
         );
       case "/settings":
@@ -182,6 +193,18 @@ function AppShell() {
       <AppLayout pageTitle={getPageTitle()} activePath={path} onNavigate={navigate}>
         {renderContent()}
       </AppLayout>
+      <ImportProgressBar />
+      <BulkUserImportModal
+        isOpen={isUserImportModalOpen}
+        onClose={() => setIsUserImportModalOpen(false)}
+        onImportSuccess={() => {
+          // Trigger the refresh callback which will update UserManagement if needed
+          if (path === "/admin/users") {
+            setUserManagementRefreshKey(prev => prev + 1);
+          }
+        }}
+        onMinimize={() => setIsUserImportModalOpen(false)}
+      />
     </div>
   );
 }
@@ -208,7 +231,9 @@ function AppRoot() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppRoot />
+      <ImportProgressProvider>
+        <AppRoot />
+      </ImportProgressProvider>
     </AuthProvider>
   );
 }

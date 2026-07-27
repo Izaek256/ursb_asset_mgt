@@ -85,11 +85,12 @@ export const ACTION_PERMISSIONS: Record<string, ActionPermission[]> = {
   disposeAsset: [{ action: "disposeAsset", allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER"] }],
 
   // User management actions
-  createUser:    [{ action: "createUser",    allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR"] }],
-  updateUser:    [{ action: "updateUser",    allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR"] }],
-  deleteUser:    [{ action: "deleteUser",    allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR"] }],
-  changeUserRole:[{ action: "changeUserRole",allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR"] }],
-  resetPassword: [{ action: "resetPassword", allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR"] }],
+  createUser:       [{ action: "createUser",       allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR"] }],
+  updateUser:       [{ action: "updateUser",       allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR"] }],
+  deleteUser:       [{ action: "deleteUser",       allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR"] }],
+  changeUserRole:   [{ action: "changeUserRole",   allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR"] }],
+  resetPassword:    [{ action: "resetPassword",    allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR"] }],
+  bulkImportUsers:  [{ action: "bulkImportUsers",  allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR"] }],
 
   // Audit log actions
   viewAuditLogs: [{ action: "viewAuditLogs", allowedRoles: ["SUPER_SYSTEM_ADMINISTRATOR", "SYSTEM_ADMINISTRATOR", "ASSET_MANAGER"] }],
