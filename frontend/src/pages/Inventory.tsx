@@ -12,6 +12,7 @@ import PageHeader from "../components/PageHeader";
 import Button from "../components/common/Button";
 import FilterBar, { FilterField, filterSelectCls } from "../components/common/FilterBar";
 import { ICONS } from "../utils/icons";
+import { SkeletonCard, Skeleton } from "../components/common/LoadingSkeleton";
 
 interface AssetStub {
   asset_id: string;
@@ -143,9 +144,7 @@ export default function Inventory() {
     return (
       <div className="w-full flex flex-col gap-5 select-none font-sans">
         <PageHeader title="Asset Inventory" subtitle="Loading inventory…" />
-        <div className="bg-white border border-sky-cardBorder rounded-2xl p-10 text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-ursb mx-auto" />
-        </div>
+        <SkeletonCard className="h-96" />
       </div>
     );
   }

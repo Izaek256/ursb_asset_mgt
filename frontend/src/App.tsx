@@ -23,6 +23,7 @@ import Storage from "./pages/Storage";
 import Transfers from "./pages/Transfers";
 import CredentialsPage from "./pages/CredentialsPage";
 import { hasPageAccess, getDefaultPathForRole, hasActionPermission } from "./utils/rbac";
+import { PageLoader } from "./components/common/LoadingSkeleton";
 
 const NAV_LABELS: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -267,12 +268,7 @@ function AppRoot() {
   const { user, isInitialLoading } = useAuth();
 
   if (isInitialLoading) {
-    return (
-      <div className="flex flex-col justify-center items-center h-screen bg-sky-page gap-5 select-none">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-sky-border border-t-ursb" />
-        <div className="text-base text-ink-dim font-semibold">Loading...</div>
-      </div>
-    );
+    return <PageLoader message="Loading application..." />;
   }
 
   if (!user) {

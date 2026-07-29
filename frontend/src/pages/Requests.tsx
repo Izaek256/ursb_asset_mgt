@@ -14,6 +14,7 @@ import Table, { Column } from "../components/common/Table";
 import Button from "../components/common/Button";
 import FilterBar, { FilterField, filterInputCls, filterSelectCls } from "../components/common/FilterBar";
 import { fmtDateTime, fmtDate } from "../utils/formatDate";
+import { SkeletonCard } from "../components/common/LoadingSkeleton";
 
 interface AssetOption {
   asset_id: string;
@@ -528,9 +529,7 @@ export default function Requests() {
         <Tab.Panels className="mt-2">
           <Tab.Panel>
             {isLoading ? (
-              <div className="flex justify-center py-16">
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ursb" />
-              </div>
+              <SkeletonCard className="h-96" />
             ) : requests.length === 0 ? (
               <EmptyState
                 title="No pending requests found"
@@ -584,9 +583,7 @@ export default function Requests() {
             )}
 
             {isLoading ? (
-              <div className="flex justify-center py-16">
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ursb" />
-              </div>
+              <SkeletonCard className="h-96" />
             ) : filteredHistoryRequests.length === 0 ? (
               <EmptyState
                 title="No history found"

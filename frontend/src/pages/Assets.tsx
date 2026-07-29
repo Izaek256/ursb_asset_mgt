@@ -18,6 +18,7 @@ import BulkImportModal, { BulkImportModalRef } from "../components/assets/BulkIm
 import { hasActionPermission } from "../utils/rbac";
 import { fmtDate } from "../utils/formatDate";
 import { useImportProgress } from "../context/ImportProgressContext";
+import { SkeletonCard } from "../components/common/LoadingSkeleton";
 
 interface AssetRow {
   asset_id: string;

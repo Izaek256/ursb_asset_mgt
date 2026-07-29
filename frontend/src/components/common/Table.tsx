@@ -1,4 +1,5 @@
 import React from "react";
+import { SkeletonTable } from "./LoadingSkeleton";
 
 export interface Column<T> {
   header: string;
@@ -14,6 +15,7 @@ interface TableProps<T> {
   isLoading?: boolean;
   embedded?: boolean;
   pageSize?: number; // if provided, enables client-side pagination
+  skeletonRows?: number;
 }
 
 export default function Table<T>({
@@ -24,6 +26,7 @@ export default function Table<T>({
   isLoading = false,
   embedded = false,
   pageSize,
+  skeletonRows = 5,
 }: TableProps<T>) {
   const [page, setPage] = React.useState(1);
 
@@ -33,11 +36,7 @@ export default function Table<T>({
   }, [data]);
 
   if (isLoading) {
-    return (
-      <div className="flex justify-center items-center py-12 bg-white border border-sky-cardBorder rounded-2xl">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-ursb motion-reduce:animate-none" />
-      </div>
-    );
+    return <SkeletonTable rows={skeletonRows} columns={columns.length} className={embedded ? "" : ""} />;
   }
 
   if (data.length === 0) {

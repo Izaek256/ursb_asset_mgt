@@ -13,6 +13,7 @@ import StatusBadge from "../components/common/badges/StatusBadge";
 import EmptyState from "../components/EmptyState";
 import { ICONS } from "../utils/icons";
 import { fmtDateTime, fmtDate } from "../utils/formatDate";
+import { SkeletonCard } from "../components/common/LoadingSkeleton";
 
 export default function Transfers() {
   const { user } = useAuth();
@@ -296,9 +297,7 @@ export default function Transfers() {
       </FilterBar>
 
       {isLoading ? (
-        <div className="flex justify-center py-16">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ursb" />
-        </div>
+        <SkeletonCard className="h-96" />
       ) : displayedTransfers.length === 0 ? (
         <EmptyState
           title="No transfers found"

@@ -12,6 +12,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { Skeleton, SkeletonCard, SkeletonText } from "../components/common/LoadingSkeleton";
 
 // ── Types ────────────────────────────────────────────────────────────────────────
 interface StatCard {
@@ -165,8 +166,31 @@ export default function Dashboard({ onNavigate }: { onNavigate: (path: string) =
 
   if (loading || !data) {
     return (
-      <div className="flex justify-center items-center py-20 select-none">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ursb" />
+      <div className="w-full flex flex-col gap-6 select-none font-sans">
+        {/* Stat Cards Skeleton */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-5">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-white border border-sky-cardBorder rounded-2xl p-5 flex items-center gap-3.5">
+              <Skeleton variant="circular" width={44} height={44} />
+              <div className="flex-1 space-y-2">
+                <Skeleton variant="text" width="60%" height={12} />
+                <Skeleton variant="text" width="40%" height={24} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Main Content Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 flex flex-col gap-6">
+            <SkeletonCard className="h-64" />
+            <SkeletonCard className="h-80" />
+          </div>
+          <div className="flex flex-col gap-6">
+            <SkeletonCard className="h-64" />
+            <SkeletonCard className="h-48" />
+          </div>
+        </div>
       </div>
     );
   }

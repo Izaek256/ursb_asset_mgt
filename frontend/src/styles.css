@@ -59,6 +59,27 @@
   animation: slide-out 0.3s ease-in forwards;
 }
 
+/* ── SKELETON LOADING ANIMATIONS ───────────────────────────────────────────────── */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(148, 163, 184, 0.3) 0%,
+    rgba(148, 163, 184, 0.5) 50%,
+    rgba(148, 163, 184, 0.3) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
 /* ── RESET & BASE ────────────────────────────────────────────────────────────── */
 * {
   margin: 0;

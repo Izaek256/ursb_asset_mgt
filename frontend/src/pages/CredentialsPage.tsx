@@ -15,6 +15,7 @@ import Table, { Column } from "../components/common/Table";
 import Modal from "../components/Modal";
 import { fmtDateTime } from "../utils/formatDate";
 import { useImportProgress } from "../context/ImportProgressContext";
+import { SkeletonCard } from "../components/common/LoadingSkeleton";
 
 interface RecentAccount {
   user_id: string;
@@ -1081,7 +1082,7 @@ export default function CredentialsPage() {
           </div>
         </div>
         {isLoadingAccounts ? (
-          <div className="text-center py-8 text-ink-dim">Loading...</div>
+          <SkeletonCard className="h-64" />
         ) : accounts.length === 0 ? (
           <div className="text-center py-8 text-ink-dim">No recent accounts found.</div>
         ) : (

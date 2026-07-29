@@ -4,6 +4,7 @@ import { apiFetch, useAuth } from "../AuthContext";
 import type { AssetDetail } from "../types";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { fmtDateTime, fmtDate } from "../utils/formatDate";
+import { SkeletonCard } from "../components/common/LoadingSkeleton";
 
 const STATUS_CLASS: Record<string, string> = {
   Available: "badge-info",
@@ -298,7 +299,7 @@ export default function AssetDetail() {
     user?.role === "SUPER_SYSTEM_ADMINISTRATOR";
 
   if (isLoading) {
-    return <div className="page-loading">Loading asset details...</div>;
+    return <SkeletonCard className="h-96" />;
   }
 
   if (error || !asset) {

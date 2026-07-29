@@ -11,6 +11,7 @@ import StatusBadge from "../components/common/badges/StatusBadge";
 import RoleBadge from "../components/common/badges/RoleBadge";
 import ErrorMessage from "../components/ErrorMessage";
 import Modal from "../components/Modal";
+import { SkeletonCard } from "../components/common/LoadingSkeleton";
 
 const ROLE_FILTER_OPTIONS: { label: string; value: Role | "All" }[] = [
   { label: "All",                        value: "All" },
@@ -140,11 +141,7 @@ export default function UserManagement({ refreshKey }: UserManagementProps) {
   });
 
   if (isLoading) {
-    return (
-      <div className="flex justify-center py-20">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ursb" />
-      </div>
-    );
+    return <SkeletonCard className="h-96" />;
   }
 
   const columns: Column<UserRow>[] = [

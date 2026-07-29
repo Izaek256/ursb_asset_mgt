@@ -10,6 +10,7 @@ import PageHeader from "../components/PageHeader";
 import Table, { Column } from "../components/common/Table";
 import Button from "../components/common/Button";
 import FilterBar, { FilterField, filterInputCls, filterSelectCls } from "../components/common/FilterBar";
+import { SkeletonCard } from "../components/common/LoadingSkeleton";
 
 interface ActiveAssetOption {
   asset_id: string;
@@ -394,9 +395,7 @@ export default function Storage() {
       </FilterBar>
 
       {isLoading ? (
-        <div className="flex justify-center py-16">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ursb" />
-        </div>
+        <SkeletonCard className="h-96" />
       ) : !data || data.assets.length === 0 ? (
         <EmptyState
           title="No assets in storage"

@@ -12,6 +12,7 @@ import PageHeader from "../components/PageHeader";
 import Table, { Column } from "../components/common/Table";
 import Button from "../components/common/Button";
 import { fmtDateTime, fmtDate } from "../utils/formatDate";
+import { SkeletonCard } from "../components/common/LoadingSkeleton";
 
 interface AssetOption {
   asset_id: string;
@@ -525,9 +526,7 @@ export default function Assignments() {
           {/* Active Assignments Tab */}
           <Tab.Panel>
             {isLoading ? (
-              <div className="flex justify-center py-16">
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ursb" />
-              </div>
+              <SkeletonCard className="h-96" />
             ) : assignments.length === 0 ? (
               <EmptyState
                 title="No active assignments found"
@@ -563,9 +562,7 @@ export default function Assignments() {
           {/* History Tab */}
           <Tab.Panel>
             {isLoading ? (
-              <div className="flex justify-center py-16">
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ursb" />
-              </div>
+              <SkeletonCard className="h-96" />
             ) : historyAssignments.length === 0 ? (
               <EmptyState
                 title="No history found"

@@ -3,12 +3,12 @@ import { Tab } from "@headlessui/react";
 import { useAuth } from "../AuthContext";
 import { apiFetch } from "../AuthContext";
 import { UserSettings, SystemSettings } from "../types";
-import LoadingSpinner from "../components/LoadingSpinner";
 import ErrorMessage from "../components/ErrorMessage";
 import Button from "../components/common/Button";
 import ToggleSwitch from "../components/common/ToggleSwitch";
 import PageHeader from "../components/PageHeader";
 import { filterInputCls } from "../components/common/FilterBar";
+import { SkeletonCard } from "../components/common/LoadingSkeleton";
 
 const TABS = ["General", "Notifications", "Security", "System"] as const;
 
@@ -21,6 +21,7 @@ function splitName(fullName: string) {
 export default function Settings() {
   const { user, refreshUser } = useAuth();
   const [isLoadingSettings, setIsLoadingSettings] = React.useState(true);
+  const [settingsError, setSettingsError] = React.useState<string | null>(null);
 
   const [profileForm, setProfileForm] = React.useState({
     firstName: "",
@@ -239,6 +240,18 @@ export default function Settings() {
     </div>
   );
 
+  if (isLoadingSettings) {
+    return (
+      <div className="w-full flex flex-col gap-5 select-none font-sans">
+        <PageHeader
+          title="Settings"
+          subtitle="Configure your account and system preferences"
+        />
+        <SkeletonCard className="h-64" />
+      </div>
+    );
+  }
+
   return (
     <div className="w-full flex flex-col gap-5 select-none font-sans">
       <PageHeader
@@ -246,10 +259,8 @@ export default function Settings() {
         subtitle="Configure your account and system preferences"
       />
 
-      {isLoadingSettings && (
-        <div className="flex items-center gap-2 text-sm text-ink-dim">
-          <LoadingSpinner /> Loading settings...
-        </div>
+      {settingsError && (
+        <ErrorMessage message={settingsError} onRetry={() => setSettingsError(null)} />
       )}
 
       <Tab.Group>

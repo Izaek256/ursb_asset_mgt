@@ -2,6 +2,7 @@ import React from "react";
 import { Listbox, Transition } from "@headlessui/react";
 import { ICONS } from "../../utils/icons";
 import Button from "./Button";
+import { InlineLoader } from "./LoadingSkeleton";
 
 type BaseProps = {
   label?: string;
@@ -10,6 +11,7 @@ type BaseProps = {
   required?: boolean;
   className?: string;
   variant?: "dark" | "light";
+  loading?: boolean;
 };
 
 type TextInputProps = BaseProps & {
@@ -106,7 +108,11 @@ export default function FormInput(props: Props) {
                 <span className={`absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none ${
                   isLight ? "text-ink-dim/60" : "text-white/50"
                 }`}>
-                  <ICONS.chevronDown className="w-4.5 h-4.5" aria-hidden="true" />
+                  {props.loading ? (
+                    <InlineLoader size="sm" />
+                  ) : (
+                    <ICONS.chevronDown className="w-4.5 h-4.5" aria-hidden="true" />
+                  )}
                 </span>
               </Listbox.Button>
               <Transition

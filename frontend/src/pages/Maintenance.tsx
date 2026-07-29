@@ -11,6 +11,7 @@ import ConfirmDialog from "../components/ConfirmDialog";
 import PageHeader from "../components/PageHeader";
 import Table, { Column } from "../components/common/Table";
 import Button from "../components/common/Button";
+import { SkeletonCard } from "../components/common/LoadingSkeleton";
 
 interface MaintenanceRecordResponse {
   maintenance_id: number;
@@ -376,9 +377,7 @@ export default function Maintenance() {
       />
 
       {isLoading ? (
-        <div className="flex justify-center py-16">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ursb" />
-        </div>
+        <SkeletonCard className="h-96" />
       ) : records.length === 0 ? (
         <EmptyState
           title="No maintenance history"
