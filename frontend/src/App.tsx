@@ -6,6 +6,7 @@ import RoleGuard from "./components/RoleGuard";
 import ToastContainer from "./components/Toast";
 import ImportProgressBar from "./components/ImportProgressBar";
 import BulkUserImportModal from "./components/users/BulkUserImportModal";
+import ReloadConfirmationModal from "./components/ReloadConfirmationModal";
 import UserManagement from "./pages/UserManagement";
 import AuditLogs from "./pages/AuditLogs";
 import Assets from "./pages/Assets";
@@ -41,15 +42,59 @@ const NAV_LABELS: Record<string, string> = {
 
 function AppShell() {
   const { user } = useAuth();
-  const { setOpenUserImportModal } = useImportProgress();
+  const { setOpenUserImportModal, setOnJobComplete, setOnCancelJob, jobs } = useImportProgress();
   const [path, setPath] = React.useState(window.location.pathname || "/dashboard");
   const [isUserImportModalOpen, setIsUserImportModalOpen] = React.useState(false);
   const [userManagementRefreshKey, setUserManagementRefreshKey] = React.useState(0);
+  const [showReloadModal, setShowReloadModal] = React.useState(false);
+
+  // Browser reload protection
+  React.useEffect(() => {
+    const runningJobs = jobs.filter((j) => j.status === "running");
+    const hasRunningJobs = runningJobs.length > 0;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasRunningJobs) {
+        e.preventDefault();
+        e.returnValue = ""; // Chrome requires returnValue to be set
+        return ""; // Other browsers
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [jobs]);
 
   // Register the user import modal opener with the context
   React.useEffect(() => {
-    setOpenUserImportModal(() => setIsUserImportModalOpen(true));
+    const openModal = () => setIsUserImportModalOpen(true);
+    setOpenUserImportModal(() => openModal);
   }, [setOpenUserImportModal]);
+
+  // Register job complete callback to refresh user management data
+  React.useEffect(() => {
+    const handleJobComplete = (job: any) => {
+      if (job.type === "user" && job.status === "done") {
+        // Refresh user management data
+        setUserManagementRefreshKey((prev) => prev + 1);
+      }
+    };
+    setOnJobComplete(() => handleJobComplete);
+    return () => setOnJobComplete(() => {});
+  }, [setOnJobComplete]);
+
+  // Register cancel job callback for user imports
+  React.useEffect(() => {
+    const handleCancelJob = (jobId: string) => {
+      // The BulkUserImportModal handles its own cancellation via WebSocket
+      // This is a placeholder for future integration if needed
+    };
+    setOnCancelJob(() => handleCancelJob);
+    return () => setOnCancelJob(() => {});
+  }, [setOnCancelJob]);
 
   React.useEffect(() => {
     const onPop = () => setPath(window.location.pathname);
@@ -204,6 +249,15 @@ function AppShell() {
           }
         }}
         onMinimize={() => setIsUserImportModalOpen(false)}
+      />
+      <ReloadConfirmationModal
+        isOpen={showReloadModal}
+        onConfirm={() => {
+          setShowReloadModal(false);
+          window.location.reload();
+        }}
+        onCancel={() => setShowReloadModal(false)}
+        jobCount={jobs.filter((j) => j.status === "running").length}
       />
     </div>
   );

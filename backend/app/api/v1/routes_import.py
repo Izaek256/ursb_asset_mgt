@@ -8,6 +8,7 @@ import asyncio
 from datetime import datetime, date
 from app.utils.time import today_eat, utcnow
 from typing import List, Dict, Any
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request
 from fastapi.responses import StreamingResponse
@@ -20,6 +21,9 @@ from app.models.user import UserRole
 from app.api.v1.auth import get_current_user, require_role
 
 router = APIRouter(prefix="/api/v1/assets", tags=["assets", "import"])
+
+# Thread pool for CPU-intensive operations (file parsing, validation)
+_thread_pool = ThreadPoolExecutor(max_workers=4)
 
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 
@@ -35,7 +39,7 @@ def _parse_xlsx(file_bytes: bytes) -> List[Dict[str, Any]]:
     rows = list(sheet.iter_rows(values_only=True))
     if not rows:
         return []
-    
+
     headers = [str(h).strip() if h else "" for h in rows[0]]
     data = []
     for row in rows[1:]:
@@ -45,6 +49,16 @@ def _parse_xlsx(file_bytes: bytes) -> List[Dict[str, Any]]:
         row_dict = {headers[i]: (str(cell).strip() if cell is not None else "") for i, cell in enumerate(row) if i < len(headers)}
         data.append(row_dict)
     return data
+
+async def _parse_csv_async(file_bytes: bytes) -> List[Dict[str, str]]:
+    """Parse CSV in thread pool to avoid blocking event loop"""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(_thread_pool, _parse_csv, file_bytes)
+
+async def _parse_xlsx_async(file_bytes: bytes) -> List[Dict[str, Any]]:
+    """Parse XLSX in thread pool to avoid blocking event loop"""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(_thread_pool, _parse_xlsx, file_bytes)
 
 @router.post("/import")
 async def bulk_import_assets(
@@ -79,9 +93,9 @@ async def bulk_import_assets(
 
     try:
         if filename_lower.endswith('.csv'):
-            rows = _parse_csv(file_bytes)
+            rows = await _parse_csv_async(file_bytes)
         else:
-            rows = _parse_xlsx(file_bytes)
+            rows = await _parse_xlsx_async(file_bytes)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to parse file: {str(e)}")
 
@@ -108,7 +122,10 @@ async def bulk_import_assets(
             else:
                 existing_serials = {s[0] for s in db.query(Asset.serial_number).all()}
                 existing_assets_map = {}
-            
+
+            # Yield control to event loop after DB query
+            await asyncio.sleep(0)
+
             assets_to_insert = []
             
             for idx, row in enumerate(rows, start=1):
@@ -118,6 +135,10 @@ async def bulk_import_assets(
                     db.rollback()
                     db.close()
                     return
+
+                # Yield control to event loop every 10 rows to prevent blocking
+                if idx % 10 == 0:
+                    await asyncio.sleep(0)
 
                 asset_name = row.get("asset_name", "").strip()
                 asset_type_str = row.get("asset_type", "").strip()
@@ -364,12 +385,14 @@ async def bulk_import_assets(
                 await asyncio.sleep(0.005)
 
             if assets_to_insert:
+                # Yield control before bulk insert
+                await asyncio.sleep(0)
                 db.bulk_save_objects(assets_to_insert)
-            
+
             # Commit the session transaction
             action_desc = "ASSET_BULK_IMPORT" if import_mode == "add" else "ASSET_BULK_UPDATE"
             details_desc = f"Bulk {import_mode}ed {imported} assets from file {file.filename}"
-            
+
             audit_entry = AuditLog(
                 user_id=current_user.user_id,
                 action=action_desc,
@@ -378,6 +401,8 @@ async def bulk_import_assets(
                 details=details_desc,
             )
             db.add(audit_entry)
+            # Yield control before commit
+            await asyncio.sleep(0)
             db.commit()
 
             # Yield final summary report

@@ -27,6 +27,7 @@ interface ImportProgressContextValue {
   startJob: (type: ImportType, label: string) => string; // returns job id
   updateJob: (id: string, patch: Partial<Omit<ImportJob, "id" | "type">>) => void;
   dismissJob: (id: string) => void;
+  cancelJob: (id: string) => void;
   clearDoneJobs: () => void;
 
   /**
@@ -38,17 +39,27 @@ interface ImportProgressContextValue {
 
   /**
    * Dedicated callback for the global user-import modal (lives in App.tsx).
-   * Set once on mount; never cleared.
    */
   openUserImportModal: (() => void) | null;
   setOpenUserImportModal: (fn: (() => void) | null) => void;
 
   /**
    * Dedicated callback for the credentials page import modal.
-   * Set when credentials page mounts, cleared when unmounts.
    */
   openCredentialsImportModal: (() => void) | null;
   setOpenCredentialsImportModal: (fn: (() => void) | null) => void;
+
+  /**
+   * Callback to refresh page data when a job completes.
+   */
+  onJobComplete: (job: ImportJob) => void;
+  setOnJobComplete: (fn: (job: ImportJob) => void) => void;
+
+  /**
+   * Callback to cancel a running job and rollback changes.
+   */
+  onCancelJob: (id: string) => void;
+  setOnCancelJob: (fn: (id: string) => void) => void;
 }
 
 const ImportProgressContext = createContext<ImportProgressContextValue>(null!);
@@ -58,6 +69,8 @@ export function ImportProgressProvider({ children }: { children: React.ReactNode
   const [openImportModal, setOpenImportModalState] = useState<(() => void) | null>(null);
   const [openUserImportModal, setOpenUserImportModalState] = useState<(() => void) | null>(null);
   const [openCredentialsImportModal, setOpenCredentialsImportModalState] = useState<(() => void) | null>(null);
+  const [onJobComplete, setOnJobCompleteState] = useState<(job: ImportJob) => void>(() => {});
+  const [onCancelJob, setOnCancelJobState] = useState<(id: string) => void>(() => {});
 
   const startJob = useCallback((type: ImportType, label: string): string => {
     const id = `${type}-${Date.now()}`;
@@ -81,14 +94,41 @@ export function ImportProgressProvider({ children }: { children: React.ReactNode
 
   const updateJob = useCallback(
     (id: string, patch: Partial<Omit<ImportJob, "id" | "type">>) => {
-      setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, ...patch } : j)));
+      setJobs((prev) => {
+        const updated = prev.map((j) => (j.id === id ? { ...j, ...patch } : j));
+
+        // Check if job just completed
+        const job = updated.find((j) => j.id === id);
+        if (job && patch.status === "done" && job.status === "done") {
+          onJobComplete(job);
+          // Show toast notification
+          if ((window as any).toast) {
+            (window as any).toast.success(
+              "Import Complete",
+              `${job.summary?.imported ?? 0} items imported successfully`
+            );
+          }
+        }
+
+        return updated;
+      });
     },
-    []
+    [onJobComplete]
   );
 
   const dismissJob = useCallback((id: string) => {
     setJobs((prev) => prev.filter((j) => j.id !== id));
   }, []);
+
+  const cancelJob = useCallback((id: string) => {
+    setJobs((prev) => {
+      const job = prev.find((j) => j.id === id);
+      if (job && job.status === "running") {
+        onCancelJob(id);
+      }
+      return prev.map((j) => j.id === id ? { ...j, status: "error", errorMsg: "Cancelled by user" } : j);
+    });
+  }, [onCancelJob]);
 
   const clearDoneJobs = useCallback(() => {
     setJobs((prev) => prev.filter((j) => j.status === "running"));
@@ -112,6 +152,14 @@ export function ImportProgressProvider({ children }: { children: React.ReactNode
     setOpenCredentialsImportModalState(() => fn);
   }, []);
 
+  const setOnJobComplete = useCallback((fn: (job: ImportJob) => void) => {
+    setOnJobCompleteState(() => fn);
+  }, []);
+
+  const setOnCancelJob = useCallback((fn: (id: string) => void) => {
+    setOnCancelJobState(() => fn);
+  }, []);
+
   return (
     <ImportProgressContext.Provider
       value={{
@@ -120,6 +168,7 @@ export function ImportProgressProvider({ children }: { children: React.ReactNode
         startJob,
         updateJob,
         dismissJob,
+        cancelJob,
         clearDoneJobs,
         openImportModal,
         setOpenImportModal,
@@ -127,6 +176,10 @@ export function ImportProgressProvider({ children }: { children: React.ReactNode
         setOpenUserImportModal,
         openCredentialsImportModal,
         setOpenCredentialsImportModal,
+        onJobComplete,
+        setOnJobComplete,
+        onCancelJob,
+        setOnCancelJob,
       }}
     >
       {children}

@@ -8,9 +8,10 @@ type Props = {
   onClose: () => void;
   title?: string;
   children: React.ReactNode;
+  onMinimize?: () => void;
 };
 
-export default function Modal({ open, onClose, title, children }: Props) {
+export default function Modal({ open, onClose, title, children, onMinimize }: Props) {
   return (
     <Transition.Root show={open} as={Fragment}>
       <Dialog as="div" className="relative z-50 select-none font-sans" onClose={onClose}>
@@ -38,7 +39,18 @@ export default function Modal({ open, onClose, title, children }: Props) {
               leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
             >
               <Dialog.Panel className="relative transform overflow-hidden rounded-2xl bg-white border border-sky-cardBorder text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg p-5 sm:p-6">
-                <div className="absolute right-4 top-4">
+                <div className="absolute right-4 top-4 flex items-center gap-2">
+                  {onMinimize && (
+                    <Button
+                      type="button"
+                      variant="icon"
+                      className="w-8 h-8"
+                      onClick={onMinimize}
+                      aria-label="Minimize dialog"
+                    >
+                      <ICONS.minimize className="h-4 w-4 stroke-[2.4]" />
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     variant="icon"

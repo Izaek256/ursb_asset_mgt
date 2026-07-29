@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { ICONS } from "../../utils/icons";
 import Button from "../common/Button";
 import Modal from "../Modal";
@@ -24,14 +24,20 @@ interface BulkImportModalProps {
   onClose: () => void;
   onImportSuccess: () => void;
   onMinimize?: () => void;
+  onCancel?: () => void;
 }
 
-export default function BulkImportModal({
+export interface BulkImportModalRef {
+  handleCancel: () => void;
+}
+
+const BulkImportModal = forwardRef<BulkImportModalRef, BulkImportModalProps>(({
   isOpen,
   onClose,
   onImportSuccess,
   onMinimize,
-}: BulkImportModalProps) {
+  onCancel,
+}, ref) => {
   const { startJob, updateJob } = useImportProgress();
 
   const [importMode, setImportMode] = useState<"add" | "update">("add");
@@ -240,6 +246,23 @@ export default function BulkImportModal({
     }
   };
 
+  const handleCancel = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsLoading(false);
+    setIsProcessing(false);
+    setErrorMsg("Import cancelled. All database changes have been rolled back.");
+    if (jobIdRef.current) {
+      updateJob(jobIdRef.current, { status: "error", errorMsg: "Import cancelled. All database changes have been rolled back." });
+    }
+  };
+
+  useImperativeHandle(ref, () => ({
+    handleCancel,
+  }));
+
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return bytes + " B";
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
@@ -269,7 +292,7 @@ export default function BulkImportModal({
   }
 
   return (
-    <Modal open={isOpen} onClose={handleClose} title="Bulk Import & Update Assets">
+    <Modal open={isOpen} onClose={handleClose} title="Bulk Import & Update Assets" onMinimize={isProcessing ? handleMinimize : undefined}>
       <div className="mt-2 text-ink">
         {isProcessing ? (
           /* ── Circular Progress View ── */
@@ -532,18 +555,6 @@ export default function BulkImportModal({
       <div className="flex items-center justify-end gap-3 border-t border-sky-page/10 pt-4 mt-6">
         {isProcessing ? (
           <>
-            <Button variant="outline" onClick={handleMinimize} className="gap-1.5">
-              <svg
-                className="w-3.5 h-3.5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2.4}
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-              Minimize
-            </Button>
             <Button
               variant="danger-outline"
               onClick={() => abortControllerRef.current?.abort()}
@@ -579,4 +590,8 @@ export default function BulkImportModal({
       </div>
     </Modal>
   );
-}
+});
+
+BulkImportModal.displayName = "BulkImportModal";
+
+export default BulkImportModal;

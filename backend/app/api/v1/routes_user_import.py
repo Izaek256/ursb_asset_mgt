@@ -7,6 +7,7 @@ import string
 from datetime import datetime, timedelta, timezone
 from app.utils.time import utcnow
 from typing import List, Optional
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, WebSocket, WebSocketDisconnect, Query
 from pydantic import BaseModel
@@ -20,6 +21,9 @@ from app.api.v1.auth import get_current_user, require_role
 from app.services.auth import create_password_hash, validate_ursb_email, get_session, SESSION_COOKIE_NAME
 
 router = APIRouter(prefix="/api/v1/users", tags=["user-import"])
+
+# Thread pool for CPU-intensive operations (password hashing)
+_thread_pool = ThreadPoolExecutor(max_workers=4)
 
 # ── In-memory short-lived WebSocket auth tokens ───────────────────────────────
 # Maps one-time token -> {"user_id": str, "email": str, "expires_at": datetime}
@@ -368,12 +372,22 @@ async def bulk_import_ws(
     # We deliberately do NOT open a DB session here — password hashing is the
     # expensive CPU work, and we want to stream progress without holding any
     # write lock while that happens.
+    # Use thread pool for CPU-intensive password hashing to avoid blocking event loop
     prepared = []  # list of (User, TemporaryPassword, account_dict)
-    for i, account_data in enumerate(accounts_to_create):
-        await asyncio.sleep(0)  # yield to event loop
 
+    def generate_and_hash_password():
+        """Generate password and hash it in a thread pool to avoid blocking event loop"""
         password = generate_secure_password()
         salt, password_hash = create_password_hash(password)
+        return password, salt, password_hash
+
+    for i, account_data in enumerate(accounts_to_create):
+        # Offload password generation and hashing to thread pool
+        loop = asyncio.get_event_loop()
+        password, salt, password_hash = await loop.run_in_executor(
+            _thread_pool,
+            generate_and_hash_password
+        )
 
         name_parts = account_data['full_name'].split(' ', 1)
         new_user = User(

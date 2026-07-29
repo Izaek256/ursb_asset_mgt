@@ -1,5 +1,6 @@
 import { useImportProgress } from "../context/ImportProgressContext";
 import { ICONS } from "../utils/icons";
+import Button from "./common/Button";
 
 /**
  * Persistent bottom chrome strip that mirrors the header's visual language.
@@ -7,9 +8,10 @@ import { ICONS } from "../utils/icons";
  * Multiple bars stack vertically when multiple jobs are running.
  * Clicking anywhere on a bar re-opens its source modal.
  */
-function SingleProgressBar({ job, dismissJob, openImportModal, openUserImportModal, openCredentialsImportModal }: {
+function SingleProgressBar({ job, dismissJob, cancelJob, openImportModal, openUserImportModal, openCredentialsImportModal }: {
   job: any;
   dismissJob: (id: string) => void;
+  cancelJob: (id: string) => void;
   openImportModal: (() => void) | null;
   openUserImportModal: (() => void) | null;
   openCredentialsImportModal: (() => void) | null;
@@ -33,7 +35,6 @@ function SingleProgressBar({ job, dismissJob, openImportModal, openUserImportMod
     : "Preparing…";
 
   const handleOpen = () => {
-    // Use the appropriate modal opener based on import type
     if (job.type === "user" && openUserImportModal) {
       openUserImportModal();
     } else if (job.type === "credentials" && openCredentialsImportModal) {
@@ -108,26 +109,30 @@ function SingleProgressBar({ job, dismissJob, openImportModal, openUserImportMod
         </span>
         <ICONS.chevronRight className="shrink-0 w-3.5 h-3.5 text-ink-dim group-hover:text-ursb transition-colors" />
 
-        {/* Dismiss – only when finished */}
-        {!isRunning && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
+        {/* Cancel/Dismiss button */}
+        <Button
+          type="button"
+          variant="icon"
+          className="w-8 h-8 ml-2"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (isRunning) {
+              cancelJob(job.id);
+            } else {
               dismissJob(job.id);
-            }}
-            aria-label="Dismiss"
-            className="shrink-0 w-7 h-7 flex items-center justify-center text-ink-dim hover:text-ink transition-colors ml-1"
-          >
-            <ICONS.close className="w-3.5 h-3.5 stroke-[2.4]" />
-          </button>
-        )}
+            }
+          }}
+          aria-label={isRunning ? "Cancel and rollback" : "Dismiss"}
+        >
+          <ICONS.close className="h-4 w-4 stroke-[2.4]" />
+        </Button>
       </div>
     </div>
   );
 }
 
 export default function ImportProgressBar() {
-  const { jobs, dismissJob, openImportModal, openUserImportModal, openCredentialsImportModal } = useImportProgress();
+  const { jobs, dismissJob, cancelJob, openImportModal, openUserImportModal, openCredentialsImportModal } = useImportProgress();
 
   // Show all running jobs, plus the most recent done/error job if no running jobs
   const runningJobs = jobs.filter((j) => j.status === "running");
@@ -143,6 +148,7 @@ export default function ImportProgressBar() {
           key={job.id}
           job={job}
           dismissJob={dismissJob}
+          cancelJob={cancelJob}
           openImportModal={openImportModal}
           openUserImportModal={openUserImportModal}
           openCredentialsImportModal={openCredentialsImportModal}

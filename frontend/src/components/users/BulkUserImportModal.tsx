@@ -300,6 +300,14 @@ export default function BulkUserImportModal({
     }
   };
 
+  // Restore modal state when opened from progress bar
+  React.useEffect(() => {
+    if (isOpen && (isLoading || isProcessing)) {
+      // Modal is being reopened, ensure it shows the correct state
+      // The WebSocket connection should still be active if processing
+    }
+  }, [isOpen, isLoading, isProcessing]);
+
   const handleCancelImport = () => {
     if (wsRef.current) {
       wsRef.current.close();
@@ -339,7 +347,7 @@ export default function BulkUserImportModal({
   const strokeDashoffset = circumference - (progress / 100) * circumference;
 
   return (
-    <Modal open={isOpen} onClose={handleClose} title="Bulk User Import">
+    <Modal open={isOpen} onClose={handleClose} title="Bulk User Import" onMinimize={isProcessing ? handleMinimize : undefined}>
       <div className="mt-2 text-ink">
         {isProcessing ? (
           /* ── Progress View ── */
@@ -648,18 +656,6 @@ export default function BulkUserImportModal({
       <div className="flex items-center justify-end gap-3 border-t border-sky-page/10 pt-4 mt-6">
         {isProcessing ? (
           <>
-            <Button variant="outline" onClick={handleMinimize} className="gap-1.5">
-              <svg
-                className="w-3.5 h-3.5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2.4}
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-              Minimize
-            </Button>
             <Button variant="danger-outline" onClick={handleCancelImport}>
               Cancel Import
             </Button>

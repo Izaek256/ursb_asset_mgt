@@ -75,6 +75,7 @@ export default function CredentialsPage() {
   const [file, setFile] = React.useState<File | null>(null);
   const [isImporting, setIsImporting] = React.useState(false);
   const [isImportMinimized, setIsImportMinimized] = React.useState(false);
+  const [isDragActive, setIsDragActive] = React.useState(false);
   const [importProgress, setImportProgress] = React.useState(0);
   const [importProcessed, setImportProcessed] = React.useState(0);
   const [importTotal, setImportTotal] = React.useState(0);
@@ -85,14 +86,41 @@ export default function CredentialsPage() {
   const wsRef = React.useRef<WebSocket | null>(null);
   const importJobIdRef = React.useRef<string | null>(null);
 
-  const { startJob, updateJob, setOpenCredentialsImportModal } = useImportProgress();
+  const { startJob, updateJob, setOpenCredentialsImportModal, setOnJobComplete, setOnCancelJob } = useImportProgress();
 
   // Register re-open callback so the bottom bar can restore the modal
   React.useEffect(() => {
-    setOpenCredentialsImportModal(() => () => setIsImportMinimized(false));
+    const openModal = () => {
+      setIsImportMinimized(false);
+    };
+    setOpenCredentialsImportModal(() => openModal);
     return () => setOpenCredentialsImportModal(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Register job complete callback to refresh data
+  React.useEffect(() => {
+    const handleJobComplete = (job: any) => {
+      if (job.type === "credentials" && job.status === "done") {
+        // Refresh accounts data
+        fetchAccounts();
+      }
+    };
+    setOnJobComplete(() => handleJobComplete);
+    return () => setOnJobComplete(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Register cancel job callback to rollback changes
+  React.useEffect(() => {
+    const handleCancelJob = (jobId: string) => {
+      if (jobId === importJobIdRef.current) {
+        handleCancelImport();
+      }
+    };
+    setOnCancelJob(() => handleCancelJob);
+    return () => setOnCancelJob(() => {});
+  }, [setOnCancelJob]);
 
   // Single user creation state
   const [singleFullName, setSingleFullName] = React.useState("");
@@ -205,6 +233,35 @@ export default function CredentialsPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
+    }
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragIn = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragActive(true);
+    }
+  };
+
+  const handleDragOut = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragActive(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragActive(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      setFile(e.dataTransfer.files[0]);
     }
   };
 
@@ -557,7 +614,7 @@ export default function CredentialsPage() {
   return (
     <div className="w-full flex flex-col gap-6 select-none font-sans">
       {/* Import Progress Modal */}
-      <Modal open={isImporting && !isImportMinimized} onClose={() => {}} title="Creating User Accounts">
+      <Modal open={isImporting && !isImportMinimized} onClose={() => {}} title="Creating User Accounts" onMinimize={() => setIsImportMinimized(true)}>
         <div className="flex flex-col items-center px-4 pb-4 pt-2 select-none font-sans min-w-[320px]">
           <div className="relative flex items-center justify-center mb-6 mt-2">
             <svg className="w-40 h-40 -rotate-90" viewBox="0 0 120 120">
@@ -612,14 +669,6 @@ export default function CredentialsPage() {
           </p>
 
           <div className="flex gap-2 w-full">
-            <Button
-              variant="outline"
-              onClick={() => setIsImportMinimized(true)}
-              className="flex-1 justify-center gap-1.5"
-            >
-              <ICONS.chevronDown className="w-3.5 h-3.5" />
-              Minimize
-            </Button>
             <Button
               variant="danger-outline"
               onClick={handleCancelImport}
@@ -903,12 +952,22 @@ export default function CredentialsPage() {
           </div>
           
           <div className="flex-1 flex flex-col">
-            <div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-sky-cardBorder hover:border-[#6a94d4]/50 hover:bg-sky-page/20 transition-all rounded-xl p-6 text-center group mb-5">
+            <div
+              className={`flex-1 flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-6 text-center group mb-5 transition-all
+                ${isDragActive
+                  ? "border-[#6a94d4] bg-sky-page/30"
+                  : "border-sky-cardBorder hover:border-[#6a94d4]/50 hover:bg-sky-page/20"
+                }`}
+              onDragOver={handleDrag}
+              onDragEnter={handleDragIn}
+              onDragLeave={handleDragOut}
+              onDrop={handleDrop}
+            >
               <div className="w-12 h-12 rounded-full bg-sky-page/60 text-ink-dim group-hover:text-[#6a94d4] flex items-center justify-center mb-3 transition-colors">
                 <ICONS.file className="w-5 h-5" />
               </div>
               <p className="text-sm font-bold text-ink mb-1">
-                {file ? file.name : "Select a file to upload"}
+                {file ? file.name : "Drag & drop or click to upload"}
               </p>
               <p className="text-xs text-ink-dim mb-5 max-w-[200px]">
                 {file ? "Ready for import" : "Supports .csv and .xlsx formats up to 5MB"}
@@ -921,6 +980,20 @@ export default function CredentialsPage() {
                 >
                   {file ? "Change File" : "Browse Files"}
                 </label>
+                {file && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      onClick={() => setFile(null)}
+                      className="text-red-500 hover:bg-red-50 text-xs py-1"
+                    >
+                      Remove
+                    </Button>
+                    <Button onClick={handleImport} isLoading={isImporting} className="px-4 py-2 text-sm">
+                      Create Bulk accounts
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
 
@@ -976,9 +1049,6 @@ export default function CredentialsPage() {
               />
               <div className="flex items-center gap-3">
                 {importError && <div className="text-xs text-rose-500 font-medium">{importError}</div>}
-                <Button onClick={handleImport} isLoading={isImporting} disabled={!file} className="px-8">
-                  Import
-                </Button>
               </div>
             </div>
           </div>
