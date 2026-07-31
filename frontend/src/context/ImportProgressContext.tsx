@@ -19,13 +19,14 @@ export interface ImportJob {
     skipped: number;
     total: number;
   };
+  results?: any;
 }
 
 interface ImportProgressContextValue {
   jobs: ImportJob[];
   activeJob: ImportJob | null;
   startJob: (type: ImportType, label: string) => string; // returns job id
-  updateJob: (id: string, patch: Partial<Omit<ImportJob, "id" | "type">>) => void;
+  updateJob: (id: string, patch: Partial<Omit<ImportJob, "id" | "type" | "results">>) => void;
   dismissJob: (id: string) => void;
   cancelJob: (id: string) => void;
   clearDoneJobs: () => void;
@@ -34,43 +35,55 @@ interface ImportProgressContextValue {
    * Callback registered by whoever owns the visible import modal.
    * The progress bar calls this when the user clicks "View details".
    */
-  openImportModal: (() => void) | null;
-  setOpenImportModal: (fn: (() => void) | null) => void;
+  openImportModal: ((jobId?: string) => void) | null;
+  setOpenImportModal: (fn: ((jobId?: string) => void) | null) => void;
 
   /**
    * Dedicated callback for the global user-import modal (lives in App.tsx).
    */
-  openUserImportModal: (() => void) | null;
-  setOpenUserImportModal: (fn: (() => void) | null) => void;
+  openUserImportModal: ((jobId?: string) => void) | null;
+  setOpenUserImportModal: (fn: ((jobId?: string) => void) | null) => void;
 
   /**
    * Dedicated callback for the credentials page import modal.
    */
-  openCredentialsImportModal: (() => void) | null;
-  setOpenCredentialsImportModal: (fn: (() => void) | null) => void;
+  openCredentialsImportModal: ((jobId?: string) => void) | null;
+  setOpenCredentialsImportModal: (fn: ((jobId?: string) => void) | null) => void;
 
-  /**
-   * Callback to refresh page data when a job completes.
-   */
-  onJobComplete: (job: ImportJob) => void;
-  setOnJobComplete: (fn: (job: ImportJob) => void) => void;
+  // New modal tracking
+  viewingJobId: string | null;
+  setViewingJobId: (id: string | null) => void;
 
-  /**
-   * Callback to cancel a running job and rollback changes.
-   */
-  onCancelJob: (id: string) => void;
-  setOnCancelJob: (fn: (id: string) => void) => void;
+  // Registry for multiple listeners
+  registerJobCompleteListener: (key: string, fn: (job: ImportJob) => void) => () => void;
+  registerCancelJobListener: (key: string, fn: (id: string) => void) => () => void;
 }
 
 const ImportProgressContext = createContext<ImportProgressContextValue>(null!);
 
 export function ImportProgressProvider({ children }: { children: React.ReactNode }) {
   const [jobs, setJobs] = useState<ImportJob[]>([]);
-  const [openImportModal, setOpenImportModalState] = useState<(() => void) | null>(null);
-  const [openUserImportModal, setOpenUserImportModalState] = useState<(() => void) | null>(null);
-  const [openCredentialsImportModal, setOpenCredentialsImportModalState] = useState<(() => void) | null>(null);
-  const [onJobComplete, setOnJobCompleteState] = useState<(job: ImportJob) => void>(() => {});
-  const [onCancelJob, setOnCancelJobState] = useState<(id: string) => void>(() => {});
+  const [openImportModal, setOpenImportModalState] = useState<((jobId?: string) => void) | null>(null);
+  const [openUserImportModal, setOpenUserImportModalState] = useState<((jobId?: string) => void) | null>(null);
+  const [openCredentialsImportModal, setOpenCredentialsImportModalState] = useState<((jobId?: string) => void) | null>(null);
+  const [viewingJobId, setViewingJobId] = useState<string | null>(null);
+
+  const jobCompleteListeners = React.useRef<Map<string, (job: ImportJob) => void>>(new Map());
+  const cancelJobListeners = React.useRef<Map<string, (id: string) => void>>(new Map());
+
+  const registerJobCompleteListener = useCallback((key: string, fn: (job: ImportJob) => void) => {
+    jobCompleteListeners.current.set(key, fn);
+    return () => {
+      jobCompleteListeners.current.delete(key);
+    };
+  }, []);
+
+  const registerCancelJobListener = useCallback((key: string, fn: (id: string) => void) => {
+    cancelJobListeners.current.set(key, fn);
+    return () => {
+      cancelJobListeners.current.delete(key);
+    };
+  }, []);
 
   const startJob = useCallback((type: ImportType, label: string): string => {
     const id = `${type}-${Date.now()}`;
@@ -89,18 +102,20 @@ export function ImportProgressProvider({ children }: { children: React.ReactNode
       const filtered = prev.filter((j) => j.status === "running" || (j.status === "done" && j.id.length > 0));
       return [...filtered, job];
     });
+    setViewingJobId(id); // Set as currently viewing job
     return id;
   }, []);
 
   const updateJob = useCallback(
-    (id: string, patch: Partial<Omit<ImportJob, "id" | "type">>) => {
+    (id: string, patch: Partial<Omit<ImportJob, "id" | "type" | "results">>) => {
       setJobs((prev) => {
         const updated = prev.map((j) => (j.id === id ? { ...j, ...patch } : j));
 
         // Check if job just completed
         const job = updated.find((j) => j.id === id);
         if (job && patch.status === "done" && job.status === "done") {
-          onJobComplete(job);
+          // Trigger all registered listeners
+          jobCompleteListeners.current.forEach((fn) => fn(job));
           // Show toast notification
           if ((window as any).toast) {
             (window as any).toast.success(
@@ -113,22 +128,23 @@ export function ImportProgressProvider({ children }: { children: React.ReactNode
         return updated;
       });
     },
-    [onJobComplete]
+    []
   );
 
   const dismissJob = useCallback((id: string) => {
     setJobs((prev) => prev.filter((j) => j.id !== id));
+    setViewingJobId((prev) => (prev === id ? null : prev));
   }, []);
 
   const cancelJob = useCallback((id: string) => {
     setJobs((prev) => {
       const job = prev.find((j) => j.id === id);
       if (job && job.status === "running") {
-        onCancelJob(id);
+        cancelJobListeners.current.forEach((fn) => fn(id));
       }
       return prev.map((j) => j.id === id ? { ...j, status: "error", errorMsg: "Cancelled by user" } : j);
     });
-  }, [onCancelJob]);
+  }, []);
 
   const clearDoneJobs = useCallback(() => {
     setJobs((prev) => prev.filter((j) => j.status === "running"));
@@ -140,24 +156,16 @@ export function ImportProgressProvider({ children }: { children: React.ReactNode
     jobs.find((j) => j.status === "done" || j.status === "error") ??
     null;
 
-  const setOpenImportModal = useCallback((fn: (() => void) | null) => {
+  const setOpenImportModal = useCallback((fn: ((jobId?: string) => void) | null) => {
     setOpenImportModalState(() => fn);
   }, []);
 
-  const setOpenUserImportModal = useCallback((fn: (() => void) | null) => {
+  const setOpenUserImportModal = useCallback((fn: ((jobId?: string) => void) | null) => {
     setOpenUserImportModalState(() => fn);
   }, []);
 
-  const setOpenCredentialsImportModal = useCallback((fn: (() => void) | null) => {
+  const setOpenCredentialsImportModal = useCallback((fn: ((jobId?: string) => void) | null) => {
     setOpenCredentialsImportModalState(() => fn);
-  }, []);
-
-  const setOnJobComplete = useCallback((fn: (job: ImportJob) => void) => {
-    setOnJobCompleteState(() => fn);
-  }, []);
-
-  const setOnCancelJob = useCallback((fn: (id: string) => void) => {
-    setOnCancelJobState(() => fn);
   }, []);
 
   return (
@@ -176,10 +184,10 @@ export function ImportProgressProvider({ children }: { children: React.ReactNode
         setOpenUserImportModal,
         openCredentialsImportModal,
         setOpenCredentialsImportModal,
-        onJobComplete,
-        setOnJobComplete,
-        onCancelJob,
-        setOnCancelJob,
+        viewingJobId,
+        setViewingJobId,
+        registerJobCompleteListener,
+        registerCancelJobListener,
       }}
     >
       {children}

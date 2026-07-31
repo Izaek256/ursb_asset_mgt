@@ -30,20 +30,28 @@ interface ImportSummary {
   accounts: CreatedAccount[];
 }
 
+import { forwardRef, useImperativeHandle } from "react";
+
 interface BulkUserImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   onImportSuccess: () => void;
   onMinimize?: () => void;
+  jobId?: string | null;
 }
 
-export default function BulkUserImportModal({
+export interface BulkUserImportModalRef {
+  handleCancel: () => void;
+}
+
+const BulkUserImportModal = forwardRef<BulkUserImportModalRef, BulkUserImportModalProps>(({
   isOpen,
   onClose,
   onImportSuccess,
   onMinimize,
-}: BulkUserImportModalProps) {
-  const { startJob, updateJob } = useImportProgress();
+  jobId,
+}, ref) => {
+  const { startJob, updateJob, jobs } = useImportProgress();
 
   const [file, setFile] = useState<File | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
@@ -300,13 +308,37 @@ export default function BulkUserImportModal({
     }
   };
 
-  // Restore modal state when opened from progress bar
+  useImperativeHandle(ref, () => ({
+    handleCancel: handleCancelImport
+  }));
+
+  // Restore modal state when opened from progress bar or sync with running job
   React.useEffect(() => {
-    if (isOpen && (isLoading || isProcessing)) {
-      // Modal is being reopened, ensure it shows the correct state
-      // The WebSocket connection should still be active if processing
+    if (isOpen && jobId && jobId.startsWith("user-")) {
+      const job = jobs.find((j) => j.id === jobId);
+      if (job) {
+        jobIdRef.current = job.id;
+        if (job.status === "running") {
+          setIsProcessing(true);
+          setProgress(job.progress);
+          setProcessed(job.processed);
+          setTotal(job.total);
+          setErrorMsg(null);
+          setSummary(null);
+        } else if (job.status === "done") {
+          setIsProcessing(false);
+          setIsLoading(false);
+          setSummary(job.results || null);
+          setErrorMsg(null);
+        } else if (job.status === "error") {
+          setIsProcessing(false);
+          setIsLoading(false);
+          setErrorMsg(job.errorMsg || "Import failed");
+          setSummary(null);
+        }
+      }
     }
-  }, [isOpen, isLoading, isProcessing]);
+  }, [isOpen, jobId, jobs]);
 
   const handleCancelImport = () => {
     if (wsRef.current) {
@@ -686,4 +718,8 @@ export default function BulkUserImportModal({
       </div>
     </Modal>
   );
-}
+});
+
+BulkUserImportModal.displayName = "BulkUserImportModal";
+
+export default BulkUserImportModal;

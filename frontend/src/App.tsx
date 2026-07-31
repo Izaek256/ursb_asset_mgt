@@ -6,6 +6,7 @@ import RoleGuard from "./components/RoleGuard";
 import ToastContainer from "./components/Toast";
 import ImportProgressBar from "./components/ImportProgressBar";
 import BulkUserImportModal from "./components/users/BulkUserImportModal";
+import BulkImportModal, { BulkImportModalRef } from "./components/assets/BulkImportModal";
 import ReloadConfirmationModal from "./components/ReloadConfirmationModal";
 import UserManagement from "./pages/UserManagement";
 import AuditLogs from "./pages/AuditLogs";
@@ -43,11 +44,23 @@ const NAV_LABELS: Record<string, string> = {
 
 function AppShell() {
   const { user } = useAuth();
-  const { setOpenUserImportModal, setOnJobComplete, setOnCancelJob, jobs } = useImportProgress();
+  const {
+    setOpenUserImportModal,
+    setOpenImportModal,
+    registerJobCompleteListener,
+    registerCancelJobListener,
+    jobs,
+    viewingJobId,
+    setViewingJobId
+  } = useImportProgress();
   const [path, setPath] = React.useState(window.location.pathname || "/dashboard");
   const [isUserImportModalOpen, setIsUserImportModalOpen] = React.useState(false);
+  const [isAssetImportModalOpen, setIsAssetImportModalOpen] = React.useState(false);
   const [userManagementRefreshKey, setUserManagementRefreshKey] = React.useState(0);
+  const [assetsRefreshKey, setAssetsRefreshKey] = React.useState(0);
   const [showReloadModal, setShowReloadModal] = React.useState(false);
+  const bulkImportModalRef = React.useRef<BulkImportModalRef | null>(null);
+  const bulkUserImportModalRef = React.useRef<any>(null);
 
   // Browser reload protection
   React.useEffect(() => {
@@ -69,33 +82,51 @@ function AppShell() {
     };
   }, [jobs]);
 
-  // Register the user import modal opener with the context
+  // Register modal openers with the progress bar context
   React.useEffect(() => {
-    const openModal = () => setIsUserImportModalOpen(true);
-    setOpenUserImportModal(() => openModal);
-  }, [setOpenUserImportModal]);
+    setOpenUserImportModal((jobId) => {
+      if (jobId) setViewingJobId(jobId);
+      setIsUserImportModalOpen(true);
+    });
+    return () => setOpenUserImportModal(null);
+  }, [setOpenUserImportModal, setViewingJobId]);
 
-  // Register job complete callback to refresh user management data
+  React.useEffect(() => {
+    if (hasActionPermission(user?.role, "bulkImportAssets")) {
+      setOpenImportModal((jobId) => {
+        if (jobId) setViewingJobId(jobId);
+        setIsAssetImportModalOpen(true);
+      });
+    } else {
+      setOpenImportModal(null);
+    }
+    return () => setOpenImportModal(null);
+  }, [setOpenImportModal, user?.role, setViewingJobId]);
+
+  // Register job complete callback to refresh page data
   React.useEffect(() => {
     const handleJobComplete = (job: any) => {
       if (job.type === "user" && job.status === "done") {
-        // Refresh user management data
         setUserManagementRefreshKey((prev) => prev + 1);
       }
+      if (job.type === "asset" && job.status === "done") {
+        setAssetsRefreshKey((prev) => prev + 1);
+      }
     };
-    setOnJobComplete(() => handleJobComplete);
-    return () => setOnJobComplete(() => {});
-  }, [setOnJobComplete]);
+    return registerJobCompleteListener("app", handleJobComplete);
+  }, [registerJobCompleteListener]);
 
-  // Register cancel job callback for user imports
+  // Register cancel job callbacks
   React.useEffect(() => {
     const handleCancelJob = (jobId: string) => {
-      // The BulkUserImportModal handles its own cancellation via WebSocket
-      // This is a placeholder for future integration if needed
+      if (jobId.startsWith("asset-") && bulkImportModalRef.current) {
+        bulkImportModalRef.current.handleCancel();
+      } else if (jobId.startsWith("user-") && bulkUserImportModalRef.current) {
+        bulkUserImportModalRef.current.handleCancel();
+      }
     };
-    setOnCancelJob(() => handleCancelJob);
-    return () => setOnCancelJob(() => {});
-  }, [setOnCancelJob]);
+    return registerCancelJobListener("app", handleCancelJob);
+  }, [registerCancelJobListener]);
 
   React.useEffect(() => {
     const onPop = () => setPath(window.location.pathname);
@@ -161,7 +192,7 @@ function AppShell() {
       case "/assets":
         return (
           <RoleGuard requiredPath="/assets">
-            <Assets />
+            <Assets refreshKey={assetsRefreshKey} />
           </RoleGuard>
         );
       case "/assets/register":
@@ -241,8 +272,12 @@ function AppShell() {
       </AppLayout>
       <ImportProgressBar />
       <BulkUserImportModal
+        ref={bulkUserImportModalRef}
         isOpen={isUserImportModalOpen}
-        onClose={() => setIsUserImportModalOpen(false)}
+        onClose={() => {
+          setIsUserImportModalOpen(false);
+          setViewingJobId(null);
+        }}
         onImportSuccess={() => {
           // Trigger the refresh callback which will update UserManagement if needed
           if (path === "/admin/users") {
@@ -250,6 +285,22 @@ function AppShell() {
           }
         }}
         onMinimize={() => setIsUserImportModalOpen(false)}
+        jobId={viewingJobId}
+      />
+      <BulkImportModal
+        ref={bulkImportModalRef}
+        isOpen={isAssetImportModalOpen}
+        onClose={() => {
+          setIsAssetImportModalOpen(false);
+          setViewingJobId(null);
+        }}
+        onImportSuccess={() => {
+          if (path === "/assets") {
+            setAssetsRefreshKey(prev => prev + 1);
+          }
+        }}
+        onMinimize={() => setIsAssetImportModalOpen(false)}
+        jobId={viewingJobId}
       />
       <ReloadConfirmationModal
         isOpen={showReloadModal}

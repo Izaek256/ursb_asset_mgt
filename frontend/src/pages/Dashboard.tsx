@@ -3,7 +3,7 @@ import { apiFetch } from "../AuthContext";
 import { ICONS } from "../utils/icons";
 import Button from "../components/common/Button";
 import { Dropdown } from "../components/common/Dropdown";
-import DonutChart, { DonutSlice } from "../components/DonutChart";
+import DonutChart from "../components/DonutChart";
 import { CHART, DOT_CLASSES } from "../theme/chartColors";
 import {
   BarChart,
@@ -12,7 +12,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { Skeleton, SkeletonCard, SkeletonText } from "../components/common/LoadingSkeleton";
+import { Skeleton, SkeletonCard } from "../components/common/LoadingSkeleton";
 
 // ── Types ────────────────────────────────────────────────────────────────────────
 interface StatCard {

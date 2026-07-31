@@ -1,4 +1,3 @@
-import React from "react";
 import Modal from "./Modal";
 import Button from "./common/Button";
 import { ICONS } from "../utils/icons";
@@ -62,7 +61,7 @@ export default function ReloadConfirmationModal({
           <Button variant="outline" onClick={onCancel}>
             Cancel Reload
           </Button>
-          <Button variant="danger" onClick={onConfirm}>
+          <Button variant="danger-inverse" onClick={onConfirm}>
             Reload Anyway
           </Button>
         </div>

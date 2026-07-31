@@ -14,11 +14,9 @@ import { ICONS } from "../utils/icons";
 import { CHART } from "../theme/chartColors";
 import excelIcon from "../assets/icons8-export-excel-50.png";
 import pdfIcon from "../assets/icons8-export-pdf-50.png";
-import BulkImportModal, { BulkImportModalRef } from "../components/assets/BulkImportModal";
 import { hasActionPermission } from "../utils/rbac";
 import { fmtDate } from "../utils/formatDate";
 import { useImportProgress } from "../context/ImportProgressContext";
-import { SkeletonCard } from "../components/common/LoadingSkeleton";
 
 interface AssetRow {
   asset_id: string;
@@ -129,9 +127,13 @@ function exportAssetsExcel(rows: AssetRow[]) {
   XLSX.writeFile(workbook, `ursb-assets-export-${formatFileDate()}.xlsx`);
 }
 
-export default function Assets() {
+interface AssetsProps {
+  refreshKey?: number;
+}
+
+export default function Assets({ refreshKey: propRefreshKey }: AssetsProps = {}) {
   const { user } = useAuth();
-  const { activeJob, setOpenImportModal, setOnJobComplete, setOnCancelJob } = useImportProgress();
+  const { openImportModal, registerJobCompleteListener } = useImportProgress();
   const [assets, setAssets] = React.useState<AssetRow[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isExporting, setIsExporting] = React.useState(false);
@@ -139,22 +141,16 @@ export default function Assets() {
   const [statusFilter, setStatusFilter] = React.useState("All");
   const [typeFilter, setTypeFilter] = React.useState("All");
   const [search, setSearch] = React.useState("");
-  const [isImportModalOpen, setIsImportModalOpen] = React.useState(false);
   const [page, setPage] = React.useState(1);
   const pageSize = 50;
-  const bulkImportModalRef = React.useRef<BulkImportModalRef | null>(null);
 
   const canBulkImport = user && hasActionPermission(user.role, "bulkImportAssets");
 
-  // Register the "open asset import modal" callback with the progress bar context.
-  // Re-registers whenever canBulkImport or the setter reference changes.
   React.useEffect(() => {
-    if (canBulkImport) {
-      setOpenImportModal(() => () => setIsImportModalOpen(true));
+    if (propRefreshKey !== undefined) {
+      setRefreshKey((prev) => prev + 1);
     }
-    return () => setOpenImportModal(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canBulkImport]);
+  }, [propRefreshKey]);
 
   // Register job complete callback to refresh asset data
   React.useEffect(() => {
@@ -164,22 +160,8 @@ export default function Assets() {
         setRefreshKey((prev) => prev + 1);
       }
     };
-    setOnJobComplete(() => handleJobComplete);
-    return () => setOnJobComplete(() => {});
-  }, [setOnJobComplete]);
-
-  // Register cancel job callback for asset imports
-  React.useEffect(() => {
-    const handleCancelJob = (jobId: string) => {
-      console.log('Assets page cancel job called with jobId:', jobId);
-      if (bulkImportModalRef.current) {
-        console.log('Calling handleCancel on bulkImportModalRef');
-        bulkImportModalRef.current.handleCancel();
-      }
-    };
-    setOnCancelJob(() => handleCancelJob);
-    return () => setOnCancelJob(() => {});
-  }, [setOnCancelJob]);
+    return registerJobCompleteListener("assets-page", handleJobComplete);
+  }, [registerJobCompleteListener]);
 
   React.useEffect(() => {
     setPage(1);
@@ -359,7 +341,7 @@ export default function Assets() {
               )}
             </Menu>
             {canBulkImport && (
-              <Button variant="outline" onClick={() => setIsImportModalOpen(true)}>
+              <Button variant="outline" onClick={() => openImportModal?.()}>
                 <ICONS.upload className="w-4 h-4 mr-1.5 stroke-[2.4]" />
                 Bulk Import
               </Button>
@@ -459,13 +441,6 @@ export default function Assets() {
         </div>
       )}
 
-      <BulkImportModal
-        ref={bulkImportModalRef}
-        isOpen={isImportModalOpen}
-        onClose={() => setIsImportModalOpen(false)}
-        onImportSuccess={() => fetchAssets()}
-        onMinimize={() => setIsImportModalOpen(false)}
-      />
     </div>
   );
 }

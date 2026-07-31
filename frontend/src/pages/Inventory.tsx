@@ -12,7 +12,7 @@ import PageHeader from "../components/PageHeader";
 import Button from "../components/common/Button";
 import FilterBar, { FilterField, filterSelectCls } from "../components/common/FilterBar";
 import { ICONS } from "../utils/icons";
-import { SkeletonCard, Skeleton } from "../components/common/LoadingSkeleton";
+import { SkeletonCard } from "../components/common/LoadingSkeleton";
 
 interface AssetStub {
   asset_id: string;

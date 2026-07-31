@@ -6,7 +6,6 @@ import { ICONS } from "../utils/icons";
 import Modal from "../components/Modal";
 import FormInput from "../components/common/FormInput";
 import StatusBadge from "../components/common/badges/StatusBadge";
-import ErrorMessage from "../components/ErrorMessage";
 import EmptyState from "../components/EmptyState";
 import ConfirmDialog from "../components/ConfirmDialog";
 import PageHeader from "../components/PageHeader";
@@ -374,14 +373,14 @@ export default function Requests() {
   const renderActions = (r: AssetRequest) => (
     <div className="flex flex-wrap gap-1.5 select-none">
       {/* Requester can cancel their own pending requests */}
-      {r.requested_by === parseInt(user.user_id) && r.status === "Pending" && (
+      {user && r.requested_by === parseInt(user.user_id) && r.status === "Pending" && (
         <Button variant="danger-outline" onClick={() => handleCancelClick(r)}>Cancel</Button>
       )}
       {/* Requester can confirm pickup when asset is ready */}
-      {r.requested_by === parseInt(user.user_id) && r.status === "ReadyForPickup" && (
+      {user && r.requested_by === parseInt(user.user_id) && r.status === "ReadyForPickup" && (
         <Button variant="outline" onClick={() => handlePickupClick(r)}>Confirm Pickup</Button>
       )}
-      {isCustodian && r.assigned_to === parseInt(user.user_id) && r.status === "Assigned" && (
+      {user && isCustodian && r.assigned_to === parseInt(user.user_id) && r.status === "Assigned" && (
         <>
           <Button onClick={() => handleHandOverClick(r)}>Hand Over</Button>
           <Button variant="danger-outline" onClick={() => handleCustodianCancelClick(r)}>Cancel</Button>
@@ -483,7 +482,7 @@ export default function Requests() {
 
   const custodianOptions = users
     .filter(u => u.isActive && (u.role === "Asset Custodian" || u.role === "ASSET_CUSTODIAN"))
-    .filter(u => selectedRequest?.assigned_to !== u.id) // Filter out the already assigned custodian
+    .filter(u => selectedRequest?.assigned_to !== (u.id ? parseInt(u.id) : null)) // Filter out the already assigned custodian
     .map(u => ({
       value: String(u.id),
       label: `${u.name} (${u.role})`,

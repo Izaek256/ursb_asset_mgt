@@ -24,7 +24,7 @@ interface BulkImportModalProps {
   onClose: () => void;
   onImportSuccess: () => void;
   onMinimize?: () => void;
-  onCancel?: () => void;
+  jobId?: string | null;
 }
 
 export interface BulkImportModalRef {
@@ -36,9 +36,9 @@ const BulkImportModal = forwardRef<BulkImportModalRef, BulkImportModalProps>(({
   onClose,
   onImportSuccess,
   onMinimize,
-  onCancel,
+  jobId,
 }, ref) => {
-  const { startJob, updateJob } = useImportProgress();
+  const { startJob, updateJob, jobs } = useImportProgress();
 
   const [importMode, setImportMode] = useState<"add" | "update">("add");
   const [file, setFile] = useState<File | null>(null);
@@ -262,6 +262,33 @@ const BulkImportModal = forwardRef<BulkImportModalRef, BulkImportModalProps>(({
   useImperativeHandle(ref, () => ({
     handleCancel,
   }));
+
+  // Restore modal state when opened from progress bar or sync with running job
+  React.useEffect(() => {
+    if (isOpen && jobId && jobId.startsWith("asset-")) {
+      const job = jobs.find((j) => j.id === jobId);
+      if (job) {
+        jobIdRef.current = job.id;
+        if (job.status === "running") {
+          setIsProcessing(true);
+          setProgress(job.processed);
+          setTotalRows(job.total);
+          setErrorMsg(null);
+          setSummary(null);
+        } else if (job.status === "done") {
+          setIsProcessing(false);
+          setIsLoading(false);
+          setSummary(job.results || null);
+          setErrorMsg(null);
+        } else if (job.status === "error") {
+          setIsProcessing(false);
+          setIsLoading(false);
+          setErrorMsg(job.errorMsg || "Import failed");
+          setSummary(null);
+        }
+      }
+    }
+  }, [isOpen, jobId, jobs]);
 
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return bytes + " B";

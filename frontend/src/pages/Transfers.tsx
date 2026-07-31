@@ -12,7 +12,7 @@ import FilterBar, { FilterField, filterInputCls, filterSelectCls } from "../comp
 import StatusBadge from "../components/common/badges/StatusBadge";
 import EmptyState from "../components/EmptyState";
 import { ICONS } from "../utils/icons";
-import { fmtDateTime, fmtDate } from "../utils/formatDate";
+import { fmtDateTime } from "../utils/formatDate";
 import { SkeletonCard } from "../components/common/LoadingSkeleton";
 
 export default function Transfers() {

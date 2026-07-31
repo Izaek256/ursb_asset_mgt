@@ -87,11 +87,23 @@ export default function CredentialsPage() {
   const wsRef = React.useRef<WebSocket | null>(null);
   const importJobIdRef = React.useRef<string | null>(null);
 
-  const { startJob, updateJob, setOpenCredentialsImportModal, setOnJobComplete, setOnCancelJob } = useImportProgress();
+  const {
+    startJob,
+    updateJob,
+    setOpenCredentialsImportModal,
+    registerJobCompleteListener,
+    registerCancelJobListener,
+    jobs,
+    viewingJobId,
+    setViewingJobId
+  } = useImportProgress();
 
   // Register re-open callback so the bottom bar can restore the modal
   React.useEffect(() => {
-    const openModal = () => {
+    const openModal = (jobId?: string) => {
+      if (jobId) {
+        setViewingJobId(jobId);
+      }
       setIsImportMinimized(false);
     };
     setOpenCredentialsImportModal(() => openModal);
@@ -107,10 +119,8 @@ export default function CredentialsPage() {
         fetchAccounts();
       }
     };
-    setOnJobComplete(() => handleJobComplete);
-    return () => setOnJobComplete(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return registerJobCompleteListener("credentials-page", handleJobComplete);
+  }, [registerJobCompleteListener]);
 
   // Register cancel job callback to rollback changes
   React.useEffect(() => {
@@ -119,9 +129,44 @@ export default function CredentialsPage() {
         handleCancelImport();
       }
     };
-    setOnCancelJob(() => handleCancelJob);
-    return () => setOnCancelJob(() => {});
-  }, [setOnCancelJob]);
+    return registerCancelJobListener("credentials-page", handleCancelJob);
+  }, [registerCancelJobListener]);
+
+  // Restore modal state when opened from progress bar or sync with running job
+  React.useEffect(() => {
+    if (viewingJobId && viewingJobId.startsWith("credentials-")) {
+      const job = jobs.find((j) => j.id === viewingJobId);
+      if (job) {
+        importJobIdRef.current = job.id;
+        if (job.status === "running") {
+          setIsImporting(true);
+          setIsImportMinimized(false);
+          setImportProgress(job.progress);
+          setImportProcessed(job.processed);
+          setImportTotal(job.total);
+          setImportError(null);
+          setImportResults(null);
+          setShowResults(false);
+        } else if (job.status === "done") {
+          setIsImporting(false);
+          setIsImportMinimized(false);
+          setImportProgress(100);
+          setImportError(null);
+          setImportResults(job.results || null);
+          setShowResults(job.results?.accounts && job.results.accounts.length > 0);
+          if (job.results?.errors && job.results.errors.length > 0) {
+            setShowErrorsModal(true);
+          }
+        } else if (job.status === "error") {
+          setIsImporting(false);
+          setIsImportMinimized(false);
+          setImportError(job.errorMsg || "Import failed");
+          setImportResults(null);
+          setShowResults(false);
+        }
+      }
+    }
+  }, [viewingJobId, jobs]);
 
   // Single user creation state
   const [singleFullName, setSingleFullName] = React.useState("");
@@ -431,6 +476,7 @@ export default function CredentialsPage() {
       updateJob(importJobIdRef.current, { status: "error", errorMsg: msg });
       importJobIdRef.current = null;
     }
+    setViewingJobId(null);
   };
 
   const copyToClipboard = (text: string) => {
@@ -684,7 +730,7 @@ export default function CredentialsPage() {
       {/* Import Errors Modal */}
       <Modal 
         open={showErrorsModal} 
-        onClose={() => setShowErrorsModal(false)} 
+        onClose={() => { setShowErrorsModal(false); setViewingJobId(null); }} 
         title="Import Errors / Duplicates Found"
       >
         <div className="flex flex-col gap-4 font-sans select-none p-2">
@@ -724,7 +770,7 @@ export default function CredentialsPage() {
           </div>
 
           <div className="flex justify-end pt-2">
-            <Button variant="primary" onClick={() => setShowErrorsModal(false)}>
+            <Button variant="primary" onClick={() => { setShowErrorsModal(false); setViewingJobId(null); }}>
               Understood
             </Button>
           </div>
@@ -805,7 +851,7 @@ export default function CredentialsPage() {
               <div className="font-bold text-amber-800 text-sm">Import Results</div>
               <div className="text-amber-600 text-xs mt-1">These passwords will not be shown again. Copy them now.</div>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => setShowResults(false)}>
+            <Button variant="ghost" size="sm" onClick={() => { setShowResults(false); setViewingJobId(null); }}>
               Dismiss
             </Button>
           </div>

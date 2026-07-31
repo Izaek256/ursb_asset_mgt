@@ -8,24 +8,25 @@ import Button from "./common/Button";
  * Multiple bars stack vertically when multiple jobs are running.
  * Clicking anywhere on a bar re-opens its source modal.
  */
-function SingleProgressBar({ job, dismissJob, cancelJob, openImportModal, openUserImportModal, openCredentialsImportModal }: {
+function SingleProgressBar({ job, dismissJob, cancelJob, openImportModal, openUserImportModal, openCredentialsImportModal, setViewingJobId }: {
   job: any;
   dismissJob: (id: string) => void;
   cancelJob: (id: string) => void;
-  openImportModal: (() => void) | null;
-  openUserImportModal: (() => void) | null;
-  openCredentialsImportModal: (() => void) | null;
+  openImportModal: ((jobId?: string) => void) | null;
+  openUserImportModal: ((jobId?: string) => void) | null;
+  openCredentialsImportModal: ((jobId?: string) => void) | null;
+  setViewingJobId: (id: string | null) => void;
 }) {
   const isRunning = job.status === "running";
   const isDone    = job.status === "done";
   const isError   = job.status === "error";
   const pct       = job.progress;
-
+ 
   /* ── derived tokens ─────────────────────────────────────────────────────── */
   const fillClass   = isError ? "bg-badge-roseText"  : isDone ? "bg-badge-greenText" : "bg-ursb";
   const chipBg      = isError ? "bg-badge-roseBg"    : isDone ? "bg-badge-greenBg"   : "bg-stat-blueChip";
   const chipText    = isError ? "text-badge-roseText" : isDone ? "text-badge-greenText" : "text-badge-blueText";
-
+ 
   const statusLine = isError
     ? (job.errorMsg ?? "Import failed")
     : isDone
@@ -33,14 +34,27 @@ function SingleProgressBar({ job, dismissJob, cancelJob, openImportModal, openUs
     : job.total > 0
     ? `${job.processed} of ${job.total} rows processed`
     : "Preparing…";
-
+ 
   const handleOpen = () => {
+    setViewingJobId(job.id);
     if (job.type === "user" && openUserImportModal) {
-      openUserImportModal();
-    } else if (job.type === "credentials" && openCredentialsImportModal) {
-      openCredentialsImportModal();
-    } else if (openImportModal) {
-      openImportModal();
+      openUserImportModal(job.id);
+    } else if (job.type === "credentials") {
+      if (window.location.pathname !== "/credentials") {
+        window.history.pushState({}, "", "/credentials");
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      }
+      if (openCredentialsImportModal) {
+        openCredentialsImportModal(job.id);
+      }
+    } else if (job.type === "asset") {
+      if (window.location.pathname !== "/assets") {
+        window.history.pushState({}, "", "/assets");
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      }
+      if (openImportModal) {
+        openImportModal(job.id);
+      }
     }
   };
 
@@ -132,7 +146,7 @@ function SingleProgressBar({ job, dismissJob, cancelJob, openImportModal, openUs
 }
 
 export default function ImportProgressBar() {
-  const { jobs, dismissJob, cancelJob, openImportModal, openUserImportModal, openCredentialsImportModal } = useImportProgress();
+  const { jobs, dismissJob, cancelJob, openImportModal, openUserImportModal, openCredentialsImportModal, setViewingJobId } = useImportProgress();
 
   // Show all running jobs, plus the most recent done/error job if no running jobs
   const runningJobs = jobs.filter((j) => j.status === "running");
@@ -152,6 +166,7 @@ export default function ImportProgressBar() {
           openImportModal={openImportModal}
           openUserImportModal={openUserImportModal}
           openCredentialsImportModal={openCredentialsImportModal}
+          setViewingJobId={setViewingJobId}
         />
       ))}
     </div>

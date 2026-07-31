@@ -7,7 +7,6 @@ import FilterBar, { FilterField, filterInputCls, filterSelectCls } from "../comp
 import ErrorMessage from "../components/ErrorMessage";
 import PageHeader from "../components/PageHeader";
 import { fmtDateTime } from "../utils/formatDate";
-import { SkeletonCard } from "../components/common/LoadingSkeleton";
 
 function formatActionDescription(log: AuditLog): string {
   const action = log.action.replace(/_/g, " ");
