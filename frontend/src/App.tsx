@@ -284,7 +284,10 @@ function AppShell() {
             setUserManagementRefreshKey(prev => prev + 1);
           }
         }}
-        onMinimize={() => setIsUserImportModalOpen(false)}
+        onMinimize={() => {
+          setIsUserImportModalOpen(false);
+          setViewingJobId(null);
+        }}
         jobId={viewingJobId}
       />
       <BulkImportModal
@@ -299,7 +302,10 @@ function AppShell() {
             setAssetsRefreshKey(prev => prev + 1);
           }
         }}
-        onMinimize={() => setIsAssetImportModalOpen(false)}
+        onMinimize={() => {
+          setIsAssetImportModalOpen(false);
+          setViewingJobId(null);
+        }}
         jobId={viewingJobId}
       />
       <ReloadConfirmationModal

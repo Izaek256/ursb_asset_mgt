@@ -75,7 +75,7 @@ export default function CredentialsPage() {
   // Bulk import state
   const [file, setFile] = React.useState<File | null>(null);
   const [isImporting, setIsImporting] = React.useState(false);
-  const [isImportMinimized, setIsImportMinimized] = React.useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = React.useState(false);
   const [isDragActive, setIsDragActive] = React.useState(false);
   const [importProgress, setImportProgress] = React.useState(0);
   const [importProcessed, setImportProcessed] = React.useState(0);
@@ -104,7 +104,7 @@ export default function CredentialsPage() {
       if (jobId) {
         setViewingJobId(jobId);
       }
-      setIsImportMinimized(false);
+      setIsImportModalOpen(true);
     };
     setOpenCredentialsImportModal(() => openModal);
     return () => setOpenCredentialsImportModal(null);
@@ -138,9 +138,9 @@ export default function CredentialsPage() {
       const job = jobs.find((j) => j.id === viewingJobId);
       if (job) {
         importJobIdRef.current = job.id;
+        setIsImportModalOpen(true);
         if (job.status === "running") {
           setIsImporting(true);
-          setIsImportMinimized(false);
           setImportProgress(job.progress);
           setImportProcessed(job.processed);
           setImportTotal(job.total);
@@ -149,7 +149,6 @@ export default function CredentialsPage() {
           setShowResults(false);
         } else if (job.status === "done") {
           setIsImporting(false);
-          setIsImportMinimized(false);
           setImportProgress(100);
           setImportError(null);
           setImportResults(job.results || null);
@@ -159,7 +158,6 @@ export default function CredentialsPage() {
           }
         } else if (job.status === "error") {
           setIsImporting(false);
-          setIsImportMinimized(false);
           setImportError(job.errorMsg || "Import failed");
           setImportResults(null);
           setShowResults(false);
@@ -317,7 +315,7 @@ export default function CredentialsPage() {
     setImportProgress(0);
     setImportProcessed(0);
     setImportTotal(0);
-    setIsImportMinimized(false);
+    setIsImportModalOpen(true);
     setIsImporting(true);
 
     // Start a background job so the bottom bar tracks this import
@@ -406,7 +404,7 @@ export default function CredentialsPage() {
         });
 
         // If minimized, keep bar visible; otherwise open errors modal if needed
-        if (!isImportMinimized && result.errors && result.errors.length > 0) {
+        if (result.errors && result.errors.length > 0) {
           setShowErrorsModal(true);
         }
       } else if (msg.type === "error") {
@@ -466,7 +464,7 @@ export default function CredentialsPage() {
       wsRef.current = null;
     }
     setIsImporting(false);
-    setIsImportMinimized(false);
+    setIsImportModalOpen(false);
     setImportProgress(0);
     setImportProcessed(0);
     setImportTotal(0);
@@ -661,7 +659,12 @@ export default function CredentialsPage() {
   return (
     <div className="w-full flex flex-col gap-6 select-none font-sans">
       {/* Import Progress Modal */}
-      <Modal open={isImporting && !isImportMinimized} onClose={() => {}} title="Creating User Accounts" onMinimize={() => setIsImportMinimized(true)}>
+      <Modal 
+        open={isImportModalOpen} 
+        onClose={() => { setIsImportModalOpen(false); setViewingJobId(null); }} 
+        title={isImporting ? "Creating User Accounts" : "Import Status & Progress"} 
+        onMinimize={isImporting ? () => { setIsImportModalOpen(false); setViewingJobId(null); } : undefined}
+      >
         <div className="flex flex-col items-center px-4 pb-4 pt-2 select-none font-sans min-w-[320px]">
           <div className="relative flex items-center justify-center mb-6 mt-2">
             <svg className="w-40 h-40 -rotate-90" viewBox="0 0 120 120">
