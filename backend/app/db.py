@@ -10,6 +10,10 @@ DATABASE_URL = os.getenv(
     "sqlite:///./ursb_asset.db",
 )
 
+# Convert plain 'mysql://' to 'mysql+pymysql://' for PyMySQL driver compatibility
+if DATABASE_URL.startswith("mysql://"):
+    DATABASE_URL = DATABASE_URL.replace("mysql://", "mysql+pymysql://", 1)
+
 connect_args = {}
 if DATABASE_URL.startswith("sqlite"):
     connect_args["check_same_thread"] = False
@@ -25,8 +29,14 @@ if DATABASE_URL.startswith("sqlite"):
         max_overflow=4,
     )
 else:
+    if "ssl-mode" in DATABASE_URL or "ssl_mode" in DATABASE_URL or "aivencloud.com" in DATABASE_URL:
+        import re
+        DATABASE_URL = re.sub(r'[\?&]ssl[-_]mode=[^&]+', '', DATABASE_URL)
+        connect_args["ssl"] = {}
+
     engine = create_engine(
         DATABASE_URL,
+        connect_args=connect_args,
         pool_pre_ping=True,
         pool_recycle=3600,
         pool_size=10,
