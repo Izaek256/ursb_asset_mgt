@@ -9,6 +9,7 @@ from sqlalchemy import (
     DECIMAL,
     Enum,
     ForeignKey,
+    Integer,
     String,
     func,
 )
@@ -84,8 +85,8 @@ class Asset(Base):
     cost: Mapped[float] = mapped_column(DECIMAL(15, 2), nullable=False)
     acquisition_date: Mapped[date] = mapped_column(Date, nullable=False)
     supplier: Mapped[str] = mapped_column(String(255), nullable=False)
-    current_custodian_id: Mapped[str | None] = mapped_column(
-        String(36),
+    current_custodian_id: Mapped[int | None] = mapped_column(
+        Integer,
         ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=True,
     )

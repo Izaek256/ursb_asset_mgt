@@ -37,8 +37,8 @@ class DisposalRecord(Base):
         Enum(DisposalMethod, native_enum=False, length=50, values_callable=lambda x: [e.name for e in x]), nullable=False
     )
     reason: Mapped[str] = mapped_column(Text, nullable=False)
-    authorised_by: Mapped[str] = mapped_column(
-        String(36),
+    authorised_by: Mapped[int] = mapped_column(
+        Integer,
         ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
     )
@@ -47,8 +47,8 @@ class DisposalRecord(Base):
         nullable=False,
         default=DisposalStatus.APPROVED,
     )
-    recommended_by: Mapped[Optional[str]] = mapped_column(
-        String(36),
+    recommended_by: Mapped[Optional[int]] = mapped_column(
+        Integer,
         ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=True,
     )

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Integer
 from app.db import Base
 from app.utils.time import utcnow
 
@@ -20,7 +20,7 @@ class Notification(Base):
         nullable=False,
     )
     user_id = Column(
-        String(36),
+        Integer,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,

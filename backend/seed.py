@@ -41,25 +41,9 @@ from app.models import (
 # ---------------------------------------------------------------------------
 # Database setup
 # ---------------------------------------------------------------------------
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./ursb_asset.db")
-
-connect_args = {}
-if DATABASE_URL.startswith("sqlite"):
-    connect_args["check_same_thread"] = False
-
-engine = create_engine(DATABASE_URL, connect_args=connect_args)
-
-if DATABASE_URL.startswith("sqlite"):
-    from sqlalchemy import event
-
-    @event.listens_for(engine, "connect")
-    def _set_sqlite_pragma(dbapi_conn, _rec):
-        cur = dbapi_conn.cursor()
-        cur.execute("PRAGMA foreign_keys=ON")
-        cur.close()
+from app.db import engine, SessionLocal, Base
 
 Base.metadata.create_all(bind=engine)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def hash_password(plain: str):
     """Returns (salt, password_hash) tuple using the same algorithm as the auth service."""
     salt, hashed = _create_password_hash(plain)

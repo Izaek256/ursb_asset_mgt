@@ -29,13 +29,13 @@ class Assignment(Base):
         ForeignKey("assets.asset_id", ondelete="RESTRICT"),
         nullable=False,
     )
-    assigned_to: Mapped[str] = mapped_column(
-        String(36),
+    assigned_to: Mapped[int] = mapped_column(
+        Integer,
         ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    assigned_by: Mapped[str] = mapped_column(
-        String(36),
+    assigned_by: Mapped[int] = mapped_column(
+        Integer,
         ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
     )
@@ -48,14 +48,14 @@ class Assignment(Base):
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    return_requested_by: Mapped[str | None] = mapped_column(
-        String(36),
+    return_requested_by: Mapped[int | None] = mapped_column(
+        Integer,
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
     return_requested_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    return_approved_by: Mapped[str | None] = mapped_column(
-        String(36),
+    return_approved_by: Mapped[int | None] = mapped_column(
+        Integer,
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
