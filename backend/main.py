@@ -56,54 +56,54 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(engine)
 
     # Ensure any new columns are added to existing tables before querying
+    from sqlalchemy import inspect
     with engine.begin() as connection:
+        inspector = inspect(connection)
+
         # Add columns to users table
-        existing_columns = {
-            row[1] for row in connection.execute(text("PRAGMA table_info(users)")).all()
-        }
-        additional_columns = {
-            "first_name": "first_name TEXT",
-            "last_name": "last_name TEXT",
-            "phone_number": "phone_number TEXT",
-            "department": "department TEXT",
-            "username": "username TEXT UNIQUE",
-            "role": "role VARCHAR(50)",
-            "password_hash": "password_hash VARCHAR(128) NOT NULL DEFAULT ''",
-            "password_salt": "password_salt VARCHAR(128) NOT NULL DEFAULT ''",
-            "is_active": "is_active BOOLEAN NOT NULL DEFAULT 1",
-            "failed_login_attempts": "failed_login_attempts INTEGER NOT NULL DEFAULT 0",
-            "locked_until": "locked_until DATETIME",
-            "created_at": "created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
-        }
-        for column_name, definition in additional_columns.items():
-            if column_name not in existing_columns:
-                connection.execute(text(f"ALTER TABLE users ADD COLUMN {definition}"))
+        if inspector.has_table("users"):
+            existing_columns = {col["name"] for col in inspector.get_columns("users")}
+            additional_columns = {
+                "first_name": "TEXT" if engine.name == "sqlite" else "VARCHAR(255)",
+                "last_name": "TEXT" if engine.name == "sqlite" else "VARCHAR(255)",
+                "phone_number": "TEXT" if engine.name == "sqlite" else "VARCHAR(64)",
+                "department": "TEXT" if engine.name == "sqlite" else "VARCHAR(255)",
+                "username": "VARCHAR(128)",
+                "role": "VARCHAR(50)",
+                "password_hash": "VARCHAR(128) NOT NULL DEFAULT ''",
+                "password_salt": "VARCHAR(128) NOT NULL DEFAULT ''",
+                "is_active": "BOOLEAN NOT NULL DEFAULT 1",
+                "failed_login_attempts": "INTEGER NOT NULL DEFAULT 0",
+                "locked_until": "DATETIME",
+                "created_at": "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP" if engine.name == "sqlite" else "DATETIME DEFAULT CURRENT_TIMESTAMP",
+            }
+            for column_name, definition in additional_columns.items():
+                if column_name not in existing_columns:
+                    connection.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {definition}"))
 
         # Add columns to assets table
-        existing_asset_columns = {
-            row[1] for row in connection.execute(text("PRAGMA table_info(assets)")).all()
-        }
-        asset_additional_columns = {
-            "is_active": "is_active BOOLEAN NOT NULL DEFAULT 1",
-        }
-        for column_name, definition in asset_additional_columns.items():
-            if column_name not in existing_asset_columns:
-                connection.execute(text(f"ALTER TABLE assets ADD COLUMN {definition}"))
+        if inspector.has_table("assets"):
+            existing_asset_columns = {col["name"] for col in inspector.get_columns("assets")}
+            asset_additional_columns = {
+                "is_active": "BOOLEAN NOT NULL DEFAULT 1",
+            }
+            for column_name, definition in asset_additional_columns.items():
+                if column_name not in existing_asset_columns:
+                    connection.execute(text(f"ALTER TABLE assets ADD COLUMN {definition}"))
 
         # Add columns to assignments table for return workflow
-        existing_assignment_columns = {
-            row[1] for row in connection.execute(text("PRAGMA table_info(assignments)")).all()
-        }
-        assignment_additional_columns = {
-            "return_requested_by": "return_requested_by VARCHAR(36)",
-            "return_requested_at": "return_requested_at DATETIME",
-            "return_approved_by": "return_approved_by VARCHAR(36)",
-            "return_approved_at": "return_approved_at DATETIME",
-            "return_rejection_reason": "return_rejection_reason TEXT",
-        }
-        for column_name, definition in assignment_additional_columns.items():
-            if column_name not in existing_assignment_columns:
-                connection.execute(text(f"ALTER TABLE assignments ADD COLUMN {definition}"))
+        if inspector.has_table("assignments"):
+            existing_assignment_columns = {col["name"] for col in inspector.get_columns("assignments")}
+            assignment_additional_columns = {
+                "return_requested_by": "VARCHAR(36)",
+                "return_requested_at": "DATETIME",
+                "return_approved_by": "VARCHAR(36)",
+                "return_approved_at": "DATETIME",
+                "return_rejection_reason": "TEXT",
+            }
+            for column_name, definition in assignment_additional_columns.items():
+                if column_name not in existing_assignment_columns:
+                    connection.execute(text(f"ALTER TABLE assignments ADD COLUMN {column_name} {definition}"))
 
     default_email = os.getenv("AUTH_DEFAULT_EMAIL", "admin@ursb.go.ug").strip().lower()
     default_password = os.getenv("AUTH_DEFAULT_PASSWORD", "Admin@1234")

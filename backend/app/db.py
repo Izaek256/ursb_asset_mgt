@@ -17,15 +17,21 @@ if DATABASE_URL.startswith("sqlite"):
     # failing immediately.  Pair with WAL mode (set in the event listener
     # below) so readers never block writers and vice-versa.
     connect_args["timeout"] = 30
-
-engine = create_engine(
-    DATABASE_URL,
-    connect_args=connect_args,
-    pool_pre_ping=True,
-    # Limit the pool so we don't open many simultaneous SQLite connections.
-    pool_size=1,
-    max_overflow=4,
-)
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args=connect_args,
+        pool_pre_ping=True,
+        pool_size=1,
+        max_overflow=4,
+    )
+else:
+    engine = create_engine(
+        DATABASE_URL,
+        pool_pre_ping=True,
+        pool_recycle=3600,
+        pool_size=10,
+        max_overflow=20,
+    )
 
 SessionLocal = sessionmaker(
     autocommit=False,
