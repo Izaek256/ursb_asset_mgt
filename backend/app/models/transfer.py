@@ -17,20 +17,20 @@ class Transfer(Base):
         ForeignKey("assets.asset_id", ondelete="RESTRICT"),
         nullable=False,
     )
-    from_user_id: Mapped[str] = mapped_column(
-        String(36),
+    from_user_id: Mapped[int] = mapped_column(
+        Integer,
         ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    to_user_id: Mapped[str] = mapped_column(
-        String(36),
+    to_user_id: Mapped[int] = mapped_column(
+        Integer,
         ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
     )
     transfer_date: Mapped[date] = mapped_column(Date, nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
-    authorised_by: Mapped[str] = mapped_column(
-        String(36),
+    authorised_by: Mapped[int] = mapped_column(
+        Integer,
         ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
     )

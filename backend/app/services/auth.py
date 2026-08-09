@@ -1,9 +1,11 @@
 import hashlib
 import hmac
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from app.utils.time import utcnow
 from typing import Optional
 
+from fastapi import HTTPException
 from sqlalchemy.orm import Session as DbSession
 
 from app.models import User, Session as SessionModel, UserRole
@@ -13,6 +15,19 @@ SESSION_DURATION = timedelta(days=1)
 HASH_ITERATIONS = 200_000
 SALT_SIZE = 32
 HASH_ALGORITHM = "sha256"
+
+
+def validate_ursb_email(email: str) -> None:
+    """
+    Validate that the email address ends with @ursb.go.ug.
+    This enforces the institutional email restriction for URSB employees.
+    Raises HTTPException if the domain does not match.
+    """
+    if not email.lower().endswith("@ursb.go.ug"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only @ursb.go.ug email addresses are permitted"
+        )
 
 
 def hash_password(password: str, salt: str) -> str:
@@ -59,7 +74,9 @@ LOCKOUT_DURATION = timedelta(minutes=15)
 
 
 def is_account_locked(user: User) -> bool:
-    return bool(user.locked_until and user.locked_until > datetime.utcnow())
+    if not user.locked_until:
+        return False
+    return user.locked_until > utcnow()
 
 
 def reset_failed_login_attempts(db: DbSession, user: User) -> None:
@@ -73,7 +90,7 @@ def reset_failed_login_attempts(db: DbSession, user: User) -> None:
 def register_failed_login_attempt(db: DbSession, user: User) -> None:
     user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
     if user.failed_login_attempts >= LOCKOUT_THRESHOLD:
-        user.locked_until = datetime.utcnow() + LOCKOUT_DURATION
+        user.locked_until = utcnow() + LOCKOUT_DURATION
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -89,6 +106,7 @@ def create_user(
     department: str | None = None,
     username: str | None = None,
     role: UserRole | None = UserRole.EMPLOYEE,
+    full_name: str | None = None,
 ) -> User:
     salt, password_hash = create_password_hash(password)
     user = User(
@@ -101,6 +119,7 @@ def create_user(
         role=role,
         password_hash=password_hash,
         password_salt=salt,
+        full_name=full_name,
     )
     db.add(user)
     db.commit()
@@ -119,10 +138,10 @@ def authenticate_user(db: DbSession, email: str, password: str) -> Optional[User
 
 def create_session(db: DbSession, user: User) -> SessionModel:
     token = secrets.token_urlsafe(32)
-    now = datetime.utcnow()
+    now = utcnow()
     session = SessionModel(
         session_token=token,
-        user_id=user.id,
+        user_id=user.user_id,
         created_at=now,
         expires_at=now + SESSION_DURATION,
     )
@@ -142,18 +161,20 @@ def get_session(db: DbSession, token: str) -> Optional[SessionModel]:
     )
     if not session:
         return None
-    
-    now = datetime.utcnow()
-    if session.expires_at < now:
+
+    # DB stores naive UTC datetimes — utcnow() returns naive UTC
+    now_naive = utcnow()
+    if session.expires_at < now_naive:
         db.delete(session)
         db.commit()
         return None
-        
-    # Extend session expiration
-    session.expires_at = now + SESSION_DURATION
-    db.add(session)
-    db.commit()
-    
+
+    half_duration = SESSION_DURATION / 2
+    if (session.expires_at - now_naive) < half_duration:
+        session.expires_at = now_naive + SESSION_DURATION
+        db.add(session)
+        db.commit()
+
     return session
 
 

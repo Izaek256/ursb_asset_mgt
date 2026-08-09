@@ -1,7 +1,7 @@
 import enum
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import Date, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import Date, Enum, ForeignKey, Integer, String, Text, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -10,6 +10,12 @@ from app.db import Base
 class AssignmentStatus(str, enum.Enum):
     ACTIVE = "Active"
     RETURNED = "Returned"
+    PENDING_ACCEPTANCE = "Pending Acceptance"
+    ACCEPTED = "Accepted"
+    DECLINED = "Declined"
+    RETURN_REQUESTED = "Return Requested"
+    RETURN_APPROVED = "Return Approved"
+    RETURN_REJECTED = "Return Rejected"
 
 
 class Assignment(Base):
@@ -23,24 +29,38 @@ class Assignment(Base):
         ForeignKey("assets.asset_id", ondelete="RESTRICT"),
         nullable=False,
     )
-    assigned_to: Mapped[str] = mapped_column(
-        String(36),
+    assigned_to: Mapped[int] = mapped_column(
+        Integer,
         ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    assigned_by: Mapped[str] = mapped_column(
-        String(36),
+    assigned_by: Mapped[int] = mapped_column(
+        Integer,
         ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    assignment_date: Mapped[date] = mapped_column(Date, nullable=False)
+    assignment_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     return_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[AssignmentStatus] = mapped_column(
-        Enum(AssignmentStatus, native_enum=False, length=50),
+        Enum(AssignmentStatus, native_enum=False, length=50, values_callable=lambda x: [e.name for e in x]),
         nullable=False,
         default=AssignmentStatus.ACTIVE,
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    return_requested_by: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    return_requested_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    return_approved_by: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    return_approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    return_rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationships
     asset = relationship("Asset", back_populates="assignments")

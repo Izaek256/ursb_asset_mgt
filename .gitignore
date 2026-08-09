@@ -1,19 +1,73 @@
-# Development Environment System Files
+# ─── OS / Editor ──────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
-.vscode/
+desktop.ini
+
+# Keep shared VS Code settings (e.g. extensions.json) but ignore personal ones
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
 .idea/
 
-# Backend / Python exclusions
+# ─── Python / Backend ─────────────────────────────────────────────────────────
+# Virtual environments
 backend/venv/
-backend/__pycache__/
-backend/**/*.pyc
-backend/.env
-backend/*.db
+backend/.venv/
+venv/
+.venv/
 
-# Frontend / Node exclusions
+# Byte-compiled / optimised files
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Distribution / packaging
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Type checkers & linters
+.mypy_cache/
+.ruff_cache/
+
+# Test caches
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment variables — never commit secrets
+backend/.env
+backend/.env.local
+backend/.env.*.local
+
+# SQLite databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+debug.log
+
+# ─── Frontend / Node ──────────────────────────────────────────────────────────
+# Dependencies
 frontend/node_modules/
+
+# Build output
 frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+
+# Environment variables
 frontend/.env
 frontend/.env.local
-*.db
+frontend/.env.*.local
+
+# ─── Agent / Kiro internals ───────────────────────────────────────────────────
+.agents/skills/
+skills-lock.json
+backend/ursb_asset.db-shm
+backend/ursb_asset.db-wal

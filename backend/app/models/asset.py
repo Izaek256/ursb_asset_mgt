@@ -3,11 +3,13 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import (
+    Boolean,
     Date,
     DateTime,
     DECIMAL,
     Enum,
     ForeignKey,
+    Integer,
     String,
     func,
 )
@@ -32,10 +34,17 @@ class AssetCondition(str, enum.Enum):
 
 
 class AssetStatus(str, enum.Enum):
-    ACTIVE = "Active"
-    IN_STORAGE = "In Storage"
+    AVAILABLE = "Available"
+    RESERVED = "Reserved"
+    PENDING_ACCEPTANCE = "Pending Acceptance"
+    PENDING_APPROVAL = "Pending Approval"
+    PENDING_PICKUP = "Pending Pickup"
+    ASSIGNED = "Assigned"
+    UNDER_TRANSFER = "Under Transfer"
     UNDER_MAINTENANCE = "Under Maintenance"
+    RETURNED = "Returned"
     DISPOSED = "Disposed"
+    DEACTIVATED = "Deactivated"
 
 
 class SourceType(str, enum.Enum):
@@ -52,33 +61,37 @@ class Asset(Base):
     )
     asset_name: Mapped[str] = mapped_column(String(255), nullable=False)
     asset_type: Mapped[AssetType] = mapped_column(
-        Enum(AssetType, native_enum=False, length=50), nullable=False
+        Enum(AssetType, native_enum=False, length=50, values_callable=lambda x: [e.name for e in x]), nullable=False
     )
     category: Mapped[str] = mapped_column(String(100), nullable=False)
     serial_number: Mapped[str] = mapped_column(
         String(100), nullable=False, unique=True, index=True
     )
     condition: Mapped[AssetCondition] = mapped_column(
-        Enum(AssetCondition, native_enum=False, length=50), nullable=False
+        Enum(AssetCondition, native_enum=False, length=50, values_callable=lambda x: [e.name for e in x]), nullable=False
     )
     status: Mapped[AssetStatus] = mapped_column(
-        Enum(AssetStatus, native_enum=False, length=50),
+        Enum(AssetStatus, native_enum=False, length=50, values_callable=lambda x: [e.name for e in x]),
         nullable=False,
-        default=AssetStatus.ACTIVE,
+        default=AssetStatus.AVAILABLE,
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
     )
     source_type: Mapped[SourceType] = mapped_column(
-        Enum(SourceType, native_enum=False, length=50), nullable=False
+        Enum(SourceType, native_enum=False, length=50, values_callable=lambda x: [e.name for e in x]), nullable=False
     )
     procurement_ref: Mapped[str | None] = mapped_column(String(100), nullable=True)
     cost: Mapped[float] = mapped_column(DECIMAL(15, 2), nullable=False)
     acquisition_date: Mapped[date] = mapped_column(Date, nullable=False)
     supplier: Mapped[str] = mapped_column(String(255), nullable=False)
-    current_custodian_id: Mapped[str | None] = mapped_column(
-        String(36),
+    current_custodian_id: Mapped[int | None] = mapped_column(
+        Integer,
         ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=True,
     )
     department: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )
@@ -97,3 +110,4 @@ class Asset(Base):
     transfers = relationship("Transfer", back_populates="asset")
     maintenance_records = relationship("MaintenanceRecord", back_populates="asset")
     disposal_records = relationship("DisposalRecord", back_populates="asset")
+    asset_requests = relationship("AssetRequest", back_populates="asset")
